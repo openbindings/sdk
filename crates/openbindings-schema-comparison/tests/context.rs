@@ -17,24 +17,36 @@ fn doc(text: &str) -> ConformantDocument {
         .unwrap()
 }
 #[test]
-fn a_thousand_operation_interface_fits_default_limits() {
-    let operations = (0..1000)
+fn shared_record_interfaces_fit_default_limits() {
+    let named = (0..40)
         .map(|i| {
-            format!(r#""op{i:04}":{{"input":{{"type":"string"}},"output":{{"type":"number"}}}}"#)
+            format!(
+                r#""S{i}":{{"type":"object","description":"Shared record {i}.","properties":{{"id":{{"type":"string","minLength":1,"maxLength":64}},"name":{{"type":"string","maxLength":200}},"count":{{"type":"integer","minimum":0}},"ratio":{{"type":"number","minimum":0,"maximum":1}},"tags":{{"type":"array","items":{{"type":"string"}},"maxItems":20}},"state":{{"enum":["open","closed","pending"]}},"created":{{"type":"string","format":"date-time"}},"active":{{"type":"boolean"}}}},"required":["id","name"],"additionalProperties":false}}"#
+            )
         })
         .collect::<Vec<_>>()
         .join(",");
+    let count = 200;
+    let operations = (0..count)
+            .map(|i| {
+                let s = i % 40;
+                format!(
+                    r##""op{i:04}":{{"input":{{"type":"object","properties":{{"id":{{"type":"string"}},"limit":{{"type":"integer","minimum":1,"maximum":100}},"filter":{{"$ref":"#/schemas/S{s}"}}}},"required":["id"]}},"output":{{"type":"object","properties":{{"items":{{"type":"array","items":{{"$ref":"#/schemas/S{s}"}}}},"next":{{"type":"string"}}}}}}}}"##
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
     let document = doc(&format!(
-        r#"{{"openbindings":"0.2.0","operations":{{{operations}}}}}"#
+        r#"{{"openbindings":"0.2.0","operations":{{{operations}}},"schemas":{{{named}}}}}"#
     ));
     let report = check_interface(
         &document,
         &document,
-        &|_| Some(OperationRole::Realized),
+        &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits::default(),
     )
     .unwrap();
-    assert_eq!(report.operations().len(), 1000);
+    assert_eq!(report.operations().len(), count);
     assert_eq!(report.issues().count(), 0);
     for operation in report.operations() {
         assert_eq!(
@@ -292,4 +304,261 @@ fn cancelled_resource_discovery_does_not_hide_ambiguous_targets_on_retry() {
             Err(ComparisonFailure::InvalidReference)
         );
     }
+}
+
+fn at(context: &ComparisonContext, pointer: &str) -> SchemaInput {
+    context.schema(context.document().at(pointer).unwrap().to_owned())
+}
+
+#[test]
+fn carrier_selections_resolve_private_declarations_and_document_pointers() {
+    for (root, detached_result) in [
+        (
+            r##"{"components":{"P":{"$id":"https://example.test/pet","$defs":{"a":{"type":"string"}},"$ref":"#/$defs/a"}}}"##,
+            Ok(true),
+        ),
+        (
+            r##"{"components":{"P":{"$defs":{"a":{"$anchor":"a","type":"string"}},"$ref":"#a"}}}"##,
+            Ok(true),
+        ),
+        (
+            r##"{"components":{"P":{"$id":"https://example.test/pet","$defs":{"a":{"$anchor":"a","type":"string"}},"$ref":"#a"}}}"##,
+            Ok(true),
+        ),
+        (
+            r##"{"components":{"P":{"$ref":"#/components/Q"},"Q":{"type":"string"}}}"##,
+            Err(ComparisonFailure::MissingReference),
+        ),
+    ] {
+        for warmed in [false, true] {
+            for reverse in [false, true] {
+                let context = ComparisonContext::new(json(root));
+                let selected = at(&context, "/components/P");
+                let detached =
+                    ComparisonContext::new(json("{}")).schema(json(selected.schema().text()));
+                if warmed {
+                    assert_eq!(
+                        identical(
+                            Some(&selected),
+                            Some(&selected),
+                            &ComparisonLimits::default()
+                        ),
+                        Ok(true)
+                    );
+                }
+                for (schema, result) in [(&selected, Ok(true)), (&detached, detached_result)] {
+                    assert_eq!(
+                        identical(Some(schema), Some(schema), &ComparisonLimits::default()),
+                        result
+                    );
+                    assert_eq!(
+                        identical_with_references(
+                            Some(schema),
+                            Some(schema),
+                            &|_| false,
+                            &ComparisonLimits::default()
+                        ),
+                        result
+                    );
+                }
+                let (a, b) = if reverse {
+                    (&detached, &selected)
+                } else {
+                    (&selected, &detached)
+                };
+                assert_eq!(
+                    identical(Some(a), Some(b), &ComparisonLimits::default()),
+                    detached_result
+                );
+                assert_eq!(
+                    identical_with_references(
+                        Some(a),
+                        Some(b),
+                        &|_| false,
+                        &ComparisonLimits::default()
+                    ),
+                    detached_result
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn root_declarations_are_independent_of_selections_and_argument_order() {
+    for (root, a, b, expected) in [
+        (
+            r##"{"components":{"X":{"$anchor":"foo","type":"string"},"Y":{"$ref":"#foo"}}}"##,
+            "/components/X",
+            "/components/Y",
+            Err(ComparisonFailure::MissingReference),
+        ),
+        (
+            r##"{"$defs":{"X":{"$anchor":"foo","type":"string"},"Y":{"$ref":"#foo"}}}"##,
+            "/$defs/X",
+            "/$defs/Y",
+            Ok(true),
+        ),
+        (
+            r##"[{"$ref":"#x","$defs":{"d":{"$anchor":"x","type":"string"}}},{"$ref":"#y","$defs":{"d":{"$anchor":"y","type":"string"}}}]"##,
+            "/0",
+            "/1",
+            Ok(false),
+        ),
+        (
+            r##"{"components":{"P":{"$defs":{"a":{"$anchor":"a","type":"string"}},"$ref":"#a"},"Q":{"$ref":"#a"}}}"##,
+            "/components/P",
+            "/components/Q",
+            Err(ComparisonFailure::MissingReference),
+        ),
+        (
+            r##"{"components":{"P":{"$id":"https://example.test/pet","$defs":{"a":{"$anchor":"a","type":"string"}},"$ref":"#a"},"Q":{"$ref":"https://example.test/pet#a"}}}"##,
+            "/components/P",
+            "/components/Q",
+            Err(ComparisonFailure::MissingReference),
+        ),
+    ] {
+        for reverse in [false, true] {
+            let reused = ComparisonContext::new(json(root));
+            let warm = at(&reused, a);
+            let _ = identical(Some(&warm), Some(&warm), &ComparisonLimits::default());
+            for context in [&reused, &ComparisonContext::new(json(root))] {
+                let (a, b) = (at(context, a), at(context, b));
+                let (a, b) = if reverse { (&b, &a) } else { (&a, &b) };
+                assert_eq!(
+                    identical(Some(a), Some(b), &ComparisonLimits::default()),
+                    expected
+                );
+                assert_eq!(
+                    identical_with_references(
+                        Some(a),
+                        Some(b),
+                        &|_| false,
+                        &ComparisonLimits::default()
+                    ),
+                    expected
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn ambiguous_identifiers_fail_after_selection_and_in_both_orders() {
+    let root = r#"{"openbindings":"0.2.0","operations":{},"schemas":{"a":{"$id":"https://example.test/S","type":"string"},"b":{"$id":"https://example.test/S","type":"number"}}}"#;
+    for warmed in [false, true] {
+        for reverse in [false, true] {
+            let context = ComparisonContext::new(json(root));
+            let a = at(&context, "/schemas/a");
+            if warmed {
+                assert_eq!(
+                    identical(Some(&a), Some(&a), &ComparisonLimits::default()),
+                    Ok(true)
+                );
+            }
+            let r = context.schema(json(r#"{"$ref":"https://example.test/S"}"#));
+            for other in [&a, &r] {
+                let (a, b) = if reverse { (&r, other) } else { (other, &r) };
+                assert_eq!(
+                    identical(Some(a), Some(b), &ComparisonLimits::default()),
+                    Err(ComparisonFailure::InvalidReference)
+                );
+                assert_eq!(
+                    identical_with_references(
+                        Some(a),
+                        Some(b),
+                        &|_| false,
+                        &ComparisonLimits::default()
+                    ),
+                    Err(ComparisonFailure::InvalidReference)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn selected_source_data_never_publishes_schema_identifiers() {
+    let root = r#"{"openbindings":"0.2.0","operations":{},"sources":{"x":{"kind":"k","data":{"$id":"https://example.test/leak","type":"string"}}},"schemas":{"r":{"$ref":"https://example.test/leak"}}}"#;
+    for warmed in [false, true] {
+        for reverse in [false, true] {
+            let context = ComparisonContext::new(json(root));
+            let data = at(&context, "/sources/x/data");
+            if warmed {
+                assert_eq!(
+                    identical(Some(&data), Some(&data), &ComparisonLimits::default()),
+                    Ok(true)
+                );
+            }
+            let r = at(&context, "/schemas/r");
+            let (a, b) = if reverse { (&r, &data) } else { (&data, &r) };
+            assert_eq!(
+                identical(Some(a), Some(b), &ComparisonLimits::default()),
+                Err(ComparisonFailure::MissingReference)
+            );
+            assert_eq!(
+                identical_with_references(
+                    Some(a),
+                    Some(b),
+                    &|_| false,
+                    &ComparisonLimits::default()
+                ),
+                Err(ComparisonFailure::MissingReference)
+            );
+        }
+    }
+}
+
+#[test]
+fn shared_values_keep_each_retrieval_resource_scope() {
+    let common = json(r#"{"$ref":"child"}"#);
+    let context = ComparisonContext::new(json(r#"{"properties":{"a":{"$ref":"https://example.test/a/root"},"b":{"$ref":"https://example.test/b/root"}}}"#))
+        .with_resource("https://example.test/a/root", common.clone())
+        .with_resource("https://example.test/b/root", common)
+        .with_resource("https://example.test/a/child", json(r#"{"type":"string"}"#))
+        .with_resource("https://example.test/b/child", json(r#"{"type":"number"}"#));
+    let a = context.schema(context.document().clone());
+    let b = input(r#"{"properties":{"a":{"type":"string"},"b":{"type":"string"}}}"#);
+    for (a, b) in [(&a, &b), (&b, &a)] {
+        assert_eq!(
+            identical(Some(a), Some(b), &ComparisonLimits::default()),
+            Ok(false)
+        );
+        assert_eq!(
+            identical_with_references(Some(a), Some(b), &|_| false, &ComparisonLimits::default()),
+            Ok(false)
+        );
+        assert_eq!(
+            compare(Direction::Input, b, a, &ComparisonLimits::default())
+                .unwrap()
+                .verdict(),
+            Verdict::Incompatible
+        );
+    }
+}
+
+#[test]
+fn detached_declarations_do_not_survive_a_call() {
+    let context = ComparisonContext::new(json("{}"));
+    let detached = context.schema(json(
+        r#"{"$id":"https://example.test/detached","type":"string"}"#,
+    ));
+    assert_eq!(
+        identical(
+            Some(&detached),
+            Some(&detached),
+            &ComparisonLimits::default()
+        ),
+        Ok(true)
+    );
+    drop(detached);
+    let reference = context.schema(json(r#"{"$ref":"https://example.test/detached"}"#));
+    assert_eq!(
+        identical(
+            Some(&reference),
+            Some(&reference),
+            &ComparisonLimits::default()
+        ),
+        Err(ComparisonFailure::MissingReference)
+    );
 }

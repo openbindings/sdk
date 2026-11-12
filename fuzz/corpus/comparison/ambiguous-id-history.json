@@ -1,0 +1,1 @@
+{"document":{"openbindings":"0.2.0","operations":{},"schemas":{"a":{"$id":"https://example.test/S","type":"string"},"b":{"$id":"https://example.test/S","type":"number"},"r":{"$ref":"https://example.test/S"}}},"left":"/schemas/a","right":"/schemas/r","warm":"/schemas/a"}

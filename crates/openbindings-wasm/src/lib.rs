@@ -1157,6 +1157,8 @@ impl Default for WasmResources {
 #[derive(Default)]
 pub struct WasmResourceEntries {
     resources: Vec<ExternalSchema>,
+    identity_bytes: usize,
+    refusal: Option<ExternalSchemaError>,
 }
 impl std::fmt::Debug for WasmResourceEntries {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1170,11 +1172,34 @@ impl WasmResourceEntries {
     pub fn new() -> WasmResourceEntries {
         Self::default()
     }
-    pub fn push(&mut self, uri: &str, value: &WasmJson) {
+    pub fn push(&mut self, uri: &str, value: &WasmJson) -> Result<(), JsValue> {
+        if let Some(refusal) = &self.refusal {
+            return Err(error("resource", refusal));
+        }
+        let limits = PreparationLimits::default();
+        let bytes = self.identity_bytes.checked_add(uri.len());
+        if self.resources.len() >= limits.max_schema_nodes
+            || bytes.is_none_or(|bytes| bytes > limits.max_identity_bytes)
+        {
+            // Only the refusal path runs registration here, preserving its exact
+            // error precedence for the staged entries followed by this entry.
+            let refusal = ExternalSchemas::new(self.resources.iter().cloned().chain(
+                std::iter::once(ExternalSchema {
+                    uri: uri.into(),
+                    document: value.value.clone(),
+                }),
+            ))
+            .expect_err("staged resources exceed registration limits");
+            let result = Err(error("resource", &refusal));
+            self.refusal = Some(refusal);
+            return result;
+        }
         self.resources.push(ExternalSchema {
             uri: uri.into(),
             document: value.value.clone(),
         });
+        self.identity_bytes = bytes.expect("checked staging bytes");
+        Ok(())
     }
     /// Admit every collected entry as one set; the entries are taken.
     pub fn build(&mut self) -> Result<WasmResources, JsValue> {

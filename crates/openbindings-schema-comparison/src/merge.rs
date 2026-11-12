@@ -1,7 +1,7 @@
 use crate::{
     ComparisonFailure as Failure,
     budget::Attempt,
-    normalize::{get, is, outside},
+    normalize::{get_value as get, is, outside},
     value::{self, Name, Object, Value},
 };
 use std::{cmp::Ordering, collections::BTreeMap};
@@ -17,7 +17,7 @@ pub(crate) fn all_of(
     let mut closed_count = usize::from(constrains_additional(&siblings));
     let mut properties_count = usize::from(has_properties(&siblings));
     for branch in &branches {
-        let Value::Object(object) = branch else {
+        let Value::Object(object) = branch.view() else {
             return Err(Failure::InvalidSchema);
         };
         if retain {
@@ -31,7 +31,7 @@ pub(crate) fn all_of(
         let mut closed = attempt.vector(closed_count)?;
         let mut properties = attempt.vector(properties_count)?;
         for object in std::iter::once(&siblings).chain(branches.iter().map(|branch| {
-            let Value::Object(object) = branch else {
+            let Value::Object(object) = branch.view() else {
                 unreachable!("normalized branches are objects")
             };
             object
@@ -121,7 +121,9 @@ fn pair(
     attempt: &mut Attempt<'_>,
 ) -> Result<Value, Failure> {
     attempt.depth(depth)?;
-    let (Value::Object(left), Value::Object(right)) = (left, right) else {
+    let (Value::Object(left), Value::Object(right)) =
+        (left.owned(depth, attempt)?, right.owned(depth, attempt)?)
+    else {
         return Err(Failure::InvalidSchema);
     };
     if outside(&left, depth, attempt)?
@@ -186,7 +188,9 @@ fn keyword(
 ) -> Result<Value, Failure> {
     attempt.depth(depth)?;
     if is(key, "properties") {
-        let (Value::Object(left), Value::Object(right)) = (left, right) else {
+        let (Value::Object(left), Value::Object(right)) =
+            (left.owned(depth, attempt)?, right.owned(depth, attempt)?)
+        else {
             return Err(Failure::InvalidSchema);
         };
         return merge_maps(left, right, depth, attempt, true).map(Value::Object);
@@ -306,7 +310,7 @@ fn strings(
         // An intersection containing number already includes its integer
         // subtype. The pinned typeIntersection fixture requires this reduction
         // in a merge; standalone canonical type arrays only sort/deduplicate.
-        if get(&names, "number").is_some() {
+        if crate::normalize::get(&names, "number").is_some() {
             let integer = value::literal("integer", attempt)?;
             names.remove(integer.as_slice());
         }

@@ -21,8 +21,13 @@ impl Default for ComparisonLimits {
         }
     }
 }
+type NormalizedKey = (usize, (usize, usize), usize, usize);
+type LocalResource = (usize, (usize, usize), crate::reference::Resources);
 pub(crate) struct Attempt<'a> {
     pub(crate) contexts: Vec<crate::ComparisonContext>,
+    pub(crate) normalized:
+        std::collections::BTreeMap<NormalizedKey, std::sync::Arc<crate::value::Value>>,
+    pub(crate) local_resources: Vec<LocalResource>,
     limits: ComparisonLimits,
     work: usize,
     allocation: usize,
@@ -33,6 +38,8 @@ impl<'a> Attempt<'a> {
     pub(crate) fn new(limits: ComparisonLimits, control: &'a dyn WorkControl) -> Self {
         Self {
             contexts: Vec::new(),
+            normalized: Default::default(),
+            local_resources: Vec::new(),
             limits,
             work: 0,
             allocation: 0,

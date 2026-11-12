@@ -21,9 +21,13 @@ pub(crate) fn get<'a, T>(map: &'a BTreeMap<Name, T>, text: &str) -> Option<&'a T
     }
     map.get(&key[..text.len()])
 }
+pub(crate) fn get_value<'a>(map: &'a Object, text: &str) -> Option<&'a Value> {
+    get(map, text).map(Value::view)
+}
 pub(crate) fn known(name: &[u16]) -> bool {
     [
         "allOf",
+        "$defs",
         "oneOf",
         "anyOf",
         "type",
@@ -74,7 +78,7 @@ pub(crate) fn outside(
     }
     if let Some(Value::Array(branches)) = get(object, "allOf") {
         for branch in branches {
-            if let Value::Object(object) = branch
+            if let Value::Object(object) = branch.view()
                 && outside(object, depth + 1, attempt)?
             {
                 return Ok(true);
@@ -141,6 +145,7 @@ pub(crate) fn normalize(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Resul
         active,
         leaves: None,
         accounted_for: None,
+        path: Vec::new(),
     }
     .schema(input.schema.view(), 0, 0, attempt)
 }
@@ -157,16 +162,47 @@ pub(crate) fn normalize_with_references(
         active,
         leaves: Some(leaves),
         accounted_for: Some(accounted_for),
+        path: Vec::new(),
     }
     .schema(input.schema.view(), 0, 0, attempt)
 }
 struct Engine<'a, const REFERENCES: bool> {
+    path: Name,
     leaves: Option<&'a BTreeMap<crate::reference_identity::ReferenceKey, ()>>,
     accounted_for: Option<&'a dyn Fn(crate::ReferenceContext<'_>) -> bool>,
     resources: Resources,
     active: Vec<((usize, usize), usize)>,
 }
 impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
+    fn child(
+        &mut self,
+        schema: JsonRef<'_>,
+        scope: usize,
+        depth: usize,
+        position: (&[u16], Option<&Name>),
+        retained: bool,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Value, Failure> {
+        if !REFERENCES {
+            return if retained {
+                self.retained_schema(schema, scope, depth, attempt)
+            } else {
+                self.schema(schema, scope, depth, attempt)
+            };
+        }
+        let mut path = crate::reference_identity::segment(&self.path, position.0, attempt)?;
+        if let Some(name) = position.1 {
+            path = crate::reference_identity::segment(&path, name, attempt)?;
+        }
+        let previous = std::mem::replace(&mut self.path, path);
+        let result = if retained {
+            self.retained_schema(schema, scope, depth, attempt)
+        } else {
+            self.schema(schema, scope, depth, attempt)
+        };
+        self.path = previous;
+        result
+    }
     fn schema(
         &mut self,
         schema: JsonRef<'_>,
@@ -186,6 +222,38 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         self.active.pop();
         result
     }
+    fn target_schema(
+        &mut self,
+        schema: JsonRef<'_>,
+        scope: usize,
+        depth: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Value, Failure> {
+        let scope = self.resources.enter(schema, scope, attempt)?;
+        let key = (
+            self.resources.identity(),
+            backend::occurrence(schema),
+            scope,
+            depth,
+        );
+        if !REFERENCES {
+            attempt.work(attempt.normalized.len().saturating_add(1).ilog2() as usize + 1)?;
+            if let Some(value) = attempt.normalized.get(&key).cloned() {
+                return Ok(Value::Shared(value));
+            }
+        }
+        let result = self.schema(schema, scope, depth, attempt)?;
+        if !REFERENCES {
+            attempt.allocate(2048)?;
+            let cached = match result {
+                Value::Shared(value) => value,
+                value => std::sync::Arc::new(value),
+            };
+            attempt.normalized.insert(key, cached.clone());
+            return Ok(Value::Shared(cached));
+        }
+        Ok(result)
+    }
     fn keep_reference(
         &self,
         schema: JsonRef<'_>,
@@ -198,7 +266,8 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         }
         let leaves = self.leaves.expect("reference variant");
         attempt.work(leaves.len().saturating_add(1).ilog2() as usize + 1)?;
-        if !leaves.contains_key(&(backend::occurrence(schema), dynamic)) {
+        attempt.allocate(self.path.len().saturating_mul(2))?;
+        if !leaves.contains_key(&(backend::occurrence(schema), dynamic, self.path.clone())) {
             return Ok(false);
         }
         let reference = schema
@@ -218,7 +287,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
     ) -> Result<Value, Failure> {
         let (target, target_scope) = self.resources.resolve(scope, reference, attempt)?;
         let authored = value::import(reference, depth, attempt)?;
-        let target = self.schema(target.view(), target_scope, depth + 1, attempt)?;
+        let target = self.target_schema(target.view(), target_scope, depth + 1, attempt)?;
         attempt.allocate(2 * std::mem::size_of::<Value>())?;
         Ok(Value::Reference(Box::new(authored), Box::new(target)))
     }
@@ -233,9 +302,16 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         if is(key, "dependentSchemas") || is(key, "patternProperties") || is(key, "properties") {
             let mut object = Object::new();
             for member in raw.members().ok_or(Failure::InvalidSchema)? {
-                let key = value::name(member.name, attempt)?;
-                let child = self.retained_schema(member.value, scope, depth + 1, attempt)?;
-                value::insert(&mut object, key, child, attempt)?;
+                let name = value::name(member.name, attempt)?;
+                let child = self.child(
+                    member.value,
+                    scope,
+                    depth + 1,
+                    (key, Some(&name)),
+                    true,
+                    attempt,
+                )?;
+                value::insert(&mut object, name, child, attempt)?;
             }
             Ok(Value::Object(object))
         } else if ["prefixItems", "allOf", "oneOf", "anyOf"]
@@ -245,11 +321,11 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             let elements = raw.elements().ok_or(Failure::InvalidSchema)?;
             let mut children = attempt.vector(elements.len())?;
             for child in elements {
-                children.push(self.retained_schema(child, scope, depth + 1, attempt)?);
+                children.push(self.child(child, scope, depth + 1, (key, None), true, attempt)?);
             }
             Ok(Value::Array(children))
         } else {
-            self.retained_schema(raw, scope, depth, attempt)
+            self.child(raw, scope, depth, (key, None), true, attempt)
         }
     }
     fn retained_schema(
@@ -339,7 +415,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         let target = if let Some(reference) = get(&raw, "$ref").filter(|_| !keep) {
             let (target, target_scope) =
                 self.resources.resolve(scope, reference.view(), attempt)?;
-            Some(self.schema(target.view(), target_scope, depth + 1, attempt)?)
+            Some(self.target_schema(target.view(), target_scope, depth + 1, attempt)?)
         } else {
             None
         };
@@ -360,15 +436,22 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             } else if is(&key, "properties") {
                 let mut properties = Object::new();
                 for member in raw.members().ok_or(Failure::InvalidSchema)? {
-                    let key = value::name(member.name, attempt)?;
-                    let child = self.schema(member.value, scope, depth + 1, attempt)?;
-                    value::insert(&mut properties, key, child, attempt)?;
+                    let name = value::name(member.name, attempt)?;
+                    let child = self.child(
+                        member.value,
+                        scope,
+                        depth + 1,
+                        (&key, Some(&name)),
+                        false,
+                        attempt,
+                    )?;
+                    value::insert(&mut properties, name, child, attempt)?;
                 }
                 Value::Object(properties)
             } else if is(&key, "items")
                 || (is(&key, "additionalProperties") && raw.kind() == JsonKind::Object)
             {
-                self.schema(raw, scope, depth + 1, attempt)?
+                self.child(raw, scope, depth + 1, (&key, None), false, attempt)?
             } else if is(&key, "additionalProperties") {
                 Value::Boolean(raw.as_bool().ok_or(Failure::InvalidSchema)?)
             } else if is(&key, "allOf") || is(&key, "oneOf") || is(&key, "anyOf") {
@@ -378,7 +461,14 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
                 }
                 let mut values = attempt.vector(elements.len())?;
                 for child in elements {
-                    values.push(self.schema(child, scope, depth + 1, attempt)?);
+                    values.push(self.child(
+                        child,
+                        scope,
+                        depth + 1,
+                        (&key, None),
+                        false,
+                        attempt,
+                    )?);
                 }
                 if is(&key, "allOf") {
                     branches = Some(values);

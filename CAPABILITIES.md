@@ -113,8 +113,12 @@ The comparison fixture harness passes 30 ordinary and 10 exact identity groups,
 plus all 62 ordinary and 29 exact directional groups (including expected schema
 errors), with no skipped groups. Directional verdicts distinguish compatible,
 incompatible and indeterminate; interface checking retains every operation,
-every distinct alias match, selected realization/consumption roles, skipped slots
-and comparison failures. Callers choose summary treatment of failures;
+every distinct alias match, realization/consumption selected by a callback on
+each required/provided pair (or a missing match), skipped slots
+and comparison failures. Missing operations have one correspondence with no role;
+present correspondences expose one role through `Option<OperationRole>`.
+Cancellation returns an error; exhausted allowances remain slot failures.
+Callers choose summary treatment of failures;
 `Verdict::collapse` takes verdicts only. Reusable `ComparisonContext`s index
 documents lazily and keep completed indexing after successful work. Both-union
 positions fail closed when non-identical. Retained applicator references compare

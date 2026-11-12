@@ -5,22 +5,24 @@ use crate::{
 use openbindings::{ConformantDocument, Operation};
 use std::fmt;
 
-/// Caller-selected use of a required operation. Both emits a separate result
-/// for each role, with realization before consumption.
+/// Caller-selected value flow for one required/provided match. A missing match
+/// has no role. Both emits realization then consumption for a present match.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OperationRole {
-    /// Provided operation realizes the required contract.
+    /// Provided operation accepts required inputs and produces required outputs.
     Realized,
-    /// Provided operation consumes the required contract.
+    /// Provided operation supplies inputs accepted by the required operation and
+    /// accepts outputs allowed by the required operation.
     Consumed,
-    /// Check both realization and consumption.
+    /// Check realization then consumption for a present match. A missing match
+    /// still produces one correspondence with no checked role.
     Both,
 }
 /// One required operation, including skipped slots and any comparison failures.
 #[derive(Clone)]
 pub struct OperationComparison {
     required: String,
-    role: OperationRole,
+    role: Option<OperationRole>,
     provided: Option<String>,
     output: Option<Result<Comparison, ComparisonFailure>>,
     input: Option<Result<Comparison, ComparisonFailure>>,
@@ -56,27 +58,30 @@ impl OperationComparison {
     pub fn input(&self) -> Option<&Result<Comparison, ComparisonFailure>> {
         self.input.as_ref()
     }
-    /// Role checked for this correspondence. Both produces two correspondences.
-    pub fn role(&self) -> OperationRole {
+    /// Checked value flow: Realized or Consumed for a present match, never Both.
+    /// Missing operations return None and have exactly one correspondence.
+    pub fn role(&self) -> Option<OperationRole> {
         self.role
     }
 }
 /// An interface issue's kind. Indeterminate outcomes and failures stay distinct.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InterfaceIssueKind {
-    /// Required operation is absent from the provided namespace.
+    /// Included required operation is absent from the provided namespace, regardless of selected role.
     Missing,
-    /// Provided output does not satisfy required output.
+    /// Realized: provided output does not satisfy required output.
+    /// Consumed: provided operation does not accept every output the required operation allows.
     OutputIncompatible,
-    /// Required input is not acceptable to the provided input.
+    /// Realized: provided operation does not accept every required input.
+    /// Consumed: provided input is not acceptable to the required operation.
     InputIncompatible,
-    /// Output comparison reached a differing outside-profile position.
+    /// Output comparison in the selected value-flow direction reached a differing outside-profile position.
     OutputIndeterminate,
-    /// Input comparison reached a differing outside-profile position.
+    /// Input comparison in the selected value-flow direction reached a differing outside-profile position.
     InputIndeterminate,
-    /// Output normalization or comparison failed without a verdict.
+    /// Output normalization or comparison in the selected value-flow direction failed without a verdict.
     OutputFailure,
-    /// Input normalization or comparison failed without a verdict.
+    /// Input normalization or comparison in the selected value-flow direction failed without a verdict.
     InputFailure,
 }
 /// A borrowed issue in sorted required-key order, output before input.
@@ -170,13 +175,16 @@ impl InterfaceComparison {
     }
 }
 /// Check every provided operation identified by any required key or alias.
-/// The callback chooses each required operation's role, or None to exclude it.
+/// The callback receives the required operation and each distinct matched
+/// provided operation, or None for a missing match. It selects the value flow,
+/// or returns None to exclude that match. Both expands a present match into two
+/// checks; an included missing match always yields one role-free correspondence.
 /// Correspondences sort by required key, provided key and role; each checks
 /// output before input. Slot failures remain results for caller summary policy.
 pub fn check_interface(
     required: &ConformantDocument,
     provided: &ConformantDocument,
-    role: &dyn Fn(&Operation) -> Option<OperationRole>,
+    role: &dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>,
     limits: &ComparisonLimits,
 ) -> Result<InterfaceComparison, ComparisonFailure> {
     check_interface_with_control(
@@ -188,11 +196,14 @@ pub fn check_interface(
     )
 }
 /// Interface checking with one monotone allowance and cooperative control.
-/// Setup failure returns no report; subsequent slot failures stay in the report.
+/// The callback selects each match's flow as in check_interface. Setup failure
+/// returns no report. After setup, exhausted allowances stay in slots and later
+/// slots retain the sticky failure. Observed cancellation always returns
+/// Err(ComparisonFailure::Cancelled), including cancellation during the final slot.
 pub fn check_interface_with_control(
     required: &ConformantDocument,
     provided: &ConformantDocument,
-    role: &dyn Fn(&Operation) -> Option<OperationRole>,
+    role: &dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>,
     limits: &ComparisonLimits,
     control: &dyn openbindings::WorkControl,
 ) -> Result<InterfaceComparison, ComparisonFailure> {
@@ -215,9 +226,6 @@ pub fn check_interface_with_control(
         let key = member.name.as_str().expect("conformant key");
         attempt.work(key.len().saturating_add(1))?;
         let operation = required.operation(key).expect("required operation");
-        let Some(role) = role(&operation) else {
-            continue;
-        };
         let mut matches = std::collections::BTreeMap::new();
         for name in std::iter::once(key).chain(
             member
@@ -238,13 +246,17 @@ pub fn check_interface_with_control(
                 matches.insert(operation.key().to_owned(), operation.value().to_owned());
             }
         }
+        let provided_document = provided;
         let mut add = |provided: Option<String>,
                        value: Option<openbindings::JsonValue>|
          -> Result<(), ComparisonFailure> {
-            for selected in [OperationRole::Realized, OperationRole::Consumed] {
-                if role != OperationRole::Both && selected != role {
-                    continue;
-                }
+            let matched = provided
+                .as_deref()
+                .and_then(|key| provided_document.operation(key));
+            let Some(role) = role(&operation, matched.as_ref()) else {
+                return Ok(());
+            };
+            let mut push = |selected| -> Result<(), ComparisonFailure> {
                 attempt.allocate(
                     key.len()
                         .saturating_add(provided.as_ref().map_or(0, String::len))
@@ -260,6 +272,19 @@ pub fn check_interface_with_control(
                     member.value,
                     value.clone(),
                 ));
+                Ok(())
+            };
+            if provided.is_none() {
+                push(None)?;
+            } else {
+                match role {
+                    OperationRole::Realized => push(Some(OperationRole::Realized))?,
+                    OperationRole::Consumed => push(Some(OperationRole::Consumed))?,
+                    OperationRole::Both => {
+                        push(Some(OperationRole::Realized))?;
+                        push(Some(OperationRole::Consumed))?;
+                    }
+                }
             }
             Ok(())
         };
@@ -277,7 +302,11 @@ pub fn check_interface_with_control(
             .saturating_mul(pending.len().saturating_add(1).ilog2() as usize + 1)
             .saturating_mul(2),
     )?;
-    pending.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    pending.sort_by(|a, b| {
+        a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)).then_with(|| {
+            (a.2 == Some(OperationRole::Consumed)).cmp(&(b.2 == Some(OperationRole::Consumed)))
+        })
+    });
     for (key, provided_key, role, target, candidate) in pending {
         let mut check = |direction: Direction, name: &str| {
             let (Some(t), Some(c)) = (
@@ -288,7 +317,7 @@ pub fn check_interface_with_control(
             };
             let t = required_context.schema(t.to_owned());
             let c = provided_context.schema(c.to_owned());
-            Some(if role == OperationRole::Consumed {
+            Some(if role == Some(OperationRole::Consumed) {
                 directional::inputs(direction, &c, &t, &mut attempt)
             } else {
                 directional::inputs(direction, &t, &c, &mut attempt)
@@ -303,6 +332,9 @@ pub fn check_interface_with_control(
             output,
             input,
         });
+    }
+    if control.is_cancelled() {
+        return Err(ComparisonFailure::Cancelled);
     }
     Ok(InterfaceComparison {
         operations: comparisons,

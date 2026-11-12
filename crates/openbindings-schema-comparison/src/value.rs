@@ -8,6 +8,7 @@ use std::{cmp::Ordering, collections::BTreeMap};
 pub(crate) type Name = Vec<u16>;
 pub(crate) type Object = BTreeMap<Name, Value>;
 pub(crate) enum Value {
+    Shared(std::sync::Arc<Value>),
     Reference(Box<Value>, Box<Value>),
     Null,
     Boolean(bool),
@@ -16,6 +17,70 @@ pub(crate) enum Value {
     Array(Vec<Value>),
     Object(Object),
     Union(Vec<Value>),
+}
+impl Value {
+    pub(crate) fn view(&self) -> &Self {
+        match self {
+            Self::Shared(value) => value,
+            value => value,
+        }
+    }
+    pub(crate) fn owned(self, depth: usize, attempt: &mut Attempt<'_>) -> Result<Self, Failure> {
+        match self {
+            Self::Shared(value) => std::sync::Arc::try_unwrap(value)
+                .map_or_else(|value| copy(&value, depth, attempt), Ok),
+            value => Ok(value),
+        }
+    }
+}
+
+// Copy a completed normalized target, reserving its owned tree before cloning.
+// Merges copy owned nodes before mutation; nested shared targets stay shared.
+pub(crate) fn copy(
+    value: &Value,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<Value, Failure> {
+    attempt.depth(depth)?;
+    Ok(match value {
+        Value::Shared(value) => Value::Shared(value.clone()),
+        Value::Reference(a, b) => {
+            attempt.allocate(2 * std::mem::size_of::<Value>())?;
+            Value::Reference(
+                Box::new(copy(a, depth + 1, attempt)?),
+                Box::new(copy(b, depth + 1, attempt)?),
+            )
+        }
+        Value::Null => Value::Null,
+        Value::Boolean(b) => Value::Boolean(*b),
+        Value::Number(n) => Value::Number(n.clone()),
+        Value::String(s) => {
+            attempt.work(s.len().saturating_add(1))?;
+            attempt.allocate(s.len().saturating_mul(2))?;
+            Value::String(s.clone())
+        }
+        Value::Array(values) | Value::Union(values) => {
+            let mut out = attempt.vector(values.len())?;
+            for child in values {
+                out.push(copy(child, depth + 1, attempt)?);
+            }
+            if matches!(value, Value::Union(_)) {
+                Value::Union(out)
+            } else {
+                Value::Array(out)
+            }
+        }
+        Value::Object(object) => {
+            let mut out = Object::new();
+            for (name, child) in object {
+                attempt.work(name.len().saturating_add(1))?;
+                attempt.allocate(name.len().saturating_mul(2))?;
+                let child = copy(child, depth + 1, attempt)?;
+                insert(&mut out, name.clone(), child, attempt)?;
+            }
+            Value::Object(out)
+        }
+    })
 }
 
 pub(crate) fn name(value: JsonRef<'_>, attempt: &mut Attempt<'_>) -> Result<Name, Failure> {
@@ -112,7 +177,12 @@ pub(crate) fn equal(
     attempt: &mut Attempt<'_>,
 ) -> Result<bool, Failure> {
     attempt.depth(depth)?;
-    Ok(match (left, right) {
+    if let (Value::Shared(a), Value::Shared(b)) = (left, right)
+        && std::sync::Arc::ptr_eq(a, b)
+    {
+        return Ok(true);
+    }
+    Ok(match (left.view(), right.view()) {
         (Value::Reference(a, at), Value::Reference(b, bt)) => {
             equal(a, b, depth + 1, attempt)? && equal(at, bt, depth + 1, attempt)?
         }

@@ -354,11 +354,17 @@ present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `context()` exposes its retained context. Indexing is lazy, shared within each
 call and reusable across calls. Failed and cancelled work leaves contexts usable.
 `check_interface` and `check_interface_with_control` take required/provided
-conformant documents and a per-required-operation callback returning
-`Option<OperationRole>`: realized, consumed, both, or excluded. Every distinct
+conformant documents and a callback
+`&dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>` receiving the
+required operation and each distinct provided match, or `None` when missing.
+It selects realized, consumed, both, or excluded for that match. Every distinct
 provided match is retained, independent of alias order, with output then input
 results including failures. `operations()`, `issues()` and each issue's
-`correspondence()` expose keys, role and slot results. Summary failure policy is
+`correspondence()` expose keys, role and slot results. `role()` returns
+`Some(Realized)` or `Some(Consumed)` for present matches, never `Both`; an included
+missing operation has one correspondence with `None` role. Consumption reverses
+input and output flow. Allowance exhaustion remains in slots after setup;
+observed cancellation returns `Err(Cancelled)`. Summary failure policy is
 the caller's; only `Verdict::collapse` supplies profile dominance over verdicts.
 `identical_with_references` and `identical_with_references_and_control` take a
 caller accounting predicate. `ReferenceContext::target()` exposes the initial
