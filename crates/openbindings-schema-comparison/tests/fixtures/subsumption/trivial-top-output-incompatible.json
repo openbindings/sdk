@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "description": "An unconstrained ({} or true) candidate may produce values outside a constrained target.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "emptyCandidate": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "trueCandidate": {
+        "output": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "emptyCandidate": {
+        "output": {}
+      },
+      "trueCandidate": {
+        "output": true
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

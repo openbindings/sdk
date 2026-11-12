@@ -12,6 +12,22 @@
   recursion, relative references and unavailable retrieval identities.
 - Clarify that selection does not perform request address admission.
 
+## 2026-11-11 comparison rework (unreleased)
+
+- Repin every applied interface to 484c9399207de99bd56921cead5f44a7b5740d9e and vendor the amended corpus byte-identically.
+- Apply rule 0a and normalization steps 3 and 9: both union keywords fail closed, retained references compare targets, and `$defs` retention is schema-local.
+- Add reusable lazy `ComparisonContext` inputs, shared indexing and default-limit scale coverage.
+- Check every alias correspondence with caller-selected operation roles; keep failures for caller summary policy.
+- Correct reference leaf accounting by schema position, expose resolved targets and reuse contexts in the source-pull example.
+- Add comparison fuzzing and refresh comparison guides and API reference inputs.
+
+## 2026-11-11 directional comparison (unreleased)
+
+- Implement profile OB-2020-12 0.1 directional input/output verdicts with exact reasons and bounded work.
+- Add interface checking with explicit required/provided roles, sorted per-operation outcomes, missing matches and profile verdict collapse.
+- Add source-puller reference-rule identity and use it for existing entries in the larger pull example.
+- Qualify all 59 ordinary and 29 exact directional fixture groups alongside the existing identity corpus.
+
 ## 2026-11-11 supplied schema roots (unreleased)
 
 ### Changed
@@ -62,7 +78,7 @@
 
 ### Changed
 
-- Apply interfaces `67f707c31aecbdf0551385e369d8024097db6278`, which states the
+- Apply interfaces `484c9399207de99bd56921cead5f44a7b5740d9e`, which states the
   kind-descriptor `check` rule; retain specification
   `c1419c9fc3ae5a00c2b83da710c11bf67dab7934`. Every copied interface fixture is
   byte-identical at the new revision.

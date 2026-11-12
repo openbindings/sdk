@@ -8,6 +8,7 @@ use std::{cmp::Ordering, collections::BTreeMap};
 pub(crate) type Name = Vec<u16>;
 pub(crate) type Object = BTreeMap<Name, Value>;
 pub(crate) enum Value {
+    Reference(Box<Value>, Box<Value>),
     Null,
     Boolean(bool),
     Number(JsonValue),
@@ -112,6 +113,9 @@ pub(crate) fn equal(
 ) -> Result<bool, Failure> {
     attempt.depth(depth)?;
     Ok(match (left, right) {
+        (Value::Reference(a, at), Value::Reference(b, bt)) => {
+            equal(a, b, depth + 1, attempt)? && equal(at, bt, depth + 1, attempt)?
+        }
         (Value::Null, Value::Null) => true,
         (Value::Boolean(a), Value::Boolean(b)) => a == b,
         (Value::Number(a), Value::Number(b)) => numbers(a, b, attempt)? == Ordering::Equal,

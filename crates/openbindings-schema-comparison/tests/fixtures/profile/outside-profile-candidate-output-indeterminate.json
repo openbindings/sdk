@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "description": "An outside-profile keyword on the candidate side fails closed the same way as on the target side.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "patternOnCandidate": {
+        "output": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "patternOnCandidate": {
+        "output": {
+          "type": "string",
+          "pattern": "^[a-z]+$"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

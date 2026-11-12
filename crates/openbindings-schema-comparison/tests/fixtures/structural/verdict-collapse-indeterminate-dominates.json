@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "description": "Verdict collapse dominance: indeterminate > incompatible > compatible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "brokenOp": {
+        "input": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "offProfileOp": {
+        "input": {
+          "type": "string",
+          "pattern": "^a"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "brokenOp": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "offProfileOp": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

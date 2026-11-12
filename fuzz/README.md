@@ -1,7 +1,7 @@
 # Fuzz harness
 
 This is a standalone, unpublished cargo-fuzz crate. No fuzz runtime is added to
-SDK dependencies. The five `fuzz_targets/` binaries call ordinary functions in
+SDK dependencies. The six `fuzz_targets/` binaries call ordinary functions in
 `src/lib.rs`. `seeds/Cargo.toml` compiles that identical file on stable without
 resolving libfuzzer-sys (or its arbitrary dependency). Its lockfile is independent
 of the workspace. `tools/verify.py` replays every committed corpus file.
@@ -24,6 +24,7 @@ fuzz/Cargo.toml` if libfuzzer-sys is not cached. The stable replay remains usabl
 | `json_value` | Arbitrary JSON bytes | Owned and borrowed parse agree; exact round trip preserves text and semantic equality, or ambiguity for duplicate names |
 | `decimal` | JSON `[number, divisor, optional third number]` | Equality, ordering, transitivity, sign reversal, equivalent spellings, division identities, integer remainder oracle |
 | `pattern` | JSON `[pattern, string]`, or raw UTF-8 pattern | Prepare invokes the ECMAScript reader; verdicts agree across lanes and across string pattern and propertyNames |
+| `comparison` | Exact JSON `[left schema, right schema]` | Identity symmetry, directional reflexivity, identity implies compatibility, unaccounted references agree with plain identity |
 | `lanes` | JSON `[schema, value]` | Default-limit evaluate and explain agree whenever both establish a verdict |
 
 Inputs retain raw number tokens. Decimal receives only lexically valid numbers;
@@ -46,6 +47,6 @@ stable CI replay. Hash-named generated corpus entries and artifacts are ignored.
 
 The separate `Fuzz` workflow runs weekly and on manual dispatch. It runs every
 target even after a preceding target fails, and uploads artifacts on failure.
-Five sequential two-minute campaigns cost 10 runner minutes of fuzzing, plus
-installation and compilation (estimate 15 to 20 minutes total on a cold runner,
+Six sequential two-minute campaigns cost 12 runner minutes of fuzzing, plus
+installation and compilation (estimate 17 to 22 minutes total on a cold runner,
 30-minute job cap). This estimate has not been measured on GitHub Actions.

@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "description": "Output: candidate bounds wider than the target's \u2014 or missing where the target declares one \u2014 are breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "widerNumericCandidate": {
+        "output": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "missingNumericBound": {
+        "output": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "widerStringCandidate": {
+        "output": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "missingStringBound": {
+        "output": {
+          "type": "string",
+          "maxLength": 255
+        }
+      },
+      "missingArrayBound": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "widerNumericCandidate": {
+        "output": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        }
+      },
+      "missingNumericBound": {
+        "output": {
+          "type": "integer"
+        }
+      },
+      "widerStringCandidate": {
+        "output": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 200
+        }
+      },
+      "missingStringBound": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "missingArrayBound": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

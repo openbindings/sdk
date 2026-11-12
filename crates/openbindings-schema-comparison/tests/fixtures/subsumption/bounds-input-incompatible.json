@@ -1,0 +1,79 @@
+{
+  "version": "1.0",
+  "description": "Input: candidate bounds narrower than the target's are breaking; an exclusive bound at the same value is stricter than an inclusive one.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "narrowerNumericCandidate": {
+        "input": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      },
+      "exclusiveMinimumAtBoundary": {
+        "input": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "narrowerStringCandidate": {
+        "input": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "narrowerArrayCandidate": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "narrowerNumericCandidate": {
+        "input": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 50
+        }
+      },
+      "exclusiveMinimumAtBoundary": {
+        "input": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        }
+      },
+      "narrowerStringCandidate": {
+        "input": {
+          "type": "string",
+          "minLength": 3
+        }
+      },
+      "narrowerArrayCandidate": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

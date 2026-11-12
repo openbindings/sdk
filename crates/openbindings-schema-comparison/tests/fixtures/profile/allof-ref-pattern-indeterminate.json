@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "description": "An out-of-profile keyword carried into an allOf branch by a resolved $ref fails closed exactly like the inline spelling: the resolved target is profile-checked, and the outcome is indeterminate, never a silent drop.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Slug": {
+        "type": "string",
+        "pattern": "^[a-z]+$"
+      }
+    },
+    "operations": {
+      "createSlug": {
+        "input": {
+          "allOf": [
+            {
+              "$ref": "#/schemas/Slug"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "createSlug": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

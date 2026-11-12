@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Failure to establish normalized identity. No equality verdict is implied.
+/// Failure to normalize or compare schemas. No comparison verdict is implied.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ComparisonFailure {

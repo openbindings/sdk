@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "description": "$defs is kept only where the compared schema's own subtree carries a retained keyword: a pattern in another operation of the same document does not keep an unused $defs.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "a": {
+        "input": {
+          "type": "string",
+          "$defs": {
+            "Unused": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "b": {
+        "input": {
+          "type": "string",
+          "pattern": "^x"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "a": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "b": {
+        "input": {
+          "type": "string",
+          "pattern": "^x"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

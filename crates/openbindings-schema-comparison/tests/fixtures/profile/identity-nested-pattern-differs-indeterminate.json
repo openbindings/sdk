@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "description": "A nested position carrying an outside-profile keyword that differs between the sides fails closed to indeterminate even though every other position is decidable.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "size": {
+              "type": "integer",
+              "maximum": 10
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[A-Z]{2}$"
+            },
+            "size": {
+              "type": "integer",
+              "maximum": 20
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

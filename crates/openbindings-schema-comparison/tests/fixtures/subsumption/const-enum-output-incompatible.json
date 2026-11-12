@@ -1,0 +1,94 @@
+{
+  "version": "1.0",
+  "description": "Output: a candidate that can produce values outside the target's const/enum \u2014 including one with no const/enum at all \u2014 is breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateEnumSuperset": {
+        "output": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "unconstrainedCandidateEnum": {
+        "output": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "unconstrainedCandidateConst": {
+        "output": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "candidateConstOutsideEnum": {
+        "output": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "constMismatch": {
+        "output": {
+          "type": "string",
+          "const": "fixed"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateEnumSuperset": {
+        "output": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      },
+      "unconstrainedCandidateEnum": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "unconstrainedCandidateConst": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "candidateConstOutsideEnum": {
+        "output": {
+          "type": "string",
+          "const": "c"
+        }
+      },
+      "constMismatch": {
+        "output": {
+          "type": "string",
+          "const": "other"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

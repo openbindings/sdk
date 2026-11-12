@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "description": "Fragment-only refs (#/schemas/Foo) resolve against the containing document root: each side's ref resolves against its OWN interface document. The candidate's ref names a schema that exists only in the candidate document (never in the target's), and its target — a wider enum — accepts every input the required schema allows.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Command": {
+        "type": "string",
+        "enum": [
+          "start",
+          "stop"
+        ]
+      }
+    },
+    "operations": {
+      "runCommand": {
+        "input": {
+          "$ref": "#/schemas/Command"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "AcceptedCommand": {
+        "type": "string",
+        "enum": [
+          "start",
+          "stop",
+          "restart"
+        ]
+      }
+    },
+    "operations": {
+      "runCommand": {
+        "input": {
+          "$ref": "#/schemas/AcceptedCommand"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

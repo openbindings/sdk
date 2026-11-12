@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "description": "The same reference spelling inside a retained applicator, reaching different named schemas, is a difference, not identity.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Id": {
+        "type": "string"
+      }
+    },
+    "operations": {
+      "list": {
+        "input": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/schemas/Id"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Id": {
+        "type": "integer"
+      }
+    },
+    "operations": {
+      "list": {
+        "input": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/schemas/Id"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

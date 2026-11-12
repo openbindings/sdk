@@ -1,7 +1,10 @@
 //! External consumers and two illustrative kind implementations for current source pulling.
 //! Kind definitions are local to this fixture, not OpenBindings standards.
 use openbindings::{JsonRef, JsonValue};
-use openbindings_schema_comparison::{ComparisonFailure, ComparisonLimits, SchemaInput, identical};
+use openbindings_schema_comparison::{
+    ComparisonFailure, ComparisonLimits, ReferenceContext, ComparisonContext, identical,
+    identical_with_references,
+};
 use openbindings_source_pull::*;
 use std::{collections::BTreeMap, future::Future, pin::Pin};
 
@@ -121,29 +124,55 @@ fn embedded(source: JsonRef<'_>) -> Result<Observation, CatalogError> {
     })
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SlotComparison {
+    Current,
+    Different,
+    Unassessed,
+}
+
 fn slots(
     offer: &Offer,
-    observed: &Observation,
+    observed: &ComparisonContext,
     existing: JsonRef<'_>,
-    original: JsonRef<'_>,
-) -> Result<[bool; 2], CatalogError> {
-    let mut answers = [true; 2];
+    original: &ComparisonContext,
+    accounted_for: Option<&dyn Fn(ReferenceContext<'_>) -> bool>,
+) -> Result<[SlotComparison; 2], CatalogError> {
+    let mut answers = [SlotComparison::Current; 2];
     for (index, name) in ["input", "output"].into_iter().enumerate() {
         let left = offer
             .operation
             .get(name)
-            .map(|s| SchemaInput::new(s.to_owned(), observed.root.clone()));
+            .map(|s| observed.schema(s.to_owned()));
         let right = existing
             .get(name)
-            .map(|s| SchemaInput::new(s.to_owned(), original.to_owned()));
-        answers[index] = identical(left.as_ref(), right.as_ref(), &ComparisonLimits::default())
-            .map_err(CatalogError::Comparison)?;
+            .map(|s| original.schema(s.to_owned()));
+        let limits = ComparisonLimits::default();
+        let equal = match accounted_for {
+            Some(accounted_for) => {
+                identical_with_references(left.as_ref(), right.as_ref(), accounted_for, &limits)
+            }
+            None => identical(left.as_ref(), right.as_ref(), &limits),
+        }
+        .map_err(CatalogError::Comparison)?;
+        answers[index] = if equal {
+            SlotComparison::Current
+        } else if accounted_for.is_some()
+            && identical_with_references(left.as_ref(), right.as_ref(), &|_| true, &limits)
+                .map_err(CatalogError::Comparison)?
+        {
+            SlotComparison::Unassessed
+        } else {
+            SlotComparison::Different
+        };
     }
     Ok(answers)
 }
 
 fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult, CatalogError> {
     let original = request.interface().value();
+    let offered_context = ComparisonContext::new(observed.root.clone());
+    let original_context = ComparisonContext::new(original.to_owned());
     let operations = original.get("operations").unwrap();
     let bindings = original.get("bindings");
     let mut new_operations = BTreeMap::new();
@@ -193,21 +222,15 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         }
         let operation_key = identified.first().unwrap_or(&offer.key);
         let reused = if let Some(operation) = operations.get(operation_key) {
-            let compared = match slots(offer, &observed, operation, original) {
+            let compared = match slots(offer, &offered_context, operation, &original_context, None) {
                 Ok(compared) => compared,
-                Err(CatalogError::Comparison(
-                    ComparisonFailure::MissingReference
-                    | ComparisonFailure::ReferenceCycle
-                    | ComparisonFailure::InvalidReference
-                    | ComparisonFailure::UnsupportedReference
-                    | ComparisonFailure::UnsatisfiableMerge,
-                )) => {
+                Err(CatalogError::Comparison(_)) => {
                     omitted.push(json(&format!(r#"{{"status":"implementation-unsupported","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared.","item":{},"existing":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{operation_key}")))));
                     continue;
                 }
                 Err(error) => return Err(error),
             };
-            if compared != [true; 2] {
+            if compared != [SlotComparison::Current; 2] {
                 omitted.push(json(&format!(r#"{{"status":"conflict","reasonCode":"offered-schema-differs","message":"The offered input or output differs from the existing operation.","item":{},"existing":{},"offered":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{operation_key}")), offer.operation.text())));
                 continue;
             }
@@ -235,6 +258,42 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
             if reused { ",\"reused\":true" } else { "" }
         )));
     }
+    // This illustrative catalog accounts for operation slots through existing
+    // bindings of this source. It offers no named-schema report entries.
+    let accounted_slots: Vec<_> = bindings
+        .into_iter()
+        .flat_map(|v| v.members().unwrap())
+        .filter(|b| b.value.get("source").and_then(|s| s.as_str()) == Some(request.source()))
+        .filter(|b| {
+            observed.offers.iter().any(|o| {
+                b.value
+                    .get("data")
+                    .and_then(|d| d.get("item"))
+                    .and_then(|v| v.as_str())
+                    == Some(o.key.as_str())
+            })
+        })
+        .flat_map(|b| {
+            let operation = b
+                .value
+                .get("operation")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .replace('~', "~0")
+                .replace('/', "~1");
+            [
+                format!("#/operations/{operation}/input"),
+                format!("#/operations/{operation}/output"),
+            ]
+        })
+        .collect();
+    let accounted_for = |context: ReferenceContext<'_>| {
+        context.base().is_none()
+            && accounted_slots.iter().any(|slot| {
+                context.spelling() == slot
+            })
+    };
     for binding in bindings.into_iter().flat_map(|v| v.members().unwrap()) {
         if binding.value.get("source").and_then(|s| s.as_str()) != Some(request.source()) {
             continue;
@@ -270,15 +329,9 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         {
             proposal.insert("data".into(), offer.data.clone());
         }
-        let comparisons = match slots(offer, &observed, operation, original) {
+        let comparisons = match slots(offer, &offered_context, operation, &original_context, Some(&accounted_for)) {
             Ok(comparisons) => comparisons,
-            Err(CatalogError::Comparison(
-                ComparisonFailure::MissingReference
-                | ComparisonFailure::ReferenceCycle
-                | ComparisonFailure::InvalidReference
-                | ComparisonFailure::UnsupportedReference
-                | ComparisonFailure::UnsatisfiableMerge,
-            )) => {
+            Err(CatalogError::Comparison(_)) => {
                 existing.push(json(&format!(r#"{{"binding":{},"status":"unassessed","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared."}}"#, quote(key))));
                 continue;
             }
@@ -286,7 +339,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         };
         let mut remove = Vec::new();
         for (name, comparison) in ["input", "output"].into_iter().zip(comparisons) {
-            if !comparison {
+            if comparison == SlotComparison::Different {
                 if let Some(value) = offer.operation.get(name) {
                     proposal.insert(name.into(), value.to_owned());
                 } else {
@@ -296,6 +349,10 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         }
         if !remove.is_empty() {
             proposal.insert("remove".into(), array(&remove));
+        }
+        if proposal.is_empty() && comparisons.contains(&SlotComparison::Unassessed) {
+            existing.push(json(&format!(r#"{{"binding":{},"status":"unassessed","reasonCode":"unaccounted-reference-change","message":"A schema differs only through a target this report does not account for."}}"#, quote(key))));
+            continue;
         }
         let status = if proposal.is_empty() {
             "\"status\":\"current\"".into()

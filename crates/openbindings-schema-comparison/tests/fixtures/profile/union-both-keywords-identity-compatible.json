@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "description": "Identity still holds for a schema carrying both oneOf and anyOf: a schema stands in for itself.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "read": {
+        "output": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ],
+          "anyOf": [
+            {
+              "maxLength": 3
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "read": {
+        "output": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ],
+          "anyOf": [
+            {
+              "maxLength": 3
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

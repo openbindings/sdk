@@ -5,12 +5,13 @@ type Target = fn(&[u8]) -> bool;
 #[test]
 fn all_target_bodies_replay_committed_seeds() {
     let corpus = Path::new(env!("CARGO_MANIFEST_DIR")).join("../corpus");
-    let targets: [(&str, Target); 5] = [
+    let targets: [(&str, Target); 6] = [
         ("document", openbindings_fuzz::document),
         ("json_value", openbindings_fuzz::json_value),
         ("decimal", openbindings_fuzz::decimal),
         ("pattern", openbindings_fuzz::pattern),
         ("lanes", openbindings_fuzz::lanes),
+        ("comparison", openbindings_fuzz::comparison),
     ];
     for (name, target) in targets {
         let mut paths: Vec<_> = std::fs::read_dir(corpus.join(name))

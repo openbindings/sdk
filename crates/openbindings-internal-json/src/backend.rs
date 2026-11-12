@@ -78,6 +78,23 @@ pub fn member_candidates<'a, E>(
     Ok(MemberCandidates { object, members })
 }
 
+/// Borrow candidates for an already decoded exact member name. Search work is
+/// charged before every probe, as with token-based member_candidates.
+pub fn member_candidates_utf16<'a, E>(
+    object: crate::JsonRef<'a>,
+    name: &[u16],
+    mut work: impl FnMut(usize) -> Result<(), E>,
+) -> Result<MemberCandidates<'a>, E> {
+    let scalar = String::from_utf16(name).ok();
+    let members = object.owner.member_candidates(
+        object.id,
+        scalar.as_deref(),
+        name.iter().copied(),
+        name.len().saturating_mul(2),
+        &mut work,
+    )?;
+    Ok(MemberCandidates { object, members })
+}
 /// A borrowed candidate sequence; it owns neither an arena nor a name.
 pub struct MemberCandidates<'a> {
     object: crate::JsonRef<'a>,
@@ -1376,6 +1393,25 @@ pub fn ref_id(value: crate::JsonRef<'_>) -> usize {
 /// `ref_id`, this can distinguish operands borrowed from different arenas.
 pub fn occurrence(value: crate::JsonRef<'_>) -> (usize, usize) {
     (std::sync::Arc::as_ptr(value.owner) as usize, value.id)
+}
+/// Borrow the immediate containing value without walking sibling subtrees.
+pub fn parent(value: crate::JsonRef<'_>) -> Option<crate::JsonRef<'_>> {
+    let id = value.owner.nodes[value.id].parent;
+    (id != crate::raw::NO_PARENT).then_some(crate::JsonRef {
+        owner: value.owner,
+        id: id as usize,
+    })
+}
+/// Borrow a value's member-name token, or `None` for an array element or root.
+pub fn member_name(value: crate::JsonRef<'_>) -> Option<crate::JsonRef<'_>> {
+    let (_, edge) = value.owner.edge(value.id)?;
+    match edge {
+        crate::raw::Edge::Key(id) => Some(crate::JsonRef {
+            owner: value.owner,
+            id,
+        }),
+        crate::raw::Edge::Index(_) => None,
+    }
 }
 /// Borrow the value at an arena position recorded by [`ref_id`] from any value
 /// sharing that arena. `None` when the position does not exist.

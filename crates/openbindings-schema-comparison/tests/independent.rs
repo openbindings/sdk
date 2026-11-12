@@ -81,6 +81,7 @@ fn every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged() {
         let schema = json(r#"{"properties":{"p":{"type":"string","minLength":2}}}"#);
         SchemaInput::new(schema.clone(), schema)
     };
+    identical(Some(&left), Some(&right), &ComparisonLimits::default()).unwrap();
     let baseline = CancelAfter {
         checks: AtomicUsize::new(0),
         limit: usize::MAX,
