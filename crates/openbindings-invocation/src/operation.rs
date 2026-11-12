@@ -137,6 +137,9 @@ impl<P: InvocationSupport, E> DefaultOperationInvoker<P, E> {
     /// `ERR_BINDING_NOT_FOUND` or `ERR_BINDING_SELECTION_REQUIRED`. Every ordered
     /// selection key is checked before any support query. Explicit bindings
     /// bypass support selection.
+    /// This method does not admit the address: an empty ordered list or an empty
+    /// key in that list returns `ERR_BINDING_NOT_FOUND`. Invocation and preflight instead
+    /// reject those malformed lists with a [`BoundaryFailure`].
     pub fn select(
         &self,
         interface: &ConformantDocument,

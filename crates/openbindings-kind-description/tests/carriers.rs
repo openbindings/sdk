@@ -107,6 +107,68 @@ fn source_data_absence_null_and_runtime_context_remain_distinct() {
             .text(),
         source
     );
+    for data in [
+        None,
+        Some(JsonValue::null()),
+        Some(exact(r#"{"n":1e999999,"unit":"\ud800","x":1,"x":2}"#)),
+    ] {
+        let context = request.context();
+        let typed = CheckSourceRequest::new("example.k@1", data.clone(), context).unwrap();
+        let admitted = CheckSourceRequest::from_json(typed.value().value().clone()).unwrap();
+        assert_eq!(
+            typed.data().as_ref().map(JsonValue::text),
+            data.as_ref().map(JsonValue::text)
+        );
+        assert_eq!(
+            admitted.data().as_ref().map(JsonValue::text),
+            data.as_ref().map(JsonValue::text)
+        );
+        assert_eq!(
+            typed.context().unwrap().value().value().text(),
+            request.context().unwrap().value().value().text()
+        );
+    }
+    let typed = CheckSourceRequest::new("example.k@1", None, None).unwrap();
+    assert!(typed.data().is_none());
+    assert!(typed.context().is_none());
+}
+
+#[test]
+fn typed_kind_requests_escape_names_and_share_json_admission() {
+    for kind in ["plain", "quote\" slash\\ newline\n", "東京"] {
+        let described = DescribeKindRequest::new(kind).unwrap();
+        let checked = CheckSourceRequest::new(kind, None, None).unwrap();
+        assert_eq!(described.kind().as_str(), Some(kind));
+        assert_eq!(checked.kind().as_str(), Some(kind));
+        assert_eq!(
+            DescribeKindRequest::from_json(described.value().value().clone())
+                .unwrap()
+                .kind()
+                .as_str(),
+            Some(kind)
+        );
+        assert_eq!(
+            CheckSourceRequest::from_json(checked.value().value().clone())
+                .unwrap()
+                .kind()
+                .as_str(),
+            Some(kind)
+        );
+    }
+    let expected = CarrierError::EmptyString("kind");
+    assert_eq!(DescribeKindRequest::new("").unwrap_err(), expected);
+    assert_eq!(
+        CheckSourceRequest::new("", None, None).unwrap_err(),
+        expected
+    );
+    assert_eq!(
+        DescribeKindRequest::from_json(exact(r#"{"kind":""}"#)).unwrap_err(),
+        expected
+    );
+    assert_eq!(
+        CheckSourceRequest::from_json(exact(r#"{"kind":""}"#)).unwrap_err(),
+        expected
+    );
 }
 
 #[test]

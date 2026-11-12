@@ -131,9 +131,12 @@ key, source and operation, using only the document, address and the provider's
 provider invocation. Read `binding.source()`, load that source's stored context,
 then pass the selected key in `OperationRequest::binding(interface, binding.key())`
 with that context to `invoke` or `preflight`. This explicit binding keeps the
-later attempt on the source whose context you loaded. Selection returns the same
-resolution errors as invocation, including whole-list admission before support
-queries. The `select` method itself needs only `P: InvocationSupport`.
+later attempt on the source whose context you loaded. Selection checks the whole
+ordered list's operation membership before support queries. It does not admit
+the address: an empty ordered list or an empty key in that list returns
+`ERR_BINDING_NOT_FOUND`, while `invoke` and `preflight` reject those malformed
+lists with a `BoundaryFailure`. The `select` method itself needs only
+`P: InvocationSupport`.
 
 For a prepared operation, call `prepared.select(&provider, &choice)`, read its
 binding's source and load that source's context, then invoke with
@@ -143,6 +146,10 @@ explicit key. Its provider needs only `InvocationSupport`. To preflight that
 binding, use an explicit `OperationRequest::binding` with the prepared interface
 snapshot and the source's context. Selection does not pin a later operation-name
 or ordered-list selection.
+
+`prepared.input()` and `prepared.output()` borrow the prepared schemas, with
+`None` for an undeclared direction. Use the borrowed input schema to check inline
+values before loading context or consuming the prepared operation into a call.
 
 `DefaultOperationInvoker` requires an explicit `SchemaEvaluator` and `ExternalSchemas`.
 Lazy invocation prepares each declared direction when its first value reaches the

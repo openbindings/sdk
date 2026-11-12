@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-11 review follow-ups (unreleased)
+
+- Lend prepared input and output schemas from `PreparedOperation` for checks
+  before loading context or opening an invocation.
+- Construct kind-description and source-check requests from typed values.
+- Bound supplied-root admission and lookup before normalization or copying,
+  pass evaluators the stored normalized identity, and reuse the set's resolution
+  space while checking each preparation's limits.
+- Qualify evaluators against supplied roots, including local definitions,
+  recursion, relative references and unavailable retrieval identities.
+- Clarify that selection does not perform request address admission.
+
 ## 2026-11-11 comparison rework (unreleased)
 
 - Repin every applied interface to 484c9399207de99bd56921cead5f44a7b5740d9e and vendor the amended corpus byte-identically.
@@ -35,7 +47,9 @@
 
 - Add `DefaultOperationInvoker::select` and `PreparedOperation::select`, returning
   the core `Binding` before context loading or provider work. Invocation,
-  preflight and selection share the same binding selection rules.
+  preflight and selection share binding resolution rules. Selection does not
+  admit the address; malformed ordered lists return `ERR_BINDING_NOT_FOUND`
+  there and a `BoundaryFailure` from invocation or preflight.
 
 ## 2026-11-11 review fixes (unreleased)
 

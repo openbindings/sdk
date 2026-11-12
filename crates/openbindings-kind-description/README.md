@@ -15,6 +15,12 @@ conformance nor JSON Schema validity, availability, trust or permission to execu
 Applications inspect `CheckDescription::executes` before choosing to perform a
 check. Context is supplied separately from the source entry authored afterward.
 
+Use `DescribeKindRequest::new(kind)` or
+`CheckSourceRequest::new(kind, data, context)` to construct requests from typed
+values. Both apply the same carrier checks as `from_json`, escape the kind name,
+and use default exact-JSON admission limits. Data and context retain their exact
+JSON, including duplicate nested members and number spellings.
+
 To evaluate proposed data against `KindDescription::source_data()` or
 `binding_data()`, supply that exact `JsonValue` as an `openbindings::ExternalSchema`
 under a URI the caller chooses, build `ExternalSchemas`, then call
@@ -57,8 +63,8 @@ async fn check_explicit_proposal<P: SourceChecker>(
     control: CancellationToken,
 ) -> Result<CheckedSource, KindError<CheckFailure<P::Error>>> {
     // The application has already chosen to run the kind's disclosed check.
-    let proposal = CheckSourceRequest::from_json(
-        JsonValue::parse(r#"{"kind":"example.embedded@1","data":null}"#).unwrap(),
+    let proposal = CheckSourceRequest::new(
+        "example.embedded@1", Some(JsonValue::null()), None,
     ).unwrap();
     provider.check_source(proposal, control).await
 }

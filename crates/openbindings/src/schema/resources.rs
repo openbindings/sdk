@@ -3,7 +3,7 @@ use crate::{document::DocumentInner, schema::references::SchemaSpace, *};
 use std::{
     collections::BTreeMap,
     fmt,
-    sync::{Arc, Mutex, PoisonError, Weak},
+    sync::{Arc, Mutex, OnceLock, PoisonError, Weak},
 };
 #[derive(Clone)]
 /// An explicit immutable schema resource associated with its retrieval identity. Supplying it performs no I/O.
@@ -20,7 +20,8 @@ pub struct ExternalSchema {
 /// space it assembles for a nonempty set and a document revision is cached with
 /// the set while both are alive. Dropping either releases that cache entry;
 /// independently retained environments and prepared schemas keep the original
-/// sources they need. Each preparation checks its requested footprint limits,
+/// sources they need. Supplied roots share one resolution space owned by the
+/// immutable set. Each preparation checks its requested footprint limits,
 /// including supplied resources that the selected schema never reaches.
 #[derive(Clone, Default)]
 pub struct ExternalSchemas {
@@ -33,6 +34,7 @@ pub(crate) struct ExternalSchemasInner {
     // One space per live revision this set was prepared with. A revision's
     // entry leaves when the revision is dropped; all leave with the set.
     spaces: Mutex<Vec<(Weak<DocumentInner>, Arc<SchemaSpace>)>>,
+    supplied_space: OnceLock<Arc<SchemaSpace>>,
 }
 impl Drop for ExternalSchemasInner {
     fn drop(&mut self) {
@@ -159,33 +161,71 @@ impl ExternalSchemas {
         control: &dyn WorkControl,
     ) -> Result<PreparedSchema<E::Validator>, PreparationFailure> {
         control.check()?;
-        let result = self.resource_index(uri).and_then(|_| {
-            evaluator.prepare(
-                EvaluationRequest {
-                    root: SchemaRoot::Supplied(uri),
-                    external_schemas: self,
-                },
-                limits,
-                control,
-            )
-        });
+        let result = openbindings_internal_schema::preparation::Attempt::run(
+            limits.max_sdk_work_units,
+            limits.max_sdk_reservation_bytes,
+            &|| control.is_cancelled(),
+            |attempt| {
+                let index = self.resource_index(uri, limits.max_identity_bytes, attempt)?;
+                // Nested SDK work shares the enclosing allowance. The evaluator
+                // receives only the storage allowance left after root lookup;
+                // no further SDK storage is reserved after this handoff.
+                let remaining = PreparationLimits {
+                    max_sdk_reservation_bytes: limits.max_sdk_reservation_bytes
+                        - attempt.allocated(),
+                    ..*limits
+                };
+                evaluator.prepare(
+                    EvaluationRequest {
+                        root: SchemaRoot::Supplied(&self.inner.resources[index].uri),
+                        external_schemas: self,
+                    },
+                    &remaining,
+                    control,
+                )
+            },
+        )
+        .map_err(PreparationFailure::from)?;
         control.check()?;
         result.map(|validator| PreparedSchema { validator })
     }
-    pub(crate) fn resource_index(&self, uri: &str) -> Result<usize, PreparationFailure> {
+    pub(crate) fn resource_index(
+        &self,
+        uri: &str,
+        maximum_identity: usize,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<usize, PreparationFailure> {
+        control.check()?;
+        if uri.len() > maximum_identity {
+            return Err(PreparationFailure::new(PreparationFailureKind::Limit {
+                resource: "schema-identity-bytes".into(),
+            }));
+        }
+        let comparisons = self.inner.resources.len().checked_ilog2().unwrap_or(0) as usize + 1;
+        control.charge_work(
+            uri.len()
+                .saturating_add(1)
+                .saturating_mul(comparisons.saturating_mul(2).saturating_add(1)),
+        )?;
+        // Reserve URI normalization scratch and a possible owned failure URI
+        // before either can copy caller text.
+        control.charge_allocation(uri.len().saturating_mul(8).saturating_add(256))?;
+        let find = |uri: &str| {
+            self.inner
+                .resources
+                .binary_search_by(|r| r.uri.as_str().cmp(uri))
+                .ok()
+        };
+        // Requests passed by prepare already carry the stored spelling.
+        if let Some(index) = find(uri) {
+            return Ok(index);
+        }
         let normalized = crate::uri::compared_id(None, uri);
-        normalized
-            .and_then(|uri| {
-                self.inner
-                    .resources
-                    .binary_search_by(|r| r.uri.cmp(&uri))
-                    .ok()
+        normalized.and_then(|uri| find(&uri)).ok_or_else(|| {
+            PreparationFailure::new(PreparationFailureKind::Resolution {
+                cause: ResolutionFailureKind::ResourceUnavailable { uri: uri.into() },
             })
-            .ok_or_else(|| {
-                PreparationFailure::new(PreparationFailureKind::Resolution {
-                    cause: ResolutionFailureKind::ResourceUnavailable { uri: uri.into() },
-                })
-            })
+        })
     }
     /// Admit immutable resources without acquisition. Duplicate retrieval spellings
     /// after RFC resolution and empty-fragment removal are configuration errors.
@@ -308,6 +348,7 @@ impl ExternalSchemas {
                 resources,
                 input_policy,
                 spaces: Mutex::default(),
+                supplied_space: OnceLock::new(),
             }),
         })
     }
@@ -333,6 +374,32 @@ impl ExternalSchemas {
     }
     pub(crate) fn is_empty(&self) -> bool {
         self.inner.resources.is_empty()
+    }
+    pub(crate) fn supplied_space(
+        &self,
+        maximum_nodes: usize,
+        maximum_identity: usize,
+        control: &dyn openbindings_internal_schema::Control,
+    ) -> Result<Arc<SchemaSpace>, openbindings_internal_schema::Failure> {
+        if let Some(space) = self.inner.supplied_space.get() {
+            space.check_inventory_limits(maximum_nodes, maximum_identity, control)?;
+            return Ok(space.clone());
+        }
+        // Build without a lock. Only complete spaces are published; a failed
+        // attempt leaves retries independent and a concurrent winner is reused.
+        let built = Arc::new(SchemaSpace::supplied_bounded(
+            self,
+            maximum_nodes,
+            maximum_identity,
+            control,
+        )?);
+        let _ = self.inner.supplied_space.set(built);
+        Ok(self
+            .inner
+            .supplied_space
+            .get()
+            .expect("completed space")
+            .clone())
     }
     /// The space kept for this set and a live revision, if one was assembled.
     pub(crate) fn kept_space(&self, document: &Arc<DocumentInner>) -> Option<Arc<SchemaSpace>> {

@@ -596,6 +596,7 @@ pub enum SchemaRoot<'a> {
     /// A schema retained from its conformant OpenBindings document.
     Contained(&'a Schema),
     /// The retrieval URI of a resource in [`EvaluationRequest::external_schemas`].
+    /// [`ExternalSchemas::prepare`] passes the set's normalized stored identity.
     /// Its own `$id`, when present, establishes its reference base.
     Supplied(&'a str),
 }

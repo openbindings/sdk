@@ -372,3 +372,10 @@ Public diagnostic formatting omits reasons and document values.
 the document, address or choice, and `InvocationSupport::can_invoke`. Read its
 source, load that source's context, then invoke or preflight the selected binding
 explicitly with that context. Prepared selection also checks operation membership.
+Selection does not admit the address: an empty ordered list or an empty key in
+that list returns `ERR_BINDING_NOT_FOUND`; invocation and preflight return a
+`BoundaryFailure` for those malformed lists.
+
+`PreparedOperation::input()` and `output()` borrow its prepared schemas, with
+`None` for an undeclared direction. They allow inline value checks before context
+loading and invocation without preparing a direction again.

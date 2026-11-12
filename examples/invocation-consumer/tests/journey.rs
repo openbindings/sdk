@@ -98,7 +98,7 @@ async fn two_local_kinds_cross_description_authoring_pull_drift_context_and_invo
         let checks = kinds.checks();
         let description = kinds
             .describe_kind(
-                DescribeKindRequest::from_json(json(&format!(r#"{{"kind":"{kind}"}}"#))).unwrap(),
+                DescribeKindRequest::new(kind).unwrap(),
                 CancellationToken::new(),
             )
             .await
@@ -129,7 +129,14 @@ async fn two_local_kinds_cross_description_authoring_pull_drift_context_and_invo
         };
         let checked = kinds
             .check_source(
-                CheckSourceRequest::from_json(proposed).unwrap(),
+                CheckSourceRequest::new(
+                    kind,
+                    proposed.get("data").map(|value| value.to_owned()),
+                    proposed
+                        .get("context")
+                        .map(|value| Context::new(value.to_owned().as_object().unwrap())),
+                )
+                .unwrap(),
                 CancellationToken::new(),
             )
             .await
