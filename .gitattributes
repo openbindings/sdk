@@ -20,3 +20,6 @@
 /crates/openbindings-schema-evaluator-test-support/fixtures/** -text
 # The required Unicode-table reproducer compares these generated source bytes.
 /crates/openbindings-json-schema-evaluator/src/pattern/identifier/ranges.rs -text
+# The fuzz seed test replays these inputs byte for byte, and the carriers target
+# picks its decoder from the first byte, which can be a line feed.
+/fuzz/corpus/** -text
