@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "description": "Output: candidate items may be narrower; a target without items admits any element.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalItems": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "narrowerCandidateItems": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        }
+      },
+      "candidateItemsUnconstrainedTarget": {
+        "output": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalItems": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "narrowerCandidateItems": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "candidateItemsUnconstrainedTarget": {
+        "output": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

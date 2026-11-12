@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "description": "Input: a candidate that rejects any value the target's const/enum admits is breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "constMismatch": {
+        "input": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "constNotInCandidateEnum": {
+        "input": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "enumNotCovered": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      },
+      "constCannotCoverEnum": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "constMismatch": {
+        "input": {
+          "type": "string",
+          "const": "other"
+        }
+      },
+      "constNotInCandidateEnum": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "other",
+            "another"
+          ]
+        }
+      },
+      "enumNotCovered": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "constCannotCoverEnum": {
+        "input": {
+          "type": "string",
+          "const": "a"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

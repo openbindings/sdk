@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "description": "An operation the target declares that the candidate does not carry (by key or alias) is breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "svc.get": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "svc.other": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

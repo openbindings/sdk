@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "description": "A nested position identical on both sides (a property with pattern) is compatible by identity; the differing sibling property is decided by the profile's numeric bounds rule and is input-compatible because the candidate is wider.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "size": {
+              "type": "integer",
+              "maximum": 10
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "deliver": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "size": {
+              "type": "integer",
+              "maximum": 20
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

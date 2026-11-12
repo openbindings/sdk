@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "description": "Fragment-only refs (#/schemas/Foo) resolve against the containing document root: each side's ref resolves against its OWN interface document. The candidate's ref names a schema that exists only in the candidate document (never in the target's), and its target — a narrower enum — satisfies the required output.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "OrderStatus": {
+        "type": "string",
+        "enum": [
+          "placed",
+          "shipped",
+          "delivered"
+        ]
+      }
+    },
+    "operations": {
+      "orderStatus": {
+        "output": {
+          "$ref": "#/schemas/OrderStatus"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "FulfillmentStatus": {
+        "type": "string",
+        "enum": [
+          "placed",
+          "shipped"
+        ]
+      }
+    },
+    "operations": {
+      "orderStatus": {
+        "output": {
+          "$ref": "#/schemas/FulfillmentStatus"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

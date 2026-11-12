@@ -63,7 +63,8 @@ carry operation-specific support claims and check disclosures. Explicit source
 checks return a source-entry claim or a separate rejection, context challenge or
 operational failure. Kind implementations supply the meaning of source and binding
 data. Applications choose providers, execution permission and acquisition policy.
-Normalized schema identity is an optional comparison companion. Source pulling
+Normalized schema identity, directional compatibility and caller-directed
+interface checking are provided by the optional comparison companion. Source pulling
 returns exact additions and reports against an original document, with checked
 relationships and prospective conformance. Applying changes remains explicit.
 

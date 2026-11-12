@@ -476,3 +476,54 @@ fn comparison_gaps_and_removal_proposals_are_reported() {
         ExistingStatus::Current
     );
 }
+
+#[test]
+fn unchanged_reference_with_unaccounted_target_drift_is_unassessed() {
+    let original = document(
+        r##"{"openbindings":"0.2.0","operations":{"a":{"input":{"$ref":"#/schemas/S"}}},"schemas":{"S":{"type":"string","minLength":1}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"schemas":{"S":{"type":"string","minLength":2}},"items":[{"key":"a","operation":{"input":{"$ref":"#/schemas/S"}},"data":{"item":"a"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"##,
+    );
+    let result = complete(Embedded.pull_source(
+        PullRequest::new(original, "catalog"),
+        CancellationToken::new(),
+    ))
+    .unwrap();
+    let entry = result.report().existing().unwrap().next().unwrap();
+    assert_eq!(entry.status(), ExistingStatus::Unassessed);
+    assert_eq!(
+        entry.reason_code().unwrap().as_str(),
+        Some("unaccounted-reference-change")
+    );
+    assert!(entry.proposal().is_none());
+    assert!(!result.report().is_complete());
+}
+#[test]
+fn annotation_only_schema_edits_leave_existing_bindings_current() {
+    let original = document(
+        r#"{"openbindings":"0.2.0","operations":{"a":{"input":{"type":"string","description":"author","default":"old","format":"email"}}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{"input":{"type":"string","description":"source","default":"new"}},"data":{"item":"a"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"#,
+    );
+    let result = complete(Embedded.pull_source(
+        PullRequest::new(original, "catalog"),
+        CancellationToken::new(),
+    ))
+    .unwrap();
+    let entry = result.report().existing().unwrap().next().unwrap();
+    assert_eq!(entry.status(), ExistingStatus::Current);
+    assert!(entry.proposal().is_none());
+    assert!(result.report().is_complete());
+}
+
+#[test]
+fn accounted_operation_target_drift_is_reported_at_the_target_binding() {
+    let original = document(
+        r##"{"openbindings":"0.2.0","operations":{"a":{"input":{"$ref":"#/operations/b/input"}},"b":{"input":{"type":"string","minLength":1}}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"operations":{"b":{"input":{"type":"string","minLength":2}}},"items":[{"key":"a","operation":{"input":{"$ref":"#/operations/b/input"}},"data":{"item":"a"}},{"key":"b","operation":{"input":{"type":"string","minLength":2}},"data":{"item":"b"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}},"b":{"operation":"b","source":"catalog","data":{"item":"b"}}}}"##,
+    );
+    let result = complete(Embedded.pull_source(
+        PullRequest::new(original, "catalog"),
+        CancellationToken::new(),
+    ))
+    .unwrap();
+    let entries = result.report().existing().unwrap().collect::<Vec<_>>();
+    assert_eq!(entries[0].status(), ExistingStatus::Current);
+    assert_eq!(entries[1].status(), ExistingStatus::Stale);
+    assert!(result.report().is_complete());
+}

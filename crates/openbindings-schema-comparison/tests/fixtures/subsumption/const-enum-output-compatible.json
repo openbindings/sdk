@@ -1,0 +1,83 @@
+{
+  "version": "1.0",
+  "description": "Output: the candidate may only produce values inside the target's const/enum.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalConst": {
+        "output": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "candidateConstInTargetEnum": {
+        "output": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "candidateEnumSubset": {
+        "output": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b",
+            "c"
+          ]
+        }
+      },
+      "singletonEnumMatchesConst": {
+        "output": {
+          "type": "string",
+          "const": "only"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalConst": {
+        "output": {
+          "type": "string",
+          "const": "fixed"
+        }
+      },
+      "candidateConstInTargetEnum": {
+        "output": {
+          "type": "string",
+          "const": "a"
+        }
+      },
+      "candidateEnumSubset": {
+        "output": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      },
+      "singletonEnumMatchesConst": {
+        "output": {
+          "type": "string",
+          "enum": [
+            "only"
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

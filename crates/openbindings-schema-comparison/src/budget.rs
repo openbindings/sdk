@@ -4,11 +4,11 @@ use openbindings::WorkControl;
 /// Finite local work policy for a single comparison, including failed work.
 #[derive(Clone, Copy, Debug)]
 pub struct ComparisonLimits {
-    /// Monotone work allowance for normalization and equality; default 20 million.
+    /// Monotone work allowance for normalization and comparison; default 20 million.
     pub max_work: usize,
     /// Conservative cumulative allocation reservations; default 64 MiB.
     pub max_allocation_bytes: usize,
-    /// Maximum normalization/equality nesting; default and fixed ceiling 128.
+    /// Maximum normalization/comparison nesting; default and fixed ceiling 128.
     /// Smaller values tighten the local policy; larger values do not raise the ceiling.
     pub max_depth: usize,
 }
@@ -22,6 +22,7 @@ impl Default for ComparisonLimits {
     }
 }
 pub(crate) struct Attempt<'a> {
+    pub(crate) contexts: Vec<crate::ComparisonContext>,
     limits: ComparisonLimits,
     work: usize,
     allocation: usize,
@@ -31,6 +32,7 @@ pub(crate) struct Attempt<'a> {
 impl<'a> Attempt<'a> {
     pub(crate) fn new(limits: ComparisonLimits, control: &'a dyn WorkControl) -> Self {
         Self {
+            contexts: Vec::new(),
             limits,
             work: 0,
             allocation: 0,

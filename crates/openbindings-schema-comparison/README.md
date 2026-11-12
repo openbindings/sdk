@@ -1,10 +1,11 @@
 # OpenBindings schema comparison
 
-Compare optional schemas by normalized identity under comparison profile
+Compare schemas by normalized identity or directional compatibility under profile
 `OB-2020-12` version `0.1`, pinned at interfaces revision
-`67f707c31aecbdf0551385e369d8024097db6278`. This unpublished companion is independent
-of core document conformance and the value evaluator. Directional compatibility
-and whole-profile conformance are outside this initial API's claim.
+`484c9399207de99bd56921cead5f44a7b5740d9e`. This unpublished companion is independent
+of core document conformance and the value evaluator. It implements the profile's
+directional rules and interface-level fold, plus the source puller's reference
+rule for existing-entry identity.
 
 ```rust
 use openbindings::JsonValue;
@@ -24,7 +25,16 @@ assert!(!identical(None, Some(&existing), &ComparisonLimits::default())?);
 `SchemaInput::new` retains a selected exact schema and its document root. The root
 need not be an OBI: a source puller can compare an offered schema before authoring
 it. `SchemaInput::from(&schema)` retains a canonical core schema's original context.
-Dropping the original document or view does not invalidate the input. Absent slots
+Dropping the original document or view does not invalidate the input.
+For many comparisons, construct one `ComparisonContext::new(root)` per document
+and select inputs with `context.schema(exact_schema)`. Its `with_base` and
+`with_resource` configure resolution, just as the convenience input methods do.
+Contexts retain completed successful indexing across calls. Failed or cancelled
+work leaves them usable. Within a call, inputs with the same root and resource
+configuration share indexing, including reference inventory and normalization.
+Only reached schemas are normalized; unused defects and deep unused schemas do
+not fail an unrelated comparison. A resource or anchor lookup discovers identifiers
+lazily, without validating unrelated content. Absent slots
 remain `None`; present null is an invalid schema. Every present side normalizes
 before an identity verdict, including when the other side is absent.
 `identical` returns `Result<bool, ComparisonFailure>`: true means normalized
@@ -39,11 +49,15 @@ references fail normalization. Duplicate supplied URI identities are refused.
 
 Normalization strips the profile's annotations/extensions, canonicalizes type and
 required, resolves references, and merges eligible allOf branches in authored
-order. Outside-profile keywords and their contents remain exact opaque data.
+order. Outside-profile keywords remain authored data. References at schema positions
+inside retained 2020-12 applicators, and initial `$dynamicRef` targets, must resolve
+and have identical normalized targets for identity. They remain uninlined.
+Missing targets and cycles fail, including when the authored content is equal.
+A `$ref` inside a non-applicator keyword is data.
 An allOf with an outside-profile sibling or branch, a union, or an additionalProperties
 constraint that merging would loosen remains ordered. `nullable` stays outside the
-profile, and `$defs` remains where retained keywords in its resource could depend
-on it. Union arrays at actual schema oneOf/anyOf
+profile. `$defs` remains only on a schema whose own schema subtree carries a
+retained keyword. Unrelated schemas and non-schema carrier members cannot keep it. Union arrays at actual schema oneOf/anyOf
 positions compare as multisets with multiplicity; ordinary arrays, including
 const/enum and unknown-keyword contents, remain ordered. Literal additionalProperties
 booleans retain their flags; object forms normalize as schemas. The profile's
@@ -71,7 +85,136 @@ fixed ceiling remains 128. Work units and reservations are SDK policy, not a
 portable cost metric or a bound on caller-owned input storage. A refused attempt
 stays refused; fresh retries use unchanged inputs. `identical_with_control` observes
 cooperative cancellation at work and allocation boundaries. It never publishes a
-partial normalized tree or caches a failed result.
+partial normalized tree or caches a failed result. Completed document indexing
+can be reused without charging that indexing again in a later call.
 
-The preserved fixture harness passes all 27 ordinary and 10 exact identity groups; the 59 ordinary and 29
-exact directional groups are explicitly outside scope rather than counted as passes.
+The fixture harness passes all 30 ordinary and 10 exact identity groups, and all
+62 ordinary and 29 exact directional groups, including expected normalization
+failures. No groups are skipped. All copied inputs are byte-identical to the pin,
+with hashes in `tests/fixtures/README.md`.
+
+## Directional comparison and interface checking
+
+`compare(Direction::Input | Direction::Output, target, candidate, limits)` accepts
+two present `SchemaInput`s. `compare_with_control` adds cooperative cancellation.
+Both return `Result<Comparison, ComparisonFailure>`. `Comparison::verdict()` is
+`Compatible`, `Incompatible`, or `Indeterminate`; `reason()` exposes report data
+and `finding()` returns `outside-profile` for indeterminate positions. Public
+`Debug` and diagnostic `Display` never disclose schema values or reason strings.
+Normalization failures, including unsatisfiable merges and resource refusals, are
+errors without a verdict. Ordinary `identical` changes only where the amended profile changes identity:
+retained reference targets participate, and `$defs` retention is schema-local.
+
+```rust
+use openbindings::JsonValue;
+use openbindings_schema_comparison::{compare, ComparisonLimits, Direction, SchemaInput, Verdict};
+let target = JsonValue::parse(r#"{"type":"integer","minimum":1}"#)?;
+let target = SchemaInput::new(target.clone(), target);
+let candidate = JsonValue::parse(r#"{"type":"number","minimum":0}"#)?;
+let candidate = SchemaInput::new(candidate.clone(), candidate);
+let result = compare(Direction::Input, &target, &candidate, &ComparisonLimits::default())?;
+assert_eq!(result.verdict(), Verdict::Compatible);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+The walk applies identity, outside-profile refusal, Top, type, const/enum,
+objects, items, numeric bounds, string bounds, array bounds and unions in that
+order. It stops at the first failing rule. Identity prunes even outside-profile
+positions. A non-identical position carrying both `oneOf` and `anyOf` is
+indeterminate before any other directional rule runs. Retained conjunctions with no directional merge rule fail closed when
+they differ. Union search accepts a definitive matching variant; if no variant
+matches and some comparisons are indeterminate, that variant remains indeterminate.
+Reasons retain nested paths, exact JSON values, exclusive markers, actual union
+keys and authored indexes. Types, properties and required names choose the first
+lexical failure; enum and union traversal retain authored order.
+
+`check_interface(required, provided, role, limits)` accepts two
+`ConformantDocument`s and a callback `&dyn Fn(&Operation) -> Option<OperationRole>`.
+For each required operation, return `Realized`, `Consumed`, `Both`, or `None` to
+exclude it. Consumption reverses schema flow while preserving the required
+operation set. Every distinct provided operation identified by any required key
+or alias receives a correspondence. Alias order has no meaning. A key and alias
+identifying the same operation produce one match.
+
+`operations()` retains correspondences in sorted required-key and provided-key
+order, with realization before consumption for `Both`. Each retains `role()`,
+`required()`, `provided()`, output then input results, including failures. A missing
+operation remains a correspondence; a slot with either schema absent is skipped.
+`issues()` reports missing, incompatible, indeterminate and failed checks in that
+order of correspondences, output before input. `correspondence()` identifies the
+matched provided operation and role for each issue.
+
+Summary policy belongs to the caller. `Verdict::collapse` accepts verdicts only,
+using `indeterminate > incompatible > compatible`. The report and correspondence
+have no collapse method that interprets comparison failures.
+
+```rust
+use openbindings::Document;
+use openbindings_schema_comparison::{check_interface, ComparisonLimits, OperationRole, Verdict};
+let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}}}"#)?
+    .validate()?.conformant().unwrap();
+let report = check_interface(&document, &document,
+    &|_| Some(OperationRole::Both), &ComparisonLimits::default())?;
+// This caller counts comparison failures as indeterminate.
+let outcomes = report.operations().iter().flat_map(|operation| {
+    let missing = operation.is_missing().then_some(Verdict::Incompatible);
+    missing.into_iter().chain([operation.output(), operation.input()].into_iter()
+        .flatten().map(|slot| slot.as_ref().map_or(Verdict::Indeterminate, |c| c.verdict())))
+});
+assert_eq!(Verdict::collapse(outcomes), Verdict::Compatible);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+`check_interface_with_control` adds cooperative cancellation. One allowance covers
+the entire fold, including shared document contexts. Setup failure returns no
+report; after setup, a failed slot stays in the report and later checks continue.
+Exhaustion is sticky. A 1,000-operation self-comparison completes at default limits.
+
+## Source puller's reference rule
+
+`identical_with_references(left, right, accounted_for, limits)` compares optional
+slots using the source-puller rule. The callback receives a `ReferenceContext`
+with decoded spelling, the original schema, its resource root and base, plus
+`target()` for the initial resolved target or its resolution failure, and
+decides accounting; the companion never reads a pull report.
+References at corresponding schema positions spelled the same on both sides
+and accepted by both callbacks remain leaves. An accounted spelling at one
+property cannot keep an inline counterpart at another property as a leaf.
+Union and conjunction branches can match spellings across their variants.
+The rule also applies to references under retained applicators and `$dynamicRef`. Their siblings normalize, but stay unmerged, as does an allOf containing
+such a leaf. Other references are followed. All other identity normalization,
+exact equality and failure rules apply. `identical_with_references_and_control`
+adds cooperative cancellation; each call uses one monotone budget, including
+reference inventory and comparison work.
+
+```rust
+use openbindings::JsonValue;
+use openbindings_schema_comparison::{identical_with_references, ComparisonLimits, SchemaInput};
+let schema = JsonValue::parse(r##"{"$ref":"#/schemas/User"}"##)?;
+let before = SchemaInput::new(schema.clone(), JsonValue::parse(r#"{"schemas":{"User":{"type":"string"}}}"#)?);
+let offered = SchemaInput::new(schema, JsonValue::parse(r#"{"schemas":{"User":{"type":"number"}}}"#)?);
+let limits = ComparisonLimits::default();
+// The caller has a report entry for User, so its drift is reported there.
+assert!(identical_with_references(Some(&before), Some(&offered),
+    &|reference| reference.spelling() == "#/schemas/User", &limits)?);
+// Without that accounting, following the reference finds a difference.
+assert!(!identical_with_references(Some(&before), Some(&offered), &|_| false, &limits)?);
+// Keeping every same-spelled reference answers the second question: the entry
+// itself is unchanged, so the difference is only behind an unaccounted target.
+assert!(identical_with_references(Some(&before), Some(&offered), &|_| true, &limits)?);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+A source puller reports the last situation as `unassessed`. Annotation-only edits
+remain `current`. Binding and source data still compare as exact JSON values.
+
+```rust
+use openbindings::JsonValue;
+use openbindings_schema_comparison::{ComparisonContext, ComparisonLimits, identical};
+let context = ComparisonContext::new(JsonValue::parse(
+    r#"{"schemas":{"A":{"type":"string"},"B":{"type":["string"]}}}"#)?);
+let a = context.schema(context.document().at("/schemas/A").unwrap().to_owned());
+let b = context.schema(context.document().at("/schemas/B").unwrap().to_owned());
+assert!(identical(Some(&a), Some(&b), &ComparisonLimits::default())?);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```

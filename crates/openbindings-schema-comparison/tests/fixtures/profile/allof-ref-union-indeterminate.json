@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "description": "A oneOf carried into an allOf branch by a resolved $ref fails closed exactly like the inline spelling: branches are profile-checked after resolution, and the outcome is indeterminate, never a silent drop.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Choice": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          }
+        ]
+      }
+    },
+    "operations": {
+      "pickValue": {
+        "input": {
+          "allOf": [
+            {
+              "$ref": "#/schemas/Choice"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "pickValue": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

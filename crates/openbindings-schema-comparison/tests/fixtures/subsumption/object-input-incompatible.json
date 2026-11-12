@@ -1,0 +1,99 @@
+{
+  "version": "1.0",
+  "description": "Input: a candidate that requires fields the target does not promise, or narrows a shared property, is breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateAddsRequired": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "disjointRequired": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      "propertyTypeMismatch": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateAddsRequired": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "extra": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "extra"
+          ]
+        }
+      },
+      "disjointRequired": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "task_name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "task_name"
+          ]
+        }
+      },
+      "propertyTypeMismatch": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

@@ -645,6 +645,7 @@
       "direction": "input",
       "verdict": "incompatible",
       "findings": [
+        "length-bounds",
         "union"
       ]
     },
@@ -661,6 +662,7 @@
       "direction": "output",
       "verdict": "incompatible",
       "findings": [
+        "length-bounds",
         "union"
       ]
     },
@@ -689,6 +691,54 @@
       "path": "suppression/unspecified-output-skipped-compatible.json",
       "mode": "subsume",
       "direction": "output",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "profile/union-both-keywords-indeterminate.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "profile/union-both-keywords-identity-compatible.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "profile/retained-reference-target-differs-indeterminate.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "structural/retained-reference-target-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/retained-reference-target-difference-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/normalize-defs-unused-beside-other-retained-keyword-identical.json",
+      "mode": "identical",
+      "direction": "input",
       "verdict": "compatible",
       "findings": []
     }

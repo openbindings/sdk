@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "description": "Output: a candidate that may produce types outside the target (number does not narrow to integer) is breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateSuperset": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "numberCandidateIntegerTarget": {
+        "output": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateSuperset": {
+        "output": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "numberCandidateIntegerTarget": {
+        "output": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "description": "Input: candidate items narrower than the target's are breaking; a target without items is Top, which a constrained candidate cannot cover.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "narrowerCandidateItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        }
+      },
+      "unconstrainedTargetItems": {
+        "input": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "narrowerCandidateItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "unconstrainedTargetItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

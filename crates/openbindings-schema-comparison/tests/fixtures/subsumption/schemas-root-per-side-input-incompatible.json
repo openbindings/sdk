@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "description": "Same-named schemas in the two documents are distinct definitions: each side's #/schemas/ ref resolves against its OWN containing document root, so a candidate whose like-named schema narrows the enum is breaking on input. Resolving the candidate's ref against the target document would silently substitute the target's definition and miss the narrowing.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Command": {
+        "type": "string",
+        "enum": [
+          "start",
+          "stop"
+        ]
+      }
+    },
+    "operations": {
+      "commandNarrowedBehindRef": {
+        "input": {
+          "$ref": "#/schemas/Command"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Command": {
+        "type": "string",
+        "enum": [
+          "start"
+        ]
+      }
+    },
+    "operations": {
+      "commandNarrowedBehindRef": {
+        "input": {
+          "$ref": "#/schemas/Command"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

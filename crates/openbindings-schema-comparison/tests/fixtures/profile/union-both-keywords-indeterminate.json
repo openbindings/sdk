@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "description": "A schema carrying both oneOf and anyOf is not one union the profile decides: where it is not identical the position is indeterminate, never compared on oneOf alone.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "read": {
+        "output": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ],
+          "anyOf": [
+            {
+              "maxLength": 3
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "read": {
+        "output": {
+          "oneOf": [
+            {
+              "type": "string"
+            }
+          ],
+          "anyOf": [
+            {
+              "maxLength": 10
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

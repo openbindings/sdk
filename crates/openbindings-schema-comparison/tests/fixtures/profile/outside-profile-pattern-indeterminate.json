@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "description": "The pattern keyword is outside the profile: normalization fails closed and the outcome is indeterminate, never incompatible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "patternOnTarget": {
+        "input": {
+          "type": "string",
+          "pattern": "^[a-z]+$"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "patternOnTarget": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

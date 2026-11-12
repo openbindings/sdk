@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "description": "Keywords outside the profile subset (not, if/then, patternProperties, multipleOf, uniqueItems) fail closed to indeterminate.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "notKeyword": {
+        "input": {
+          "not": {
+            "type": "string"
+          }
+        }
+      },
+      "conditionalKeyword": {
+        "input": {
+          "if": {
+            "type": "string"
+          },
+          "then": {
+            "minLength": 1
+          }
+        }
+      },
+      "patternProperties": {
+        "input": {
+          "type": "object",
+          "patternProperties": {
+            "^S_": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "multipleOf": {
+        "input": {
+          "type": "integer",
+          "multipleOf": 5
+        }
+      },
+      "uniqueItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "notKeyword": {
+        "input": {
+          "type": "number"
+        }
+      },
+      "conditionalKeyword": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "patternProperties": {
+        "input": {
+          "type": "object"
+        }
+      },
+      "multipleOf": {
+        "input": {
+          "type": "integer"
+        }
+      },
+      "uniqueItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

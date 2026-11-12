@@ -19,7 +19,7 @@ Build integrations around the current responsibilities:
 | Discover or publish an OBI | The optional HTTP discovery companion, with explicit transport/acquisition policy. |
 | Discover kind capabilities or check a proposed source | The kind-description companion's separate description and explicit checking operations. |
 | Pull source-derived authoring changes | `SourcePuller::handle_pull_source` and checked `pull_source`, report inspection, prospective conformance and explicit caller adoption. Proposals do not apply themselves. |
-| Compare schemas for authoring | The optional normalized identity companion with explicit reference context for each side. |
+| Compare schemas for authoring | The optional comparison companion: normalized identity, directional compatibility and per-operation interface checking, with reusable document contexts. |
 | Invoke a binding or operation | `BindingInvoker` with checked `invoke` or `DefaultOperationInvoker` with a caller-selected provider; operation invocation adds declared schema gates. |
 
 The TypeScript facade currently exposes exact documents, schema evaluation and HTTP

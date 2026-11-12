@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "description": "$ref-bound schemas are resolved before comparison: a candidate missing a referenced target enum value is breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "inactive",
+          "archived"
+        ]
+      }
+    },
+    "operations": {
+      "statusEnumNarrowed": {
+        "input": {
+          "$ref": "#/schemas/Status"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "statusEnumNarrowed": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "active",
+            "inactive"
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

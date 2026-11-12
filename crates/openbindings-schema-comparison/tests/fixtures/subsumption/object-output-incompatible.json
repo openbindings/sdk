@@ -1,0 +1,114 @@
+{
+  "version": "1.0",
+  "description": "Output: a candidate that may omit promised fields or emit properties a closed/constrained target forbids is breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateDropsRequired": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ]
+        }
+      },
+      "closedTargetExtraProperty": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "closedTargetOpenCandidate": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "schemaTargetUnconstrainedCandidate": {
+        "output": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "candidateDropsRequired": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "closedTargetExtraProperty": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "extra": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "closedTargetOpenCandidate": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "schemaTargetUnconstrainedCandidate": {
+        "output": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

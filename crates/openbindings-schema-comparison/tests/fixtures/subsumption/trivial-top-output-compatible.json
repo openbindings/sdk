@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "Every candidate output is a subset of an unconstrained (Top) target.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "bothEmpty": {
+        "output": {}
+      },
+      "emptyTarget": {
+        "output": {}
+      },
+      "trueTarget": {
+        "output": true
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "bothEmpty": {
+        "output": {}
+      },
+      "emptyTarget": {
+        "output": {
+          "type": "string"
+        }
+      },
+      "trueTarget": {
+        "output": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

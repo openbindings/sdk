@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "description": "Operations pair by key or alias across the flat key+aliases namespace (core §5.1); a candidate-only operation is an addition and non-breaking.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "svc.get": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "svc.search": {
+        "aliases": [
+          "svc.find"
+        ],
+        "input": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "svc.get": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      "svc.find": {
+        "input": {
+          "type": "object"
+        }
+      },
+      "svc.extra": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

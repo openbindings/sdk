@@ -16,6 +16,7 @@ name = "seed_corpus"
 path = "tests/seed_corpus.rs"
 
 [dependencies]
+openbindings-schema-comparison = { path = "../../crates/openbindings-schema-comparison" }
 openbindings = { path = "../../crates/openbindings" }
 openbindings-internal-json = { path = "../../crates/openbindings-internal-json" }
 openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }

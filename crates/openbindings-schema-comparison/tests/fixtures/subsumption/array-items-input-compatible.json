@@ -1,0 +1,71 @@
+{
+  "version": "1.0",
+  "description": "Input: candidate items may be wider than the target's; a candidate without items is unconstrained.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "widerCandidateItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "absentCandidateItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "identicalItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "widerCandidateItems": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        }
+      },
+      "absentCandidateItems": {
+        "input": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

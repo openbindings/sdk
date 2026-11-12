@@ -15,7 +15,7 @@ The SDK supplies checked calls and exact JSON. Applications supply kind-specific
 transports, credential storage and routing, and decide retries.
 
 This page targets the current unpublished `0.2.0-alpha.1` SDK and its interface
-revision `67f707c31aecbdf0551385e369d8024097db6278`. The document model is
+revision `484c9399207de99bd56921cead5f44a7b5740d9e`. The document model is
 OpenBindings 0.2. The [example crate](../examples/kind-adapter/README.md) contains
 every Rust block below, with tests. Its fictional in-memory protocol needs no
 network. It builds for native Rust and `wasm32-unknown-unknown`.
@@ -534,7 +534,7 @@ new attempt. The SDK never acquires context or retries for you.
 
 A provider that makes no prediction can use the one-line body
 `ready(Ok(None))` with `Ready<Result<Option<ContextChallenge>, InvocationError>>`.
-The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/67f707c31aecbdf0551385e369d8024097db6278/binding-invoker/README.md)
+The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/484c9399207de99bd56921cead5f44a7b5740d9e/binding-invoker/README.md)
 states that `null` is always conformant, even when invocation will need context.
 `None` means no prediction; it does not promise that invocation will proceed.
 
@@ -681,11 +681,18 @@ Source and binding data compare as JSON values. Existing-entry schema comparison
 also needs report context: a reference to a target accounted for by the report
 stays a leaf, so its target's drift is reported once at that target. Other
 references are followed; a difference only through a target the report does not
-account for makes the entry unassessed. The comparison companion currently has
-no report-aware reference policy argument. Do not assume its ordinary identity
-call implements this reconciliation rule. Supply that logic in the adapter, or
-report an entry as unassessed when you cannot judge it truthfully. The minimal
-example has no references and does not need that logic.
+account for makes the entry unassessed. Use the comparison companion's
+`identical_with_references(left, right, accounted_for, limits)` with a callback
+that identifies targets your report accounts for. Its `ReferenceContext` exposes
+`spelling()`, the original `schema()`, `resource()` and `base()`, so accounting can
+distinguish equal spellings in different resources. It preserves same-spelled
+accounted references as leaves and keeps their siblings and containing allOf
+unmerged. If it returns false, compare again with `&|_| true`: a true answer then
+means the entry differs only behind unaccounted targets, so report `unassessed`.
+A normalization failure also provides no identity answer. Use
+`identical_with_references_and_control` when cooperative cancellation is needed.
+The larger pull example demonstrates these calls; the minimal example has no
+references.
 
 Binding proposals can change binding `data` and the operation's `input` and
 `output`, or remove those slots with a nonempty `remove` array. Source proposals
@@ -1092,7 +1099,7 @@ Run both native and Wasm builds and exercise any actual host transport separatel
 - Build for Wasm, then verify the host imports and local-future requirements.
 
 For the full current contracts, read the pinned
-[binding invocation](https://github.com/openbindings/interfaces/blob/67f707c31aecbdf0551385e369d8024097db6278/binding-invoker/README.md),
-[kind description](https://github.com/openbindings/interfaces/blob/67f707c31aecbdf0551385e369d8024097db6278/kind-descriptor/README.md) and
-[source pull](https://github.com/openbindings/interfaces/blob/67f707c31aecbdf0551385e369d8024097db6278/source-puller/README.md)
+[binding invocation](https://github.com/openbindings/interfaces/blob/484c9399207de99bd56921cead5f44a7b5740d9e/binding-invoker/README.md),
+[kind description](https://github.com/openbindings/interfaces/blob/484c9399207de99bd56921cead5f44a7b5740d9e/kind-descriptor/README.md) and
+[source pull](https://github.com/openbindings/interfaces/blob/484c9399207de99bd56921cead5f44a7b5740d9e/source-puller/README.md)
 publications. Interface and SDK versions are independent.

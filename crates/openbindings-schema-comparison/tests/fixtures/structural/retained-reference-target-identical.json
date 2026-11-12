@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "description": "A reference inside a retained applicator whose targets normalize identically on both sides leaves the schemas identical.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Id": {
+        "type": "string",
+        "description": "left"
+      }
+    },
+    "operations": {
+      "list": {
+        "input": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/schemas/Id"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Id": {
+        "type": "string"
+      }
+    },
+    "operations": {
+      "list": {
+        "input": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/schemas/Id"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

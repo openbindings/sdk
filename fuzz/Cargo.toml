@@ -10,6 +10,7 @@ cargo-fuzz = true
 [workspace]
 
 [dependencies]
+openbindings-schema-comparison = { path = "../crates/openbindings-schema-comparison" }
 libfuzzer-sys = "=0.4.10"
 openbindings = { path = "../crates/openbindings" }
 openbindings-internal-json = { path = "../crates/openbindings-internal-json" }
@@ -47,6 +48,13 @@ bench = false
 [[bin]]
 name = "lanes"
 path = "fuzz_targets/lanes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "comparison"
+path = "fuzz_targets/comparison.rs"
 test = false
 doc = false
 bench = false
