@@ -4,7 +4,7 @@ For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 
 This unpublished companion implements source-puller version
-0.1.0 at interfaces revision `67f707c31aecbdf0551385e369d8024097db6278`.
+0.1.0 at interfaces revision `484c9399207de99bd56921cead5f44a7b5740d9e`.
 It carries additions to one original document and the report of pulling one
 selected source. Kind implementations own source interpretation and projection.
 A report is a producer claim, not proof of live availability or fidelity.

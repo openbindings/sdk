@@ -22,6 +22,7 @@ impl Default for ComparisonLimits {
     }
 }
 pub(crate) struct Attempt<'a> {
+    pub(crate) contexts: Vec<crate::ComparisonContext>,
     limits: ComparisonLimits,
     work: usize,
     allocation: usize,
@@ -31,6 +32,7 @@ pub(crate) struct Attempt<'a> {
 impl<'a> Attempt<'a> {
     pub(crate) fn new(limits: ComparisonLimits, control: &'a dyn WorkControl) -> Self {
         Self {
+            contexts: Vec::new(),
             limits,
             work: 0,
             allocation: 0,

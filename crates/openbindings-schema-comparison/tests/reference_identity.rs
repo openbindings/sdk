@@ -69,6 +69,31 @@ fn unaccounted_target_drift_has_a_second_identity_question() {
         identical_with_references(Some(&a), Some(&b), &|_| true, &ComparisonLimits::default()),
         Ok(true)
     );
+    for schema in [
+        r##"{"not":{"$ref":"#/schemas/S"}}"##,
+        r##"{"$dynamicRef":"#/schemas/S"}"##,
+    ] {
+        let before = input(schema, r#"{"type":"string"}"#);
+        let after = input(schema, r#"{"type":"number"}"#);
+        assert_eq!(
+            identical_with_references(
+                Some(&before),
+                Some(&after),
+                &|_| true,
+                &ComparisonLimits::default()
+            ),
+            Ok(true)
+        );
+        assert_eq!(
+            identical_with_references(
+                Some(&before),
+                Some(&after),
+                &|_| false,
+                &ComparisonLimits::default()
+            ),
+            Ok(false)
+        );
+    }
     let inline = input(r#"{"type":"string"}"#, "true");
     assert_eq!(
         identical_with_references(
@@ -103,7 +128,7 @@ fn only_same_spelled_accounted_references_can_hide_missing_content_or_cycles() {
             &|_| false,
             &ComparisonLimits::default()
         ),
-        Ok(true)
+        Err(ComparisonFailure::InvalidReference)
     );
     let malformed_target = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"$ref":"not a uri"}"#);
     assert_eq!(
@@ -200,6 +225,7 @@ fn accounting_receives_the_original_resource_context_without_disclosing_it() {
             context.schema().get("$ref").unwrap().as_str(),
             Some(context.spelling())
         );
+        assert!(context.target().unwrap().get("type").is_some());
         assert!(!format!("{context:?}").contains("sentinel"));
         context.base() == Some("https://sentinel.test/root")
     };
@@ -216,5 +242,26 @@ fn accounting_receives_the_original_resource_context_without_disclosing_it() {
             &ComparisonLimits::default()
         ),
         Ok(false)
+    );
+}
+
+#[test]
+fn an_inline_occurrence_does_not_keep_another_propertys_reference_as_a_leaf() {
+    let left = input(
+        r##"{"properties":{"owner":{"$ref":"#/schemas/S"},"author":{"$ref":"#/schemas/S"}}}"##,
+        r#"{"type":"string"}"#,
+    );
+    let right = input(
+        r##"{"properties":{"owner":{"type":"string"},"author":{"$ref":"#/schemas/S"}}}"##,
+        r#"{"type":"string"}"#,
+    );
+    assert_eq!(
+        identical_with_references(
+            Some(&left),
+            Some(&right),
+            &|_| true,
+            &ComparisonLimits::default()
+        ),
+        Ok(true)
     );
 }

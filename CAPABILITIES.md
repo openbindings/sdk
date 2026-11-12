@@ -102,18 +102,23 @@ qualification scopes are recorded in [performance boundaries](docs/performance-b
 
 The optional [comparison companion](crates/openbindings-schema-comparison/README.md)
 implements normalized identity, directional compatibility and interface checking
-from `OB-2020-12` profile 0.1. It preserves optional
+from `OB-2020-12` profile 0.1, amended in interfaces revision
+`484c9399207de99bd56921cead5f44a7b5740d9e`. It preserves optional
 slots, exact numbers/strings, opaque keyword values and union multiplicity. Explicit
 caller roots, bases and resource records govern references; it performs no fetching
-and does not reuse core `$id` interpretation or value evaluation. Its Equal answer
+and does not reuse core `$id` interpretation or value evaluation. Its identity answer
 is profile identity, not general schema equivalence or a verified reuse claim.
 
-The comparison fixture harness passes 27 ordinary and 10 exact identity groups,
-plus all 59 ordinary and 29 exact directional groups (including expected schema
+The comparison fixture harness passes 30 ordinary and 10 exact identity groups,
+plus all 62 ordinary and 29 exact directional groups (including expected schema
 errors), with no skipped groups. Directional verdicts distinguish compatible,
 incompatible and indeterminate; interface checking retains every operation,
-missing matches, skipped slots and comparison failures, and collapses verdicts as
-indeterminate > incompatible > compatible. Reference-rule identity lets pullers
+every distinct alias match, selected realization/consumption roles, skipped slots
+and comparison failures. Callers choose summary treatment of failures;
+`Verdict::collapse` takes verdicts only. Reusable `ComparisonContext`s index
+documents lazily and keep completed indexing after successful work. Both-union
+positions fail closed when non-identical. Retained applicator references compare
+normalized targets, and `$defs` retention is local to each schema subtree. Reference-rule identity lets pullers
 keep same-spelled accounted references as leaves and ask whether remaining drift
 lies only behind unaccounted targets. The caller supplies accounting.
 Missing/cyclic followed references, repeated-first-enum intersection ambiguity,

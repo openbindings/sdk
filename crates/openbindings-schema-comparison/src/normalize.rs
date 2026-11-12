@@ -84,6 +84,55 @@ pub(crate) fn outside(
     Ok(false)
 }
 
+// Retention belongs to this schema's own schema subtree, never its resource.
+fn keep_defs(
+    schema: JsonRef<'_>,
+    _depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
+    let mut pending = attempt.vector(1)?;
+    pending.push(schema.to_owned());
+    while let Some(schema) = pending.pop() {
+        if let Some(members) = schema.view().members() {
+            for member in members {
+                let key = value::name(member.name, attempt)?;
+                if !known(&key) && !stripped(&key) && !is(&key, "$ref") && !is(&key, "$defs") {
+                    return Ok(true);
+                }
+            }
+        }
+        let mut failure = None;
+        openbindings_internal_schema::schema_index::each_schema_child(schema.view(), |child| {
+            if failure.is_none() {
+                match attempt.allocate(2 * std::mem::size_of::<openbindings::JsonValue>()) {
+                    Ok(()) => pending.push(child.to_owned()),
+                    Err(e) => failure = Some(e),
+                }
+            }
+        });
+        if let Some(error) = failure {
+            return Err(error);
+        }
+    }
+    Ok(false)
+}
+fn retained_applicator(key: &[u16]) -> bool {
+    [
+        "not",
+        "if",
+        "then",
+        "else",
+        "dependentSchemas",
+        "prefixItems",
+        "contains",
+        "patternProperties",
+        "propertyNames",
+        "unevaluatedItems",
+        "unevaluatedProperties",
+    ]
+    .iter()
+    .any(|s| is(key, s))
+}
 pub(crate) fn normalize(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
     let resources = Resources::new(input, attempt)?;
     let active = attempt.vector(129)?;
@@ -97,7 +146,7 @@ pub(crate) fn normalize(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Resul
 }
 pub(crate) fn normalize_with_references(
     input: &SchemaInput,
-    leaves: &BTreeMap<Name, ()>,
+    leaves: &BTreeMap<crate::reference_identity::ReferenceKey, ()>,
     accounted_for: &dyn Fn(crate::ReferenceContext<'_>) -> bool,
     attempt: &mut Attempt<'_>,
 ) -> Result<Value, Failure> {
@@ -112,7 +161,7 @@ pub(crate) fn normalize_with_references(
     .schema(input.schema.view(), 0, 0, attempt)
 }
 struct Engine<'a, const REFERENCES: bool> {
-    leaves: Option<&'a BTreeMap<Name, ()>>,
+    leaves: Option<&'a BTreeMap<crate::reference_identity::ReferenceKey, ()>>,
     accounted_for: Option<&'a dyn Fn(crate::ReferenceContext<'_>) -> bool>,
     resources: Resources,
     active: Vec<((usize, usize), usize)>,
@@ -136,6 +185,130 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         let result = self.inner(schema, scope, depth, attempt);
         self.active.pop();
         result
+    }
+    fn keep_reference(
+        &self,
+        schema: JsonRef<'_>,
+        scope: usize,
+        dynamic: bool,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<bool, Failure> {
+        if !REFERENCES {
+            return Ok(false);
+        }
+        let leaves = self.leaves.expect("reference variant");
+        attempt.work(leaves.len().saturating_add(1).ilog2() as usize + 1)?;
+        if !leaves.contains_key(&(backend::occurrence(schema), dynamic)) {
+            return Ok(false);
+        }
+        let reference = schema
+            .get(if dynamic { "$dynamicRef" } else { "$ref" })
+            .expect("reference leaf");
+        let spelling = reference.as_str().ok_or(Failure::InvalidReference)?;
+        Ok((self.accounted_for.expect("reference variant"))(
+            self.resources.context(scope, schema, spelling, attempt)?,
+        ))
+    }
+    fn retained_reference(
+        &mut self,
+        reference: JsonRef<'_>,
+        scope: usize,
+        depth: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Value, Failure> {
+        let (target, target_scope) = self.resources.resolve(scope, reference, attempt)?;
+        let authored = value::import(reference, depth, attempt)?;
+        let target = self.schema(target.view(), target_scope, depth + 1, attempt)?;
+        attempt.allocate(2 * std::mem::size_of::<Value>())?;
+        Ok(Value::Reference(Box::new(authored), Box::new(target)))
+    }
+    fn retained_keyword(
+        &mut self,
+        key: &[u16],
+        raw: JsonRef<'_>,
+        scope: usize,
+        depth: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Value, Failure> {
+        if is(key, "dependentSchemas") || is(key, "patternProperties") || is(key, "properties") {
+            let mut object = Object::new();
+            for member in raw.members().ok_or(Failure::InvalidSchema)? {
+                let key = value::name(member.name, attempt)?;
+                let child = self.retained_schema(member.value, scope, depth + 1, attempt)?;
+                value::insert(&mut object, key, child, attempt)?;
+            }
+            Ok(Value::Object(object))
+        } else if ["prefixItems", "allOf", "oneOf", "anyOf"]
+            .iter()
+            .any(|s| is(key, s))
+        {
+            let elements = raw.elements().ok_or(Failure::InvalidSchema)?;
+            let mut children = attempt.vector(elements.len())?;
+            for child in elements {
+                children.push(self.retained_schema(child, scope, depth + 1, attempt)?);
+            }
+            Ok(Value::Array(children))
+        } else {
+            self.retained_schema(raw, scope, depth, attempt)
+        }
+    }
+    fn retained_schema(
+        &mut self,
+        schema: JsonRef<'_>,
+        scope: usize,
+        depth: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Value, Failure> {
+        attempt.depth(depth)?;
+        let scope = self.resources.enter(schema, scope, attempt)?;
+        let identity = (backend::occurrence(schema), scope);
+        attempt.work(self.active.len().saturating_add(1))?;
+        if self.active.contains(&identity) {
+            return Err(Failure::ReferenceCycle);
+        }
+        self.active.push(identity);
+        let result = self.retained_inner(schema, scope, depth, attempt);
+        self.active.pop();
+        result
+    }
+    fn retained_inner(
+        &mut self,
+        schema: JsonRef<'_>,
+        scope: usize,
+        depth: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Value, Failure> {
+        if schema.as_bool().is_some() {
+            return value::import(schema, depth, attempt);
+        }
+        let mut object = Object::new();
+        for member in schema.members().ok_or(Failure::InvalidSchema)? {
+            let key = value::name(member.name, attempt)?;
+            let child = if is(&key, "$ref") || is(&key, "$dynamicRef") {
+                if self.keep_reference(schema, scope, is(&key, "$dynamicRef"), attempt)? {
+                    value::import(member.value, depth + 1, attempt)?
+                } else {
+                    self.retained_reference(member.value, scope, depth + 1, attempt)?
+                }
+            } else if retained_applicator(&key)
+                || [
+                    "properties",
+                    "items",
+                    "additionalProperties",
+                    "allOf",
+                    "oneOf",
+                    "anyOf",
+                ]
+                .iter()
+                .any(|s| is(&key, s))
+            {
+                self.retained_keyword(&key, member.value, scope, depth + 1, attempt)?
+            } else {
+                value::import(member.value, depth + 1, attempt)?
+            };
+            value::insert(&mut object, key, child, attempt)?;
+        }
+        Ok(Value::Object(object))
     }
     fn inner(
         &mut self,
@@ -161,30 +334,8 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             let key = value::name(member.name, attempt)?;
             value::insert(&mut raw, key, member.value.to_owned(), attempt)?;
         }
-        let keep = if REFERENCES {
-            if let Some(reference) = get(&raw, "$ref") {
-                let name = value::name(reference.view(), attempt)?;
-                let leaves = self.leaves.expect("reference variant");
-                attempt.work(
-                    name.len()
-                        .saturating_add(1)
-                        .saturating_mul(leaves.len().saturating_add(1).ilog2() as usize + 1)
-                        .saturating_mul(12),
-                )?;
-                if leaves.contains_key(&name) {
-                    let spelling = reference.view().as_str().ok_or(Failure::InvalidReference)?;
-                    (self.accounted_for.expect("reference variant"))(
-                        self.resources.context(scope, schema, spelling),
-                    )
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        } else {
-            false
-        };
+        let keep =
+            get(&raw, "$ref").is_some() && self.keep_reference(schema, scope, false, attempt)?;
         let target = if let Some(reference) = get(&raw, "$ref").filter(|_| !keep) {
             let (target, target_scope) =
                 self.resources.resolve(scope, reference.view(), attempt)?;
@@ -197,7 +348,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         for (key, raw) in raw {
             if stripped(&key)
                 || (is(&key, "$ref") && !keep)
-                || (is(&key, "$defs") && !self.resources.keep_defs(scope))
+                || (is(&key, "$defs") && !keep_defs(schema, depth, attempt)?)
             {
                 continue;
             }
@@ -234,6 +385,14 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
                     continue;
                 }
                 Value::Union(values)
+            } else if retained_applicator(&key) {
+                self.retained_keyword(&key, raw, scope, depth + 1, attempt)?
+            } else if is(&key, "$dynamicRef") {
+                if self.keep_reference(schema, scope, true, attempt)? {
+                    value::import(raw, depth + 1, attempt)?
+                } else {
+                    self.retained_reference(raw, scope, depth + 1, attempt)?
+                }
             } else {
                 if is(&key, "enum") && raw.kind() != JsonKind::Array {
                     return Err(Failure::InvalidSchema);

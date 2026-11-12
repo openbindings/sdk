@@ -42,7 +42,7 @@ fn document_identity(left: &JsonValue, right: &JsonValue) -> Result<bool, Compar
     Ok(answer)
 }
 #[test]
-fn all_27_identity_and_59_directional_groups_preserve_the_published_verdicts() {
+fn all_30_identity_and_62_directional_groups_preserve_the_published_verdicts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let manifest: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/manifest.json")).unwrap();
@@ -58,17 +58,18 @@ fn all_27_identity_and_59_directional_groups_preserve_the_published_verdicts() {
             let report = check_interface(
                 &conformant(&fixture.get("left").unwrap().to_owned()),
                 &conformant(&fixture.get("right").unwrap().to_owned()),
+                &|_| Some(OperationRole::Realized),
                 &ComparisonLimits::default(),
             )
             .unwrap();
             assert_eq!(
-                verdict(report.verdict().unwrap()),
+                verdict(summary(&report).unwrap()),
                 record["verdict"].as_str().unwrap(),
                 "{}",
                 record["path"]
             );
             assert_eq!(
-                verdict(report.verdict().unwrap()),
+                verdict(summary(&report).unwrap()),
                 fixture
                     .get("expected")
                     .unwrap()
@@ -125,21 +126,7 @@ fn all_27_identity_and_59_directional_groups_preserve_the_published_verdicts() {
                 .iter()
                 .map(|v| v.as_str().unwrap())
                 .collect();
-            match record["path"].as_str().unwrap() {
-                "subsumption/union-variants-input-incompatible.json"
-                | "subsumption/union-variants-output-incompatible.json" => {
-                    // The prose's string-bound rule (7) precedes unions (9).
-                    // These cross-form cases constrain minLength with no type;
-                    // missing type includes string, so bounds decide first.
-                    assert_eq!(expected, BTreeSet::from(["union"]));
-                    assert_eq!(actual, BTreeSet::from(["length-bounds", "union"]));
-                    println!(
-                        "{}: verdict passed; prose rule order requires length-bounds in addition to the manifest's union finding",
-                        record["path"]
-                    );
-                }
-                _ => assert_eq!(actual, expected, "{} findings", record["path"]),
-            }
+            assert_eq!(actual, expected, "{} findings", record["path"]);
             continue;
         }
         identity += 1;
@@ -159,7 +146,7 @@ fn all_27_identity_and_59_directional_groups_preserve_the_published_verdicts() {
     }
     assert_eq!(
         (identity, directional),
-        (27, 59),
+        (30, 62),
         "every identity and directional group ran"
     );
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
@@ -179,19 +166,20 @@ fn all_10_identity_and_29_directional_exact_groups_preserve_the_published_verdic
             let report = check_interface(
                 &conformant(&json(case["leftJSON"].as_str().unwrap())),
                 &conformant(&json(case["rightJSON"].as_str().unwrap())),
+                &|_| Some(OperationRole::Realized),
                 &ComparisonLimits::default(),
             )
             .unwrap();
             if case["expected"]["error"] == "schema" {
                 assert_eq!(
-                    report.verdict(),
+                    summary(&report),
                     Err(ComparisonFailure::UnsatisfiableMerge),
                     "{}",
                     case["id"]
                 );
             } else {
                 assert_eq!(
-                    verdict(report.verdict().unwrap()),
+                    verdict(summary(&report).unwrap()),
                     case["expected"]["verdict"].as_str().unwrap(),
                     "{}",
                     case["id"]
@@ -238,4 +226,20 @@ fn verdict(verdict: Verdict) -> &'static str {
         Verdict::Incompatible => "incompatible",
         Verdict::Indeterminate => "indeterminate",
     }
+}
+
+fn summary(report: &InterfaceComparison) -> Result<Verdict, ComparisonFailure> {
+    let mut verdicts = Vec::new();
+    for operation in report.operations() {
+        if operation.is_missing() {
+            verdicts.push(Verdict::Incompatible);
+        }
+        for slot in [operation.output(), operation.input()]
+            .into_iter()
+            .flatten()
+        {
+            verdicts.push(slot.as_ref().map_err(|e| *e)?.verdict());
+        }
+    }
+    Ok(Verdict::collapse(verdicts))
 }

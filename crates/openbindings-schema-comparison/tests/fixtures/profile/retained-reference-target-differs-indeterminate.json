@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "description": "A reference inside a retained applicator (prefixItems) is compared by its target: the same spelling reaching different named schemas is not identical, so the outside-profile position is indeterminate.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Id": {
+        "type": "string"
+      }
+    },
+    "operations": {
+      "list": {
+        "input": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/schemas/Id"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "schemas": {
+      "Id": {
+        "type": "integer"
+      }
+    },
+    "operations": {
+      "list": {
+        "input": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "$ref": "#/schemas/Id"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

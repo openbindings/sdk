@@ -236,6 +236,8 @@ fn walk(
         || outside(c, depth, attempt)?
         || get(t, "allOf").is_some()
         || get(c, "allOf").is_some()
+        || (get(t, "oneOf").is_some() && get(t, "anyOf").is_some())
+        || (get(c, "oneOf").is_some() && get(c, "anyOf").is_some())
     {
         return answer(
             Verdict::Indeterminate,
@@ -655,6 +657,9 @@ fn bounds(
     answer(Verdict::Incompatible, reason, attempt).map(Some)
 }
 fn union(map: &Object) -> Option<(&'static str, &[Value])> {
+    if get(map, "oneOf").is_some() && get(map, "anyOf").is_some() {
+        return None;
+    }
     for key in ["oneOf", "anyOf"] {
         if let Some(Value::Union(v)) = get(map, key) {
             return Some((key, v));
@@ -760,6 +765,7 @@ fn render(v: &Value, depth: usize, attempt: &mut Attempt<'_>) -> Result<String, 
     attempt.allocate(16)?;
     let mut out = String::new();
     match v {
+        Value::Reference(authored, _) => return render(authored, depth + 1, attempt),
         Value::Null => out.push_str("null"),
         Value::Boolean(b) => out.push_str(if *b { "true" } else { "false" }),
         Value::Number(n) => {

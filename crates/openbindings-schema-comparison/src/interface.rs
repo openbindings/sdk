@@ -1,14 +1,26 @@
 use crate::{
-    Comparison, ComparisonFailure, ComparisonLimits, Direction, SchemaInput, Verdict,
+    Comparison, ComparisonContext, ComparisonFailure, ComparisonLimits, Direction, Verdict,
     budget::Attempt, directional,
 };
-use openbindings::ConformantDocument;
+use openbindings::{ConformantDocument, Operation};
 use std::fmt;
 
+/// Caller-selected use of a required operation. Both emits a separate result
+/// for each role, with realization before consumption.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OperationRole {
+    /// Provided operation realizes the required contract.
+    Realized,
+    /// Provided operation consumes the required contract.
+    Consumed,
+    /// Check both realization and consumption.
+    Both,
+}
 /// One required operation, including skipped slots and any comparison failures.
 #[derive(Clone)]
 pub struct OperationComparison {
     required: String,
+    role: OperationRole,
     provided: Option<String>,
     output: Option<Result<Comparison, ComparisonFailure>>,
     input: Option<Result<Comparison, ComparisonFailure>>,
@@ -16,6 +28,7 @@ pub struct OperationComparison {
 impl fmt::Debug for OperationComparison {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OperationComparison")
+            .field("role", &self.role)
             .field("missing", &self.is_missing())
             .field("output", &self.output)
             .field("input", &self.input)
@@ -43,16 +56,9 @@ impl OperationComparison {
     pub fn input(&self) -> Option<&Result<Comparison, ComparisonFailure>> {
         self.input.as_ref()
     }
-    /// Collapse this operation. A failure is never converted to a verdict.
-    pub fn verdict(&self) -> Result<Verdict, ComparisonFailure> {
-        if self.is_missing() {
-            return Ok(Verdict::Incompatible);
-        }
-        let mut verdict = Verdict::Compatible;
-        for result in [self.output(), self.input()].into_iter().flatten() {
-            verdict = verdict.max(result.as_ref().map_err(|e| *e)?.verdict());
-        }
-        Ok(verdict)
+    /// Role checked for this correspondence. Both produces two correspondences.
+    pub fn role(&self) -> OperationRole {
+        self.role
     }
 }
 /// An interface issue's kind. Indeterminate outcomes and failures stay distinct.
@@ -88,6 +94,10 @@ impl fmt::Debug for InterfaceIssue<'_> {
     }
 }
 impl<'a> InterfaceIssue<'a> {
+    /// The correspondence and checked role that produced this issue.
+    pub fn correspondence(&self) -> &'a OperationComparison {
+        self.operation
+    }
     /// Required operation's primary key.
     pub fn operation(&self) -> &'a str {
         self.operation.required()
@@ -158,45 +168,40 @@ impl InterfaceComparison {
                 .flatten()
         })
     }
-    /// Collapse all operations using the profile dominance. Returns the first
-    /// comparison failure in report order when any check failed, never a verdict.
-    pub fn verdict(&self) -> Result<Verdict, ComparisonFailure> {
-        let mut verdict = Verdict::Compatible;
-        for operation in &self.operations {
-            verdict = verdict.max(operation.verdict()?);
-        }
-        Ok(verdict)
-    }
 }
-/// Check provided operations as realizing the required document's contract.
-/// Swap the explicit roles to check the opposite consumption relationship.
-/// Matching tries the required key, then its authored aliases, in the provided
-/// flat key-and-alias namespace. Unspecified schema pairs are skipped entirely.
-/// Setup failure returns no report; slot failures stay in the completed report.
+/// Check every provided operation identified by any required key or alias.
+/// The callback chooses each required operation's role, or None to exclude it.
+/// Correspondences sort by required key, provided key and role; each checks
+/// output before input. Slot failures remain results for caller summary policy.
 pub fn check_interface(
     required: &ConformantDocument,
     provided: &ConformantDocument,
+    role: &dyn Fn(&Operation) -> Option<OperationRole>,
     limits: &ComparisonLimits,
 ) -> Result<InterfaceComparison, ComparisonFailure> {
     check_interface_with_control(
         required,
         provided,
+        role,
         limits,
         &std::sync::atomic::AtomicBool::new(false),
     )
 }
-/// Interface checking with one shared monotone budget and cooperative control.
-/// After a resource refusal, subsequent present pairs retain that same failure;
-/// no failed allowance is reset for a later operation.
+/// Interface checking with one monotone allowance and cooperative control.
+/// Setup failure returns no report; subsequent slot failures stay in the report.
 pub fn check_interface_with_control(
     required: &ConformantDocument,
     provided: &ConformantDocument,
+    role: &dyn Fn(&Operation) -> Option<OperationRole>,
     limits: &ComparisonLimits,
     control: &dyn openbindings::WorkControl,
 ) -> Result<InterfaceComparison, ComparisonFailure> {
     let mut attempt = Attempt::new(*limits, control);
     attempt.check()?;
     let root = required.document().value();
+    let provided_root = provided.document().value();
+    let required_context = ComparisonContext::new(root.clone());
+    let provided_context = ComparisonContext::new(provided_root.clone());
     let members = root
         .get("operations")
         .expect("conformant operations")
@@ -204,14 +209,16 @@ pub fn check_interface_with_control(
         .expect("operation map");
     let mut pending = attempt.vector(members.len())?;
     let mut comparisons = attempt.vector(members.len())?;
-    let provided_root = provided.document().value();
     let height = provided_root.text().len().saturating_add(1).ilog2() as usize + 1;
     let mut name_bytes = 0usize;
     for member in members {
         let key = member.name.as_str().expect("conformant key");
-        name_bytes = name_bytes.saturating_add(key.len());
         attempt.work(key.len().saturating_add(1))?;
-        let mut matched = None;
+        let operation = required.operation(key).expect("required operation");
+        let Some(role) = role(&operation) else {
+            continue;
+        };
+        let mut matches = std::collections::BTreeMap::new();
         for name in std::iter::once(key).chain(
             member
                 .value
@@ -227,20 +234,42 @@ pub fn check_interface_with_control(
                     .saturating_mul(12),
             )?;
             if let Some(operation) = provided.resolve_operation(name) {
-                matched = Some(operation);
-                break;
+                attempt.allocate(operation.key().len().saturating_add(512))?;
+                matches.insert(operation.key().to_owned(), operation.value().to_owned());
             }
         }
-        attempt.allocate(
-            key.len()
-                .saturating_add(matched.as_ref().map_or(0, |o| o.key().len())),
-        )?;
-        let provided_key = matched.as_ref().map(|o| o.key().to_owned());
-        let provided_value = matched
-            .as_ref()
-            .map(|operation| operation.value().to_owned());
-        // Retain views now, before a slot can exhaust the monotone allowance.
-        pending.push((key.to_owned(), provided_key, member.value, provided_value));
+        let mut add = |provided: Option<String>,
+                       value: Option<openbindings::JsonValue>|
+         -> Result<(), ComparisonFailure> {
+            for selected in [OperationRole::Realized, OperationRole::Consumed] {
+                if role != OperationRole::Both && selected != role {
+                    continue;
+                }
+                attempt.allocate(
+                    key.len()
+                        .saturating_add(provided.as_ref().map_or(0, String::len))
+                        .saturating_add(2 * std::mem::size_of::<OperationComparison>()),
+                )?;
+                name_bytes = name_bytes
+                    .saturating_add(key.len())
+                    .saturating_add(provided.as_ref().map_or(0, String::len));
+                pending.push((
+                    key.to_owned(),
+                    provided.clone(),
+                    selected,
+                    member.value,
+                    value.clone(),
+                ));
+            }
+            Ok(())
+        };
+        if matches.is_empty() {
+            add(None, None)?;
+        } else {
+            for (key, value) in &matches {
+                add(Some(key.clone()), Some(value.clone()))?;
+            }
+        }
     }
     attempt.work(
         name_bytes
@@ -248,8 +277,8 @@ pub fn check_interface_with_control(
             .saturating_mul(pending.len().saturating_add(1).ilog2() as usize + 1)
             .saturating_mul(2),
     )?;
-    pending.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-    for (key, provided_key, target, candidate) in pending {
+    pending.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    for (key, provided_key, role, target, candidate) in pending {
         let mut check = |direction: Direction, name: &str| {
             let (Some(t), Some(c)) = (
                 target.get(name),
@@ -257,15 +286,20 @@ pub fn check_interface_with_control(
             ) else {
                 return None;
             };
-            let t = SchemaInput::new(t.to_owned(), root.clone());
-            let c = SchemaInput::new(c.to_owned(), provided_root.clone());
-            Some(directional::inputs(direction, &t, &c, &mut attempt))
+            let t = required_context.schema(t.to_owned());
+            let c = provided_context.schema(c.to_owned());
+            Some(if role == OperationRole::Consumed {
+                directional::inputs(direction, &c, &t, &mut attempt)
+            } else {
+                directional::inputs(direction, &t, &c, &mut attempt)
+            })
         };
         let output = check(Direction::Output, "output");
         let input = check(Direction::Input, "input");
         comparisons.push(OperationComparison {
             required: key,
             provided: provided_key,
+            role,
             output,
             input,
         });

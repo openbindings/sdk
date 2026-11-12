@@ -265,3 +265,53 @@ pub fn pattern(data: &[u8]) -> bool {
     }
     false
 }
+
+/// Arbitrary schema pairs in one exact document exercise identity, directional
+/// comparison, reusable context and the source-puller reference rule. Failure
+/// is an admitted outcome, never an inequality or an indeterminate verdict.
+pub fn comparison(data: &[u8]) -> bool {
+    use openbindings_schema_comparison::{
+        ComparisonContext, ComparisonLimits, Direction, Verdict, compare, identical,
+        identical_with_references,
+    };
+    if data.len() > MAX_INPUT {
+        return false;
+    }
+    let Ok(root) = JsonValue::parse(data) else {
+        return false;
+    };
+    let (Some(a), Some(b)) = (root.view().element(0), root.view().element(1)) else {
+        return false;
+    };
+    let context = ComparisonContext::new(root.clone());
+    let a = context.schema(a.to_owned());
+    let b = context.schema(b.to_owned());
+    let limits = ComparisonLimits::default();
+    let identity = identical(Some(&a), Some(&b), &limits);
+    if let (Ok(left), Ok(right)) = (identity, identical(Some(&b), Some(&a), &limits)) {
+        assert_eq!(left, right);
+    }
+    if let (Ok(plain), Ok(followed)) = (
+        identity,
+        identical_with_references(Some(&a), Some(&b), &|_| false, &limits),
+    ) {
+        assert_eq!(plain, followed);
+    }
+    let mut success = identity.is_ok();
+    for direction in [Direction::Input, Direction::Output] {
+        if let Ok(result) = compare(direction, &a, &b, &limits) {
+            success = true;
+            if identity == Ok(true) {
+                assert_eq!(result.verdict(), Verdict::Compatible);
+            }
+        }
+        if let Ok(result) = compare(direction, &a, &a, &limits) {
+            assert_eq!(result.verdict(), Verdict::Compatible);
+        }
+    }
+    success |= identical_with_references(Some(&a), Some(&b), &|_| true, &limits).is_ok();
+    if let Ok(equal) = identical_with_references(Some(&a), Some(&a), &|_| true, &limits) {
+        assert!(equal);
+    }
+    success
+}

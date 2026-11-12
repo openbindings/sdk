@@ -1,25 +1,39 @@
-//! Resolve profile references in their containing schema resource. Only schema
-//! positions declare identifiers; instance data never changes the reference base.
-use crate::{ComparisonFailure as Failure, SchemaInput, budget::Attempt};
+//! Lazy resource resolution. Schema ancestry never interprets carrier members.
+use crate::{ComparisonContext, ComparisonFailure as Failure, SchemaInput, budget::Attempt};
 use openbindings::{JsonKind, JsonRef, JsonValue};
 use openbindings_internal_json::backend;
-use openbindings_internal_schema::{schema_index::each_schema_child, uri};
-use std::collections::BTreeMap;
+use openbindings_internal_schema::{
+    schema_index::{SCHEMA_SELECTORS, SchemaSelector, each_schema_child},
+    uri,
+};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 struct Resource {
     base: Option<String>,
     document: JsonValue,
-    keep_defs: bool,
 }
-pub(crate) struct Resources {
+#[derive(Default)]
+pub(crate) struct Index {
     entries: Vec<Resource>,
+    uris: BTreeMap<String, Option<usize>>,
     scopes: BTreeMap<(usize, usize), usize>,
-    anchors: BTreeMap<(usize, String), JsonValue>,
+    catalog: bool,
+    cataloged: std::collections::BTreeSet<(usize, usize)>,
+    tops: BTreeMap<(usize, usize), JsonValue>,
+    anchors: BTreeMap<(usize, String), Option<JsonValue>>,
+    anchored: std::collections::BTreeSet<usize>,
+}
+#[derive(Clone)]
+pub(crate) struct Resources {
+    index: Arc<Mutex<Index>>,
 }
 fn identity(text: &str, attempt: &mut Attempt<'_>) -> Result<String, Failure> {
     attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
     attempt.allocate(text.len().saturating_mul(8).saturating_add(128))?;
-    if !uri::absolute(text) || uri::fragment(text).is_some_and(|fragment| !fragment.is_empty()) {
+    if !uri::absolute(text) || uri::fragment(text).is_some_and(|f| !f.is_empty()) {
         return Err(Failure::InvalidReference);
     }
     let mut resolved = uri::resolve(text, text).ok_or(Failure::InvalidReference)?;
@@ -28,95 +42,64 @@ fn identity(text: &str, attempt: &mut Attempt<'_>) -> Result<String, Failure> {
     }
     Ok(resolved)
 }
-// Mark only schema keyword positions. Extension names may contain non-scalar
-// UTF-16 units, so recognizing x- must not depend on conversion to Rust text.
-fn outside_keyword(name: JsonRef<'_>, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
-    attempt.work(name.text().len().saturating_add(512))?;
-    let name = name.as_string().expect("member name");
-    if name
-        .utf16_units()
-        .take(2)
-        .eq([u16::from(b'x'), u16::from(b'-')])
-    {
-        return Ok(false);
-    }
-    let Some(text) = name.as_str() else {
-        return Ok(true);
-    };
-    if matches!(text, "$ref" | "$defs") {
-        return Ok(false);
-    }
-    let mut units = [0u16; 32];
-    if text.len() > units.len() || !text.is_ascii() {
+fn same(
+    a: &ComparisonContext,
+    b: &ComparisonContext,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
+    attempt.work(1)?;
+    if Arc::ptr_eq(&a.data, &b.data) {
         return Ok(true);
     }
-    for (target, byte) in units.iter_mut().zip(text.bytes()) {
-        *target = u16::from(byte);
+    if backend::occurrence(a.data.document.view()) != backend::occurrence(b.data.document.view()) {
+        return Ok(false);
     }
-    Ok(!crate::normalize::known(&units[..text.len()])
-        && !crate::normalize::stripped(&units[..text.len()]))
+    attempt.work(
+        a.data
+            .base
+            .as_ref()
+            .map_or(0, String::len)
+            .saturating_add(b.data.base.as_ref().map_or(0, String::len))
+            .saturating_add(1),
+    )?;
+    if a.data.base != b.data.base || a.data.resources.len() != b.data.resources.len() {
+        return Ok(false);
+    }
+    for ((u, a), (v, b)) in a.data.resources.iter().zip(&b.data.resources) {
+        attempt.work(u.len().saturating_add(v.len()).saturating_add(1))?;
+        if u != v || backend::occurrence(a.view()) != backend::occurrence(b.view()) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 impl Resources {
     pub(crate) fn new(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Result<Self, Failure> {
-        let mut entries = attempt.vector(input.resources.len().saturating_add(1))?;
-        entries.push(Resource {
-            base: input
-                .base
-                .as_deref()
-                .map(|base| identity(base, attempt))
-                .transpose()?,
-            document: input.document.clone(),
-            keep_defs: false,
-        });
-        for (base, document) in &input.resources {
-            let base = identity(base, attempt)?;
-            for known in &entries {
-                attempt.work(base.len().saturating_add(1))?;
-                if known.base.as_deref() == Some(base.as_str()) {
-                    return Err(Failure::InvalidReference);
-                }
-            }
-            entries.push(Resource {
-                base: Some(base),
-                document: document.clone(),
-                keep_defs: false,
-            });
-        }
-        let mut resources = Self {
-            entries,
-            scopes: BTreeMap::new(),
-            anchors: BTreeMap::new(),
-        };
-        for scope in 0..resources.entries.len() {
-            let root = resources.entries[scope].document.clone();
-            if root.get("openbindings").is_some() && root.get("operations").is_some() {
-                if let Some(schemas) = root.get("schemas").and_then(|v| v.members()) {
-                    for schema in schemas {
-                        resources.scan(schema.value, scope, 0, attempt)?;
-                    }
-                }
-                for operation in root
-                    .get("operations")
-                    .and_then(|v| v.members())
-                    .ok_or(Failure::InvalidSchema)?
-                {
-                    for slot in ["input", "output"] {
-                        if let Some(schema) = operation.value.get(slot) {
-                            resources.scan(schema, scope, 0, attempt)?;
-                        }
-                    }
-                }
-            } else {
-                resources.scan(root.view(), scope, 0, attempt)?;
+        // A call canonicalizes independently constructed inputs for the same root.
+        let context = &input.context;
+        let mut index = context.index.clone();
+        for position in 0..attempt.contexts.len() {
+            let known = attempt.contexts[position].clone();
+            if same(&known, context, attempt)? {
+                index = known.index;
+                break;
             }
         }
-        if !resources
-            .scopes
-            .contains_key(&backend::occurrence(input.schema.view()))
+        if !attempt
+            .contexts
+            .iter()
+            .any(|c| Arc::ptr_eq(&c.index, &index))
         {
-            resources.scan(input.schema.view(), 0, 0, attempt)?;
+            attempt.allocate(2 * std::mem::size_of::<ComparisonContext>())?;
+            attempt.contexts.push(context.clone());
         }
-        Ok(resources)
+        let result = Self { index };
+        result
+            .index
+            .lock()
+            .expect("comparison index")
+            .setup(context, attempt)?;
+        Ok(result)
     }
     pub(crate) fn enter(
         &mut self,
@@ -124,52 +107,163 @@ impl Resources {
         fallback: usize,
         attempt: &mut Attempt<'_>,
     ) -> Result<usize, Failure> {
-        if !self.scopes.contains_key(&backend::occurrence(schema)) {
-            self.scan(schema, fallback, 0, attempt)?;
-        }
-        self.scope(schema, fallback, attempt)
+        self.index
+            .lock()
+            .expect("comparison index")
+            .enter(schema, fallback, 0, attempt)
     }
-
+    pub(crate) fn resolve(
+        &self,
+        scope: usize,
+        reference: JsonRef<'_>,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<(JsonValue, usize), Failure> {
+        self.index
+            .lock()
+            .expect("comparison index")
+            .resolve(scope, reference, attempt)
+    }
     pub(crate) fn context<'a>(
-        &'a self,
+        &self,
         scope: usize,
         schema: JsonRef<'a>,
         spelling: &'a str,
-    ) -> crate::ReferenceContext<'a> {
-        crate::ReferenceContext {
+        attempt: &mut Attempt<'_>,
+    ) -> Result<crate::ReferenceContext<'a>, Failure> {
+        let mut index = self.index.lock().expect("comparison index");
+        let token = schema
+            .get("$ref")
+            .filter(|v| v.as_str() == Some(spelling))
+            .or_else(|| schema.get("$dynamicRef"))
+            .expect("reference context");
+        let target = index.resolve(scope, token, attempt).map(|(v, _)| v);
+        if let Err(e @ (Failure::LimitExceeded(_) | Failure::Cancelled)) = target {
+            return Err(e);
+        }
+        let entry = &index.entries[scope];
+        attempt.allocate(entry.base.as_ref().map_or(0, String::len))?;
+        Ok(crate::ReferenceContext {
             spelling,
             schema,
-            resource: &self.entries[scope].document,
-            base: self.entries[scope].base.as_deref(),
+            resource: entry.document.clone(),
+            base: entry.base.clone(),
+            target,
+        })
+    }
+}
+// Only a recognized schema edge can make an enclosing value a schema. In
+// particular /schemas/X and /operations/X/input stop before their carrier root.
+fn enclosing(schema: JsonRef<'_>) -> Option<JsonRef<'_>> {
+    let parent = backend::parent(schema)?;
+    if let Some(name) = backend::member_name(schema).and_then(|n| n.as_str())
+        && SCHEMA_SELECTORS
+            .iter()
+            .any(|(k, s)| *k == name && *s == SchemaSelector::Direct)
+    {
+        return Some(parent);
+    }
+    let keyword = backend::member_name(parent)?.as_str()?;
+    let grandparent = backend::parent(parent)?;
+    SCHEMA_SELECTORS
+        .iter()
+        .any(|(k, s)| {
+            *k == keyword
+                && match s {
+                    SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
+                        parent.kind() == JsonKind::Object
+                    }
+                    SchemaSelector::Array => parent.kind() == JsonKind::Array,
+                    SchemaSelector::Direct => false,
+                }
+        })
+        .then_some(grandparent)
+}
+impl Index {
+    fn setup(
+        &mut self,
+        context: &ComparisonContext,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<(), Failure> {
+        if !self.entries.is_empty() {
+            return attempt.check();
         }
+        let mut entries = attempt.vector(context.data.resources.len().saturating_add(1))?;
+        entries.push(Resource {
+            base: context
+                .data
+                .base
+                .as_deref()
+                .map(|s| identity(s, attempt))
+                .transpose()?,
+            document: context.data.document.clone(),
+        });
+        let mut uris = BTreeMap::new();
+        if let Some(base) = &entries[0].base {
+            attempt.allocate(base.len().saturating_add(2048))?;
+            uris.insert(base.clone(), Some(0));
+        }
+        for (base, document) in &context.data.resources {
+            let base = identity(base, attempt)?;
+            attempt.work(
+                base.len()
+                    .saturating_add(1)
+                    .saturating_mul(uris.len().saturating_add(1).ilog2() as usize + 1)
+                    .saturating_mul(12),
+            )?;
+            if uris.contains_key(&base) {
+                return Err(Failure::InvalidReference);
+            }
+            attempt.allocate(base.len().saturating_add(2048))?;
+            uris.insert(base.clone(), Some(entries.len()));
+            entries.push(Resource {
+                base: Some(base),
+                document: document.clone(),
+            });
+        }
+        attempt.check()?;
+        self.entries = entries;
+        self.uris = uris;
+        Ok(())
     }
-    pub(crate) fn keep_defs(&self, scope: usize) -> bool {
-        self.entries[scope].keep_defs
-    }
-
-    pub(crate) fn scope(
-        &self,
+    fn enter(
+        &mut self,
         schema: JsonRef<'_>,
         fallback: usize,
+        depth: usize,
         attempt: &mut Attempt<'_>,
     ) -> Result<usize, Failure> {
+        attempt.depth(depth)?;
+        let node = backend::occurrence(schema);
         attempt.work(self.scopes.len().saturating_add(1).ilog2() as usize + 1)?;
-        Ok(self
-            .scopes
-            .get(&backend::occurrence(schema))
-            .copied()
-            .unwrap_or(fallback))
+        if let Some(scope) = self.scopes.get(&node) {
+            return Ok(*scope);
+        }
+        let mut scope = fallback;
+        if backend::occurrence(self.entries[fallback].document.view()) != node
+            && let Some(parent) = enclosing(schema)
+        {
+            scope = self.enter(parent, fallback, depth + 1, attempt)?;
+        }
+        scope = self.declare(schema, scope, attempt)?;
+        if fallback == 0 && enclosing(schema).is_none() && !self.tops.contains_key(&node) {
+            attempt.allocate(256)?;
+            self.tops.insert(node, schema.to_owned());
+            self.catalog = false;
+        }
+        attempt.allocate(4 * std::mem::size_of::<((usize, usize), usize)>())?;
+        self.scopes.insert(node, scope);
+        Ok(scope)
     }
-
     fn declare(
         &mut self,
         schema: JsonRef<'_>,
-        scope: usize,
+        mut scope: usize,
         attempt: &mut Attempt<'_>,
     ) -> Result<usize, Failure> {
         let node = backend::occurrence(schema);
         if let Some(id) = schema.get("$id") {
             let text = id.as_str().ok_or(Failure::InvalidReference)?;
+            attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
             attempt.allocate(
                 text.len()
                     .saturating_add(self.entries[scope].base.as_ref().map_or(0, String::len))
@@ -189,92 +283,190 @@ impl Resources {
                 .ok_or(Failure::InvalidReference)?
             };
             let base = identity(&resolved, attempt)?;
-            let mut existing = None;
-            for (index, entry) in self.entries.iter().enumerate() {
-                attempt.work(base.len().saturating_add(1))?;
-                if entry.base.as_deref() == Some(&base) {
-                    existing = Some(index);
-                    break;
+            self.uri_work(&base, attempt)?;
+            if let Some(Some(index)) = self.uris.get(&base)
+                && backend::occurrence(self.entries[*index].document.view()) == node
+            {
+                return Ok(*index);
+            }
+            // An already ambiguous URI can include this occurrence. Re-entering
+            // it must not publish another declaration after a failed lookup.
+            if self.uris.get(&base) == Some(&None) {
+                for (index, resource) in self.entries.iter().enumerate() {
+                    attempt.work(base.len().saturating_add(1))?;
+                    if resource.base.as_deref() == Some(&base)
+                        && backend::occurrence(resource.document.view()) == node
+                    {
+                        return Ok(index);
+                    }
                 }
             }
-            return if let Some(index) = existing {
-                if backend::occurrence(self.entries[index].document.view()) != node {
-                    return Err(Failure::InvalidReference);
-                }
-                Ok(index)
-            } else {
-                attempt.allocate(std::mem::size_of::<Resource>().saturating_mul(2))?;
-                self.entries.push(Resource {
-                    base: Some(base),
-                    document: schema.to_owned(),
-                    keep_defs: false,
-                });
-                Ok(self.entries.len() - 1)
-            };
+            attempt.allocate(
+                base.len()
+                    .saturating_add(2048)
+                    .saturating_add(2 * std::mem::size_of::<Resource>()),
+            )?;
+            scope = self.entries.len();
+            self.uris
+                .entry(base.clone())
+                .and_modify(|value| *value = None)
+                .or_insert(Some(scope));
+            self.entries.push(Resource {
+                base: Some(base),
+                document: schema.to_owned(),
+            });
         }
         Ok(scope)
     }
-
-    fn scan(
-        &mut self,
-        schema: JsonRef<'_>,
-        mut scope: usize,
-        depth: usize,
-        attempt: &mut Attempt<'_>,
-    ) -> Result<(), Failure> {
-        attempt.depth(depth)?;
-        let node = backend::occurrence(schema);
-        attempt.work(self.scopes.len().saturating_add(1).ilog2() as usize + 1)?;
-        if self.scopes.contains_key(&node) {
-            return Ok(());
-        }
-        scope = self.declare(schema, scope, attempt)?;
-        attempt.allocate(std::mem::size_of::<((usize, usize), usize)>().saturating_mul(4))?;
-        self.scopes.insert(node, scope);
-        if let Some(members) = schema.members() {
-            for member in members {
-                self.entries[scope].keep_defs |= outside_keyword(member.name, attempt)?;
-            }
-        }
-        for keyword in ["$anchor", "$dynamicAnchor"] {
-            if let Some(anchor) = schema.get(keyword) {
-                let name = anchor.as_str().ok_or(Failure::InvalidReference)?;
-                attempt.allocate(name.len().saturating_add(
-                    std::mem::size_of::<((usize, String), JsonValue)>().saturating_mul(4),
-                ))?;
-                if let Some(previous) = self
-                    .anchors
-                    .insert((scope, name.to_owned()), schema.to_owned())
-                    && backend::occurrence(previous.view()) != node
-                {
-                    return Err(Failure::InvalidReference);
+    fn roots(&self, scope: usize, attempt: &mut Attempt<'_>) -> Result<Vec<JsonValue>, Failure> {
+        let root = &self.entries[scope].document;
+        let mut roots = attempt.vector(1)?;
+        if scope == 0 && root.get("openbindings").is_some() && root.get("operations").is_some() {
+            if let Some(schemas) = root.get("schemas").and_then(|v| v.members()) {
+                for schema in schemas {
+                    attempt.allocate(2 * std::mem::size_of::<JsonValue>())?;
+                    roots.push(schema.value.to_owned());
                 }
             }
+            if let Some(operations) = root.get("operations").and_then(|v| v.members()) {
+                for operation in operations {
+                    for slot in ["input", "output"] {
+                        if let Some(schema) = operation.value.get(slot) {
+                            attempt.allocate(2 * std::mem::size_of::<JsonValue>())?;
+                            roots.push(schema.to_owned());
+                        }
+                    }
+                }
+            }
+        } else if scope == 0 && !self.tops.contains_key(&backend::occurrence(root.view())) {
+            for schema in self.tops.values() {
+                attempt.allocate(2 * std::mem::size_of::<JsonValue>())?;
+                roots.push(schema.clone());
+            }
+        } else {
+            roots.push(root.clone());
         }
-        let mut children = attempt.vector(schema.members().map_or(0, |m| m.len()))?;
+        Ok(roots)
+    }
+    fn children(
+        schema: JsonRef<'_>,
+        pending: &mut Vec<JsonValue>,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<(), Failure> {
+        attempt.work(
+            schema
+                .members()
+                .map_or(0, |m| m.len())
+                .saturating_mul(32)
+                .saturating_add(1),
+        )?;
         let mut failure = None;
         each_schema_child(schema, |child| {
             if failure.is_none() {
-                if let Err(error) =
-                    attempt.allocate(std::mem::size_of::<JsonRef<'_>>().saturating_mul(2))
-                {
-                    failure = Some(error);
-                } else {
-                    children.push(child);
+                match attempt.allocate(2 * std::mem::size_of::<JsonValue>()) {
+                    Ok(()) => pending.push(child.to_owned()),
+                    Err(e) => failure = Some(e),
                 }
             }
         });
-        if let Some(error) = failure {
-            return Err(error);
+        failure.map_or(Ok(()), Err)
+    }
+    fn catalog(&mut self, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
+        if self.catalog {
+            return Ok(());
         }
-        for child in children {
-            self.scan(child, scope, depth + 1, attempt)?;
+        // Discovery is transactional: a cancelled scan cannot make a partial
+        // URI catalog look like completed successful indexing on the next call.
+        for name in self.uris.keys() {
+            attempt.work(name.len().saturating_add(1))?;
+            attempt.allocate(name.len().saturating_add(2048))?;
         }
+        let previous = self.uris.clone();
+        let entries = self.entries.len();
+        let result = self.catalog_inner(attempt);
+        if result.is_err() {
+            self.uris = previous;
+            self.entries.truncate(entries);
+        }
+        result
+    }
+    fn catalog_inner(&mut self, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
+        let initial = self.entries.len();
+        let mut visited = std::collections::BTreeSet::new();
+        for scope in 0..initial {
+            let roots = self.roots(scope, attempt)?;
+            let mut pending = attempt.vector(roots.len())?;
+            pending.extend(roots.into_iter().map(|v| (v, scope)));
+            while let Some((schema, inherited)) = pending.pop() {
+                let node = backend::occurrence(schema.view());
+                attempt.work(
+                    self.cataloged
+                        .len()
+                        .saturating_add(visited.len())
+                        .saturating_add(1)
+                        .ilog2() as usize
+                        + 1,
+                )?;
+                if self.cataloged.contains(&node) || visited.contains(&node) {
+                    continue;
+                }
+                let scope = match self.declare(schema.view(), inherited, attempt) {
+                    Ok(scope) => scope,
+                    Err(e @ (Failure::LimitExceeded(_) | Failure::Cancelled)) => return Err(e),
+                    Err(_) => inherited,
+                };
+                let mut children = attempt.vector(0)?;
+                Self::children(schema.view(), &mut children, attempt)?;
+                for child in children {
+                    attempt.allocate(2 * std::mem::size_of::<(JsonValue, usize)>())?;
+                    pending.push((child, scope));
+                }
+                attempt.allocate(128)?;
+                visited.insert(node);
+            }
+        }
+        attempt.check()?;
+        self.cataloged.extend(visited);
+        self.catalog = true;
         Ok(())
     }
-
+    fn anchors(&mut self, scope: usize, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
+        if self.anchored.contains(&scope) {
+            return Ok(());
+        }
+        let mut anchors = BTreeMap::new();
+        let mut pending = self.roots(scope, attempt)?;
+        let root = backend::occurrence(self.entries[scope].document.view());
+        while let Some(schema) = pending.pop() {
+            if schema.get("$id").is_some() && backend::occurrence(schema.view()) != root {
+                continue;
+            }
+            for key in ["$anchor", "$dynamicAnchor"] {
+                if let Some(name) = schema.get(key).and_then(|v| v.as_str()) {
+                    attempt.work(
+                        name.len()
+                            .saturating_add(1)
+                            .saturating_mul(anchors.len().saturating_add(1).ilog2() as usize + 1),
+                    )?;
+                    attempt.allocate(name.len().saturating_add(256))?;
+                    // Every declaration counts, including both anchor keywords
+                    // on one schema. Ambiguity fails only if selected.
+                    anchors
+                        .entry((scope, name.to_owned()))
+                        .and_modify(|v| *v = None)
+                        .or_insert_with(|| Some(schema.clone()));
+                }
+            }
+            Self::children(schema.view(), &mut pending, attempt)?;
+        }
+        attempt.allocate(256)?;
+        attempt.check()?;
+        self.anchors.extend(anchors);
+        self.anchored.insert(scope);
+        Ok(())
+    }
     fn target(
-        &self,
+        &mut self,
         scope: usize,
         fragment: &str,
         attempt: &mut Attempt<'_>,
@@ -284,23 +476,40 @@ impl Resources {
         let target = if decoded.is_empty() || decoded.starts_with('/') {
             fragment_target(&self.entries[scope].document, fragment, attempt)?
         } else {
+            self.anchors(scope, attempt)?;
             attempt.work(
-                self.anchors
+                decoded
                     .len()
                     .saturating_add(1)
-                    .saturating_mul(decoded.len().saturating_add(1)),
+                    .saturating_mul(self.anchors.len().saturating_add(1).ilog2() as usize + 1),
             )?;
             self.anchors
                 .get(&(scope, decoded))
-                .cloned()
                 .ok_or(Failure::MissingReference)?
+                .clone()
+                .ok_or(Failure::InvalidReference)?
         };
-        Ok((target.clone(), self.scope(target.view(), scope, attempt)?))
+        let scope = self.enter(target.view(), scope, 0, attempt)?;
+        Ok((target, scope))
     }
-    /// A scope index identifies the immutable document/base pair for this side.
-    /// Active-reference keys include this index and the original node occurrence.
-    pub(crate) fn resolve(
-        &self,
+    fn uri_work(&self, name: &str, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
+        attempt.work(
+            name.len()
+                .saturating_add(1)
+                .saturating_mul(self.uris.len().saturating_add(1).ilog2() as usize + 1)
+                .saturating_mul(12),
+        )
+    }
+    fn lookup(&self, name: &str, attempt: &mut Attempt<'_>) -> Result<Option<usize>, Failure> {
+        self.uri_work(name, attempt)?;
+        match self.uris.get(name) {
+            Some(Some(scope)) => Ok(Some(*scope)),
+            Some(None) => Err(Failure::InvalidReference),
+            None => Ok(None),
+        }
+    }
+    fn resolve(
+        &mut self,
         scope: usize,
         reference: JsonRef<'_>,
         attempt: &mut Attempt<'_>,
@@ -310,13 +519,13 @@ impl Resources {
         if !uri::valid(text) {
             return Err(Failure::InvalidReference);
         }
-        let current = &self.entries[scope];
         if text.is_empty() {
             return self.target(scope, "", attempt);
         }
         if let Some(fragment) = text.strip_prefix('#') {
             return self.target(scope, fragment, attempt);
         }
+        let current = &self.entries[scope];
         let bytes = text
             .len()
             .saturating_add(current.base.as_ref().map_or(0, String::len));
@@ -332,13 +541,14 @@ impl Resources {
         }
         .ok_or(Failure::InvalidReference)?;
         let (resource, fragment) = resolved.split_once('#').unwrap_or((&resolved, ""));
-        for (index, candidate) in self.entries.iter().enumerate() {
-            attempt.work(resource.len().saturating_add(1))?;
-            if candidate.base.as_deref() == Some(resource) {
-                return self.target(index, fragment, attempt);
-            }
+        if let Some(scope) = self.lookup(resource, attempt)? {
+            return self.target(scope, fragment, attempt);
         }
-        Err(Failure::MissingReference)
+        self.catalog(attempt)?;
+        let scope = self
+            .lookup(resource, attempt)?
+            .ok_or(Failure::MissingReference)?;
+        self.target(scope, fragment, attempt)
     }
 }
 fn fragment_target(
@@ -374,7 +584,10 @@ fn fragment_target(
         node = match node.kind() {
             JsonKind::Object => {
                 let mut found = None;
-                for member in node.members().expect("object") {
+                attempt.allocate(decoded.len().saturating_mul(8))?;
+                for member in
+                    backend::member_candidates_utf16(node, &decoded, |cost| attempt.work(cost))?
+                {
                     attempt.work(
                         member
                             .name

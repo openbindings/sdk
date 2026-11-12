@@ -10,15 +10,18 @@ use openbindings_internal_json::backend;
 use openbindings_internal_schema::uri;
 use std::collections::BTreeMap;
 
+pub(crate) type ReferenceKey = ((usize, usize), bool);
+
 /// One original reference occurrence and its containing schema resource.
 /// Accounting is caller policy; equal spellings in different resources may name
 /// different targets. Formatting this context never prints caller values.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct ReferenceContext<'a> {
     pub(crate) spelling: &'a str,
     pub(crate) schema: JsonRef<'a>,
-    pub(crate) resource: &'a JsonValue,
-    pub(crate) base: Option<&'a str>,
+    pub(crate) resource: JsonValue,
+    pub(crate) base: Option<String>,
+    pub(crate) target: Result<JsonValue, Failure>,
 }
 impl std::fmt::Debug for ReferenceContext<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -35,12 +38,17 @@ impl<'a> ReferenceContext<'a> {
         self.schema
     }
     /// Root of the containing schema resource, or the supplied document root.
-    pub fn resource(&self) -> &'a JsonValue {
-        self.resource
+    pub fn resource(&self) -> &JsonValue {
+        &self.resource
     }
     /// Absolute base of that resource, if the caller or a schema supplied one.
-    pub fn base(&self) -> Option<&'a str> {
-        self.base
+    pub fn base(&self) -> Option<&str> {
+        self.base.as_deref()
+    }
+    /// Initial resolved target, or its resolution failure. An accounted leaf
+    /// may still be kept when its target is unavailable.
+    pub fn target(&self) -> Result<&JsonValue, Failure> {
+        self.target.as_ref().map_err(|e| *e)
     }
 }
 
@@ -82,32 +90,57 @@ pub fn identical_with_references_and_control(
         let mut left = Inventory::new(left, &mut attempt)?;
         let mut right = Inventory::new(right, &mut attempt)?;
         loop {
-            for spelling in left.found.keys() {
-                let cost = spelling
-                    .len()
-                    .saturating_add(1)
-                    .saturating_mul(
-                        right
-                            .found
-                            .len()
-                            .saturating_add(common.len())
-                            .saturating_add(1)
-                            .ilog2() as usize
-                            + 1,
-                    )
-                    .saturating_mul(24);
-                attempt.work(cost)?;
-                if right.found.contains_key(spelling) && !common.contains_key(spelling) {
-                    let mut key = attempt.vector(spelling.len())?;
-                    key.extend_from_slice(spelling);
-                    value::insert(&mut common, key, (), &mut attempt)?;
+            for (path, references) in &left.found {
+                attempt.work(
+                    path.len()
+                        .saturating_add(1)
+                        .saturating_mul(right.found.len().saturating_add(1).ilog2() as usize + 1),
+                )?;
+                if let Some(others) = right.found.get(path) {
+                    for (name, schema, scope, dynamic) in references {
+                        for (other, counterpart, other_scope, other_dynamic) in others {
+                            attempt
+                                .work(name.len().saturating_add(other.len()).saturating_add(1))?;
+                            if name != other || dynamic != other_dynamic {
+                                continue;
+                            }
+                            let keyword = if *dynamic { "$dynamicRef" } else { "$ref" };
+                            let spelling = schema
+                                .get(keyword)
+                                .expect("reference")
+                                .as_str()
+                                .expect("validated reference");
+                            let other_spelling = counterpart
+                                .get(keyword)
+                                .expect("reference")
+                                .as_str()
+                                .expect("validated reference");
+                            if accounted_for(left.resources.context(
+                                *scope,
+                                schema.view(),
+                                spelling,
+                                &mut attempt,
+                            )?) && accounted_for(right.resources.context(
+                                *other_scope,
+                                counterpart.view(),
+                                other_spelling,
+                                &mut attempt,
+                            )?) {
+                                for schema in [schema, counterpart] {
+                                    attempt.allocate(256)?;
+                                    common
+                                        .insert((backend::occurrence(schema.view()), *dynamic), ());
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if left.pending.is_empty() && right.pending.is_empty() {
                 break;
             }
-            left.expand(&common, accounted_for, &mut attempt)?;
-            right.expand(&common, accounted_for, &mut attempt)?;
+            left.expand(&common, &mut attempt)?;
+            right.expand(&common, &mut attempt)?;
         }
     }
     let left = left
@@ -130,8 +163,8 @@ pub fn identical_with_references_and_control(
 struct Inventory {
     resources: Resources,
     seen: Vec<((usize, usize), usize)>,
-    found: BTreeMap<Name, ()>,
-    pending: Vec<(JsonValue, usize)>,
+    found: BTreeMap<Name, Vec<(Name, JsonValue, usize, bool)>>,
+    pending: Vec<(JsonValue, usize, Name, bool)>,
 }
 impl Inventory {
     fn new(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Result<Self, Failure> {
@@ -141,35 +174,26 @@ impl Inventory {
             found: BTreeMap::new(),
             pending: Vec::new(),
         };
-        inventory.scan(input.schema.view(), 0, 0, attempt)?;
+        inventory.scan(input.schema.view(), 0, Vec::new(), 0, attempt)?;
         Ok(inventory)
     }
     fn expand(
         &mut self,
-        common: &BTreeMap<Name, ()>,
-        accounted_for: &dyn Fn(ReferenceContext<'_>) -> bool,
+        common: &BTreeMap<ReferenceKey, ()>,
         attempt: &mut Attempt<'_>,
     ) -> Result<(), Failure> {
-        for (schema, scope) in std::mem::take(&mut self.pending) {
-            let reference = schema.get("$ref").expect("pending reference");
-            let name = value::name(reference, attempt)?;
-            attempt.work(
-                name.len()
-                    .saturating_add(1)
-                    .saturating_mul(common.len().saturating_add(1).ilog2() as usize + 1)
-                    .saturating_mul(12),
-            )?;
-            if common.contains_key(&name)
-                && accounted_for(self.resources.context(
-                    scope,
-                    schema.view(),
-                    reference.as_str().expect("validated reference"),
-                ))
-            {
+        for (schema, scope, path, dynamic) in std::mem::take(&mut self.pending) {
+            let reference = schema
+                .get(if dynamic { "$dynamicRef" } else { "$ref" })
+                .expect("pending reference");
+            attempt.work(common.len().saturating_add(1).ilog2() as usize + 1)?;
+            if common.contains_key(&(backend::occurrence(schema.view()), dynamic)) {
                 continue;
             }
             let result = match self.resources.resolve(scope, reference, attempt) {
-                Ok((target, target_scope)) => self.scan(target.view(), target_scope, 0, attempt),
+                Ok((target, target_scope)) => {
+                    self.scan(target.view(), target_scope, path, 0, attempt)
+                }
                 Err(failure) => Err(failure),
             };
             // A later round may discover a counterpart and keep this reference.
@@ -184,6 +208,7 @@ impl Inventory {
         &mut self,
         schema: JsonRef<'_>,
         scope: usize,
+        path: Name,
         depth: usize,
         attempt: &mut Attempt<'_>,
     ) -> Result<(), Failure> {
@@ -196,45 +221,80 @@ impl Inventory {
         }
         attempt.allocate(2 * std::mem::size_of_val(&identity))?;
         self.seen.push(identity);
-        if let Some(reference) = schema.get("$ref") {
-            let text = reference.as_str().ok_or(Failure::InvalidReference)?;
-            attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
-            if !uri::valid(text) {
-                return Err(Failure::InvalidReference);
-            }
-            let name = value::name(reference, attempt)?;
-            attempt.work(
-                name.len()
-                    .saturating_add(1)
-                    .saturating_mul(self.found.len().saturating_add(1).ilog2() as usize + 1)
-                    .saturating_mul(12),
-            )?;
-            if !self.found.contains_key(&name) {
-                value::insert(&mut self.found, name, (), attempt)?;
-            }
-            attempt.allocate(2 * std::mem::size_of::<(JsonValue, usize)>())?;
-            self.pending.push((schema.to_owned(), scope));
-        }
-        attempt.work(schema.text().len().saturating_add(1))?;
-        // Match normalization's schema positions. Outside-keyword contents and
-        // unused $defs are opaque; their references acquire no new semantics.
-        if let Some(properties) = schema.get("properties").and_then(|v| v.members()) {
-            for property in properties {
-                self.scan(property.value, scope, depth + 1, attempt)?;
+        for (keyword, dynamic) in [("$ref", false), ("$dynamicRef", true)] {
+            if let Some(reference) = schema.get(keyword) {
+                let text = reference.as_str().ok_or(Failure::InvalidReference)?;
+                attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
+                if !uri::valid(text) {
+                    return Err(Failure::InvalidReference);
+                }
+                let name = value::name(reference, attempt)?;
+                attempt.allocate(path.len().saturating_mul(2).saturating_add(1024))?;
+                self.found.entry(path.clone()).or_default().push((
+                    name,
+                    schema.to_owned(),
+                    scope,
+                    dynamic,
+                ));
+                self.pending
+                    .push((schema.to_owned(), scope, path.clone(), dynamic));
             }
         }
-        for key in ["items", "additionalProperties"] {
+        // Paths distinguish reference occurrences at different schema positions.
+        // Following a reference is transparent at its current position.
+        for keyword in ["properties", "dependentSchemas", "patternProperties"] {
+            if let Some(properties) = schema.get(keyword).and_then(|v| v.members()) {
+                for property in properties {
+                    let mut child =
+                        segment(&path, &keyword.encode_utf16().collect::<Vec<_>>(), attempt)?;
+                    child = segment(&child, &value::name(property.name, attempt)?, attempt)?;
+                    self.scan(property.value, scope, child, depth + 1, attempt)?;
+                }
+            }
+        }
+        for key in [
+            "items",
+            "additionalProperties",
+            "not",
+            "if",
+            "then",
+            "else",
+            "contains",
+            "propertyNames",
+            "unevaluatedItems",
+            "unevaluatedProperties",
+        ] {
             if let Some(child) = schema.get(key) {
-                self.scan(child, scope, depth + 1, attempt)?;
+                let path = segment(&path, &key.encode_utf16().collect::<Vec<_>>(), attempt)?;
+                self.scan(child, scope, path, depth + 1, attempt)?;
             }
         }
-        for key in ["allOf", "oneOf", "anyOf"] {
+        for key in ["allOf", "oneOf", "anyOf", "prefixItems"] {
             if let Some(children) = schema.get(key).and_then(|v| v.elements()) {
                 for child in children {
-                    self.scan(child, scope, depth + 1, attempt)?;
+                    let path = segment(&path, &key.encode_utf16().collect::<Vec<_>>(), attempt)?;
+                    self.scan(child, scope, path, depth + 1, attempt)?;
                 }
             }
         }
         Ok(())
     }
+}
+
+fn segment(path: &Name, name: &[u16], attempt: &mut Attempt<'_>) -> Result<Name, Failure> {
+    attempt.work(path.len().saturating_add(name.len()).saturating_add(1))?;
+    let mut out = attempt.vector(
+        path.len()
+            .saturating_add(name.len().saturating_mul(2))
+            .saturating_add(2),
+    )?;
+    out.extend_from_slice(path);
+    out.extend([0, 1]);
+    for unit in name {
+        out.push(*unit);
+        if *unit == 0 {
+            out.push(0);
+        }
+    }
+    Ok(out)
 }

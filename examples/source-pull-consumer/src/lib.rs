@@ -2,7 +2,7 @@
 //! Kind definitions are local to this fixture, not OpenBindings standards.
 use openbindings::{JsonRef, JsonValue};
 use openbindings_schema_comparison::{
-    ComparisonFailure, ComparisonLimits, ReferenceContext, SchemaInput, identical,
+    ComparisonFailure, ComparisonLimits, ReferenceContext, ComparisonContext, identical,
     identical_with_references,
 };
 use openbindings_source_pull::*;
@@ -133,9 +133,9 @@ enum SlotComparison {
 
 fn slots(
     offer: &Offer,
-    observed: &Observation,
+    observed: &ComparisonContext,
     existing: JsonRef<'_>,
-    original: JsonRef<'_>,
+    original: &ComparisonContext,
     accounted_for: Option<&dyn Fn(ReferenceContext<'_>) -> bool>,
 ) -> Result<[SlotComparison; 2], CatalogError> {
     let mut answers = [SlotComparison::Current; 2];
@@ -143,10 +143,10 @@ fn slots(
         let left = offer
             .operation
             .get(name)
-            .map(|s| SchemaInput::new(s.to_owned(), observed.root.clone()));
+            .map(|s| observed.schema(s.to_owned()));
         let right = existing
             .get(name)
-            .map(|s| SchemaInput::new(s.to_owned(), original.to_owned()));
+            .map(|s| original.schema(s.to_owned()));
         let limits = ComparisonLimits::default();
         let equal = match accounted_for {
             Some(accounted_for) => {
@@ -171,6 +171,8 @@ fn slots(
 
 fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult, CatalogError> {
     let original = request.interface().value();
+    let offered_context = ComparisonContext::new(observed.root.clone());
+    let original_context = ComparisonContext::new(original.to_owned());
     let operations = original.get("operations").unwrap();
     let bindings = original.get("bindings");
     let mut new_operations = BTreeMap::new();
@@ -220,7 +222,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         }
         let operation_key = identified.first().unwrap_or(&offer.key);
         let reused = if let Some(operation) = operations.get(operation_key) {
-            let compared = match slots(offer, &observed, operation, original, None) {
+            let compared = match slots(offer, &offered_context, operation, &original_context, None) {
                 Ok(compared) => compared,
                 Err(CatalogError::Comparison(_)) => {
                     omitted.push(json(&format!(r#"{{"status":"implementation-unsupported","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared.","item":{},"existing":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{operation_key}")))));
@@ -290,10 +292,6 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         context.base().is_none()
             && accounted_slots.iter().any(|slot| {
                 context.spelling() == slot
-                    || context
-                        .spelling()
-                        .strip_prefix(slot)
-                        .is_some_and(|tail| tail.starts_with('/'))
             })
     };
     for binding in bindings.into_iter().flat_map(|v| v.members().unwrap()) {
@@ -331,7 +329,7 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         {
             proposal.insert("data".into(), offer.data.clone());
         }
-        let comparisons = match slots(offer, &observed, operation, original, Some(&accounted_for)) {
+        let comparisons = match slots(offer, &offered_context, operation, &original_context, Some(&accounted_for)) {
             Ok(comparisons) => comparisons,
             Err(CatalogError::Comparison(_)) => {
                 existing.push(json(&format!(r#"{{"binding":{},"status":"unassessed","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared."}}"#, quote(key))));

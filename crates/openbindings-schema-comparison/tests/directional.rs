@@ -120,7 +120,13 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
     let provided = doc(
         r#"{"openbindings":"0.2.0","operations":{"old":{"output":true,"input":{"type":"string"}},"a":{"output":true}}}"#,
     );
-    let report = check_interface(&required, &provided, &ComparisonLimits::default()).unwrap();
+    let report = check_interface(
+        &required,
+        &provided,
+        &|_| Some(OperationRole::Realized),
+        &ComparisonLimits::default(),
+    )
+    .unwrap();
     assert_eq!(
         report
             .operations()
@@ -143,12 +149,18 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
             ("z", InterfaceIssueKind::Missing),
         ]
     );
-    assert_eq!(report.verdict(), Err(ComparisonFailure::UnsatisfiableMerge));
+    assert_eq!(summary(&report), Err(ComparisonFailure::UnsatisfiableMerge));
     assert_eq!(
         report.issues().nth(1).unwrap().failure(),
         Some(ComparisonFailure::UnsatisfiableMerge)
     );
-    let opposite = check_interface(&provided, &required, &ComparisonLimits::default()).unwrap();
+    let opposite = check_interface(
+        &provided,
+        &required,
+        &|_| Some(OperationRole::Realized),
+        &ComparisonLimits::default(),
+    )
+    .unwrap();
     assert!(
         opposite
             .operations()
@@ -171,7 +183,13 @@ fn public_diagnostic_formatting_does_not_disclose_report_data() {
         doc(r#"{"openbindings":"0.2.0","operations":{"sentinel":{"input":{"const":"sentinel"}}}}"#);
     let provided =
         doc(r#"{"openbindings":"0.2.0","operations":{"sentinel":{"input":{"const":"other"}}}}"#);
-    let report = check_interface(&required, &provided, &ComparisonLimits::default()).unwrap();
+    let report = check_interface(
+        &required,
+        &provided,
+        &|_| Some(OperationRole::Realized),
+        &ComparisonLimits::default(),
+    )
+    .unwrap();
     let result = report.operations()[0].input().unwrap().as_ref().unwrap();
     assert!(result.reason().unwrap().contains("sentinel"));
     for text in [
@@ -212,7 +230,13 @@ fn wide_enum_search_and_later_interface_slots_share_the_finite_allowance() {
     let provided = doc(&format!(
         r#"{{"openbindings":"0.2.0","operations":{{"a":{{"output":{t},"input":{c}}},"b":{{"input":true}}}}}}"#
     ));
-    let report = check_interface(&required, &provided, &limits).unwrap();
+    let report = check_interface(
+        &required,
+        &provided,
+        &|_| Some(OperationRole::Realized),
+        &limits,
+    )
+    .unwrap();
     assert_eq!(report.operations().len(), 2);
     let failure = report.operations()[0]
         .output()
@@ -236,6 +260,13 @@ impl openbindings::WorkControl for Control {
 fn controlled_directional_calls_refuse_resources_and_cancel_without_a_verdict() {
     let target = schema(r#"{"anyOf":[{"type":"number","minimum":1},{"type":"string"}]}"#);
     let candidate = schema(r#"{"anyOf":[{"type":"string"},{"type":"number","minimum":0}]}"#);
+    compare(
+        Direction::Input,
+        &target,
+        &candidate,
+        &ComparisonLimits::default(),
+    )
+    .unwrap();
     let baseline = Control {
         checks: AtomicUsize::new(0),
         cancel: usize::MAX,
@@ -296,5 +327,92 @@ fn controlled_directional_calls_refuse_resources_and_cancel_without_a_verdict() 
             &AtomicBool::new(true)
         ),
         Err(ComparisonFailure::Cancelled)
+    );
+}
+
+fn summary(report: &InterfaceComparison) -> Result<Verdict, ComparisonFailure> {
+    let mut verdicts = Vec::new();
+    for operation in report.operations() {
+        if operation.is_missing() {
+            verdicts.push(Verdict::Incompatible);
+        }
+        for slot in [operation.output(), operation.input()]
+            .into_iter()
+            .flatten()
+        {
+            verdicts.push(slot.as_ref().map_err(|e| *e)?.verdict());
+        }
+    }
+    Ok(Verdict::collapse(verdicts))
+}
+
+#[test]
+fn every_alias_match_is_checked_in_each_selected_role() {
+    let provided = doc(
+        r#"{"openbindings":"0.2.0","operations":{"b":{"aliases":["second"],"input":{"type":"number"},"output":{"type":"number"}},"a":{"aliases":["first"],"input":{"type":"number"},"output":{"type":"number"}}}}"#,
+    );
+    for aliases in [r#"["second","first"]"#, r#"["first","second"]"#] {
+        let required = doc(&format!(
+            r#"{{"openbindings":"0.2.0","operations":{{"z":{{}},"contract":{{"aliases":{aliases},"input":{{"type":"integer"}},"output":{{"type":"integer"}}}},"skip":{{}}}}}}"#
+        ));
+        let report = check_interface(
+            &required,
+            &provided,
+            &|operation| match operation.key() {
+                "contract" => Some(OperationRole::Both),
+                "z" => Some(OperationRole::Consumed),
+                _ => None,
+            },
+            &ComparisonLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            report
+                .operations()
+                .iter()
+                .map(|o| (o.required(), o.provided(), o.role()))
+                .collect::<Vec<_>>(),
+            [
+                ("contract", Some("a"), OperationRole::Realized),
+                ("contract", Some("a"), OperationRole::Consumed),
+                ("contract", Some("b"), OperationRole::Realized),
+                ("contract", Some("b"), OperationRole::Consumed),
+                ("z", None, OperationRole::Consumed),
+            ]
+        );
+        for operation in &report.operations()[..4] {
+            let realized = operation.role() == OperationRole::Realized;
+            assert_eq!(
+                operation.input().unwrap().as_ref().unwrap().verdict(),
+                if realized {
+                    Verdict::Compatible
+                } else {
+                    Verdict::Incompatible
+                }
+            );
+            assert_eq!(
+                operation.output().unwrap().as_ref().unwrap().verdict(),
+                if realized {
+                    Verdict::Incompatible
+                } else {
+                    Verdict::Compatible
+                }
+            );
+        }
+    }
+    let required = doc(
+        r#"{"openbindings":"0.2.0","operations":{"a":{"aliases":["first"],"input":{"type":"number"}}}}"#,
+    );
+    assert_eq!(
+        check_interface(
+            &required,
+            &provided,
+            &|_| Some(OperationRole::Realized),
+            &ComparisonLimits::default()
+        )
+        .unwrap()
+        .operations()
+        .len(),
+        1
     );
 }

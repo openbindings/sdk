@@ -348,16 +348,24 @@ encoders. Schema comparison's `identical` returns `Result<bool,
 ComparisonFailure>`; a failure is separate from a negative comparison.
 `compare` and `compare_with_control` take `Direction`, a present target and a
 present candidate, and return `Comparison` with `verdict()`, `reason()` and
-`finding()` accessors. `check_interface` and `check_interface_with_control` take
-explicit required/provided conformant documents and retain per-operation output
-then input results, including failures; `operations()` and `issues()` expose the
-report. `verdict()` collapses indeterminate > incompatible > compatible, returning
-a comparison failure separately. `identical_with_references` and
-`identical_with_references_and_control` take a caller accounting predicate for the
-source-puller reference rule. Repeating with `&|_| true` asks whether drift lies
-only behind unaccounted targets. All controlled calls share one monotone
-`ComparisonLimits` allowance per call. Public diagnostic formatting omits reasons
-and document values.
+`finding()` accessors. `ComparisonContext::new(root)` retains a reusable document;
+`with_base` and `with_resource` configure it, and `schema(exact_value)` selects a
+`SchemaInput`. `SchemaInput::new` remains a convenience for single comparisons;
+`context()` exposes its retained context. Indexing is lazy, shared within each
+call and reusable across calls. Failed and cancelled work leaves contexts usable.
+`check_interface` and `check_interface_with_control` take required/provided
+conformant documents and a per-required-operation callback returning
+`Option<OperationRole>`: realized, consumed, both, or excluded. Every distinct
+provided match is retained, independent of alias order, with output then input
+results including failures. `operations()`, `issues()` and each issue's
+`correspondence()` expose keys, role and slot results. Summary failure policy is
+the caller's; only `Verdict::collapse` supplies profile dominance over verdicts.
+`identical_with_references` and `identical_with_references_and_control` take a
+caller accounting predicate. `ReferenceContext::target()` exposes the initial
+resolved target or failure alongside spelling, original schema, resource and base.
+Repeating with `&|_| true` asks whether drift lies only behind unaccounted targets.
+All controlled calls share one monotone `ComparisonLimits` allowance per call.
+Public diagnostic formatting omits reasons and document values.
 
 `DefaultOperationInvoker::select(&interface, &address)` and
 `PreparedOperation::select(&provider, &choice)` return a core `Binding` using only
