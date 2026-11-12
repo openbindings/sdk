@@ -99,7 +99,8 @@ impl OperationRequest {
     /// exact storage with a reference-count clone.
     ///
     /// # Errors
-    /// Rejects malformed/ambiguous outer fields, addressing or document admission.
+    /// Rejects malformed/ambiguous outer fields, addressing or document admission,
+    /// and context that repeats a decoded member name at any depth.
     pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryFailure> {
         Self::from_json_ref(value.view())
     }

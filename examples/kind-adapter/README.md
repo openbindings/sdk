@@ -10,7 +10,8 @@ additions, so added entries and binding proposals omit `uses`. Schema references
 when present in another kind, show their own targets and belong outside `uses`.
 
 `Memory` implements binding invocation, advisory preflight, kind description and
-source pull. It does not offer source checking. The pull handles repeated calls,
+source pull. It does not offer source checking. A test checks that `can_invoke`
+agrees with the listed and described `invokeBinding` support claims. The pull handles repeated calls,
 alias reuse, Boolean-schema conflicts and removal proposals. Object schemas
 produce explicit comparison gaps. It fails with a native
 error when its generated binding key is occupied. This bounded demonstration

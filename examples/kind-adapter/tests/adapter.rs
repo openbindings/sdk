@@ -474,3 +474,46 @@ async fn object_schema_comparison_gaps_are_explicit() {
         }
     }
 }
+
+// guide:agreement:start
+#[tokio::test]
+async fn routing_agrees_with_published_invocation_support() {
+    use kind_adapter::{KIND, Memory};
+    use openbindings_invocation::{CancellationToken, InvocationSupport};
+    use openbindings_kind_description::{DescribeKindRequest, KindDescriptorExt};
+
+    const INVOKE: &str = "openbindings.binding-invoker.invokeBinding";
+    let adapter = Memory; // One configuration for all three queries.
+    let kinds = adapter.list_kinds(CancellationToken::new()).await.unwrap();
+    // Include the adapter's known routing kind even if a broken listing omits it,
+    // and a negative case outside its inventory.
+    for kind in kinds
+        .iter()
+        .map(|summary| summary.kind().as_str().unwrap())
+        .chain([KIND, "example.unknown@1"])
+    {
+        let listed = kinds.iter().any(|summary| {
+            summary.kind().as_str() == Some(kind)
+                && summary.supports().any(|operation| operation == INVOKE)
+        });
+        let description = adapter
+            .describe_kind(
+                DescribeKindRequest::new(kind).unwrap(),
+                CancellationToken::new(),
+            )
+            .await;
+        let described = match description {
+            Ok(description) => {
+                assert_eq!(description.kind().as_str(), Some(kind));
+                description.supports().any(|operation| operation == INVOKE)
+            }
+            Err(_) => {
+                assert_eq!(kind, "example.unknown@1");
+                false
+            }
+        };
+        assert_eq!(adapter.can_invoke(kind), listed);
+        assert_eq!(adapter.can_invoke(kind), described);
+    }
+}
+// guide:agreement:end

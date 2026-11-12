@@ -20,12 +20,12 @@ LOCAL = [
 def check_snippets():
     guide = (ROOT / "docs/writing-a-kind.md").read_text()
     snippets = re.findall(r'<!-- guide:([a-z]+) -->\n```rust\n(.*?)```', guide, re.S)
-    expected = {"setup", "invoke", "describe", "pull", "application", "partial", "proposals", "updates"}
+    expected = {"setup", "invoke", "describe", "pull", "application", "agreement", "partial", "proposals", "updates"}
     assert {name for name, _ in snippets} == expected and len(snippets) == len(expected)
     assert len(re.findall(r'^```rust\s*$', guide, re.M)) == len(snippets), "unverified Rust fence"
     for name, body in snippets:
         source = FIXTURE / "src/lib.rs"
-        if name == "application":
+        if name in {"application", "agreement"}:
             source = FIXTURE / "tests/adapter.rs"
         elif name in {"partial", "proposals", "updates"}:
             source = ROOT / "examples/source-pull-consumer/src/using_the_result.rs"

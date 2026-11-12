@@ -1,0 +1,1 @@
+{"binding":"b","operation":"op","reused":true,"uses":["schemas/s"],"lossy":[{"reasonCode":"FUZZ_PRIVATE_reason","message":"FUZZ_PRIVATE_message","details":{"n":1}}]}

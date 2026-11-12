@@ -36,7 +36,8 @@ Requests own the original `ConformantDocument`, address and optional opaque
 `openbindings_context::Context`. No source/binding carrier is copied or sliced on
 the provider's behalf. A draft must establish conformance before becoming a request;
 opaque document data still obeys document admission. Wire decoding rejects malformed
-outer fields through local `BoundaryFailure`, separately from invocation terminals.
+outer fields, and context in which any object repeats a decoded member name, through
+local `BoundaryFailure`, separately from invocation terminals.
 
 `OperationRequest::operation(interface, name)` requires a sole invocable candidate.
 `ordered(interface, name, keys)` selects the first invocable listed binding, after

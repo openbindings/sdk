@@ -70,8 +70,7 @@ fn source_data_absence_null_and_runtime_context_remain_distinct() {
     let absent = CheckSourceRequest::from_json(exact(r#"{"kind":"example.k@1"}"#)).unwrap();
     assert!(absent.data().is_none());
     assert!(absent.context().is_none());
-    let text =
-        r#"{"kind":"example.k@1","data":null,"context":{"token":9007199254740993,"a":1,"a":2}}"#;
+    let text = r#"{"kind":"example.k@1","data":null,"context":{"token":9007199254740993,"a":1}}"#;
     let request = CheckSourceRequest::from_json(exact(text)).unwrap();
     assert_eq!(request.data().unwrap().kind(), JsonKind::Null);
     assert_eq!(request.value().value().text(), text);
@@ -85,14 +84,6 @@ fn source_data_absence_null_and_runtime_context_remain_distinct() {
             .unwrap()
             .number_text(),
         Some("9007199254740993")
-    );
-    assert!(
-        request
-            .context()
-            .unwrap()
-            .value()
-            .value()
-            .has_duplicate_names()
     );
     assert_eq!(
         CheckedSource::from_json(exact(text)).unwrap_err(),
@@ -211,6 +202,21 @@ fn outer_ambiguity_is_rejected_without_interpreting_opaque_nested_values() {
             .text(),
         data
     );
+}
+
+#[test]
+fn source_check_requests_refuse_repeated_context_names_at_every_depth() {
+    for context in [
+        r#"{"PRIVATE":1,"\u0050RIVATE":2}"#,
+        r#"{"n":{"PRIVATE":1,"PRIVATE":2}}"#,
+        r#"{"a":[{"PRIVATE":1,"PRIVATE":2}]}"#,
+    ] {
+        let error =
+            CheckSourceRequest::from_json(exact(&format!(r#"{{"kind":"k","context":{context}}}"#)))
+                .unwrap_err();
+        assert_eq!(error, CarrierError::DuplicateMember);
+        assert!(!format!("{error} {error:?}").contains("PRIVATE"));
+    }
 }
 
 #[test]

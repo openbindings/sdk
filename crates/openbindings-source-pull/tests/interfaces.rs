@@ -123,7 +123,7 @@ fn original_owner_context_and_native_local_errors_are_preserved_without_retry() 
     let provider = Rc::new(Provider::new(Reply::Result));
     let client = provider.clone();
     let context = Context::try_from(json(
-        r#"{"token":9007199254740993,"opaque":"\ud800","same":1,"same":2}"#,
+        r#"{"token":9007199254740993,"opaque":"\ud800","same":1}"#,
     ))
     .unwrap();
     let supplied = request().with_context(context.clone());

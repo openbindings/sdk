@@ -179,6 +179,22 @@ fn prospective_snapshot_adds_only_declared_maps_and_never_applies_proposals() {
 }
 
 #[test]
+fn request_decoding_refuses_repeated_context_names_at_every_depth() {
+    for context in [
+        r#"{"PRIVATE":1,"\u0050RIVATE":2}"#,
+        r#"{"n":{"PRIVATE":1,"PRIVATE":2}}"#,
+        r#"{"a":[{"PRIVATE":1,"PRIVATE":2}]}"#,
+    ] {
+        let request = json(&format!(
+            r#"{{"interface":{{"openbindings":"0.2.0","operations":{{}},"sources":{{"s":{{"kind":"example@1"}}}}}},"source":"s","context":{context}}}"#
+        ));
+        let error = PullRequest::from_json(&request).unwrap_err();
+        assert!(matches!(error, RequestError::Shape("duplicate-member")));
+        assert!(!format!("{error} {error:?}").contains("PRIVATE"));
+    }
+}
+
+#[test]
 fn request_and_response_boundaries_refuse_before_prospective_work() {
     let request = PullRequest::new(
         checked(r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"example@1"}}}"#),

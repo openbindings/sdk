@@ -379,3 +379,21 @@ that list returns `ERR_BINDING_NOT_FOUND`; invocation and preflight return a
 `PreparedOperation::input()` and `output()` borrow its prepared schemas, with
 `None` for an undeclared direction. They allow inline value checks before context
 loading and invocation without preparing a direction again.
+
+### Context admission
+
+`Context::new(JsonObject)` and `Context::try_from(JsonValue)` are fallible and
+return `ContextShapeError::{ExpectedObject, DuplicateMember}`. Members remain
+opaque. Each request decoder that admits a context member applies the same
+check and reports it through its own error: `BindingRequest::from_json` and
+`OperationRequest::from_json` return `BoundaryFailureKind::DuplicateMember` at
+`/context`, `PullRequest::from_json` returns `RequestError::Shape("duplicate-member")`
+and `CheckSourceRequest::from_json` returns `CarrierError::DuplicateMember`. The
+TypeScript facade carries no context, so it has no context admission path.
+
+Context admission is SDK policy: every object in context, including objects
+inside arrays, must have unique decoded member names. The pinned context
+document is silent on duplicates. This follows the parser-differential reason
+in [OBI-01](https://github.com/openbindings/spec/blob/c1419c9fc3ae5a00c2b83da710c11bf67dab7934/openbindings.md#10-conformance):
+the same bytes can yield different values across parsers. The SDK refuses
+ambiguity without interpreting members, using the exact JSON's existing index.

@@ -20,7 +20,7 @@ concurrency:
 jobs:
   fuzz:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       CARGO_BUILD_JOBS: '4'
       FUZZ_NIGHTLY: nightly-2026-11-01
@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           status=0
-          for target in document json_value decimal pattern lanes comparison; do
+          for target in document json_value decimal pattern lanes comparison edit carriers; do
             if ! cargo +"$FUZZ_NIGHTLY" fuzz run "$target" -- \
               -max_total_time=120 -timeout=15 -rss_limit_mb=2048 -max_len=16384; then
               status=1

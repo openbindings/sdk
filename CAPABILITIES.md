@@ -139,7 +139,10 @@ Invocation and [kind description/source checking](crates/openbindings-kind-descr
 are optional Rust companions. They define provider traits and checked callers.
 Kind descriptions retain per-operation support claims and disclose check, pull and invoke execution;
 source checks require an explicit call and never acquire context or retry by
-themselves. Exact carriers retain allowed output members, numbers, strings and
+themselves. Shared Context admission refuses repeated decoded member names at
+every depth, including objects inside arrays. This is SDK policy, since the
+context document is silent on duplicates; it follows OBI-01's parser-differential
+reason. Exact carriers retain allowed output members, numbers, strings and
 absent-versus-null data. Neither a description nor a checked source proves document
 conformance, availability or permission to execute. Default carrier handoff bounds
 are 32 MiB per request/response and 100,000 listed kinds; they do not bound work

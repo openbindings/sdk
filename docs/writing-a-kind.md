@@ -211,13 +211,20 @@ invocation, pull and source check are
 `openbindings.kind-descriptor.checkSource`. A descriptor with no source checker
 makes no check claim and omits `check`.
 
-The listing and description below share their support list. Keep that list,
-`can_invoke`, and implemented behavior consistent; the SDK does not reconcile
-them for you. `pull` and `invoke` disclosures are present exactly when their
-operation keys are supported. Disclosures describe what happens and whether it
-executes something the source or binding data names. The application decides
-whether to authorize execution. Listing and describing perform no operation
-under the kind.
+For a provider that both routes and describes, under one configuration,
+`can_invoke(kind)` must be true exactly for the kinds whose listing and
+description include `openbindings.binding-invoker.invokeBinding`. This is
+kind-level capability, not reachability or credentials, and it does not promise
+that every binding succeeds. `can_invoke` is the local synchronous routing fact;
+`supports` is the published claim. A descriptor is optional and its absence makes
+no claim, so selection must not consult it. The SDK does not reconcile the two
+answers for you; the test after the descriptor below checks them.
+
+The listing and description below share their support list. `pull` and `invoke`
+disclosures are present exactly when their operation keys are supported.
+Disclosures describe what happens and whether it executes something the source
+or binding data names. The application decides whether to authorize execution.
+Listing and describing perform no operation under the kind.
 
 <!-- guide:describe -->
 ```rust
@@ -261,6 +268,55 @@ impl KindDescriptor for Memory {
             ("sourceData", json(r#"{"type":"object","properties":{"channel":{"const":"local"}},"required":["channel"],"additionalProperties":false}"#)),
             ("bindingData", json(r#"{"type":"object","properties":{"mode":{"const":"echo"}},"required":["mode"],"additionalProperties":false}"#)),
         ])).unwrap()))
+    }
+}
+```
+
+Check that agreement through the public APIs: list the kinds, describe each,
+and compare both claims with `can_invoke`, including a kind the adapter does not
+know. Keep the known routing inventory in the test so a listing that omits a kind
+cannot silently remove coverage.
+
+<!-- guide:agreement -->
+```rust
+#[tokio::test]
+async fn routing_agrees_with_published_invocation_support() {
+    use kind_adapter::{KIND, Memory};
+    use openbindings_invocation::{CancellationToken, InvocationSupport};
+    use openbindings_kind_description::{DescribeKindRequest, KindDescriptorExt};
+
+    const INVOKE: &str = "openbindings.binding-invoker.invokeBinding";
+    let adapter = Memory; // One configuration for all three queries.
+    let kinds = adapter.list_kinds(CancellationToken::new()).await.unwrap();
+    // Include the adapter's known routing kind even if a broken listing omits it,
+    // and a negative case outside its inventory.
+    for kind in kinds
+        .iter()
+        .map(|summary| summary.kind().as_str().unwrap())
+        .chain([KIND, "example.unknown@1"])
+    {
+        let listed = kinds.iter().any(|summary| {
+            summary.kind().as_str() == Some(kind)
+                && summary.supports().any(|operation| operation == INVOKE)
+        });
+        let description = adapter
+            .describe_kind(
+                DescribeKindRequest::new(kind).unwrap(),
+                CancellationToken::new(),
+            )
+            .await;
+        let described = match description {
+            Ok(description) => {
+                assert_eq!(description.kind().as_str(), Some(kind));
+                description.supports().any(|operation| operation == INVOKE)
+            }
+            Err(_) => {
+                assert_eq!(kind, "example.unknown@1");
+                false
+            }
+        };
+        assert_eq!(adapter.can_invoke(kind), listed);
+        assert_eq!(adapter.can_invoke(kind), described);
     }
 }
 ```

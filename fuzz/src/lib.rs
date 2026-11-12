@@ -315,3 +315,8 @@ pub fn comparison(data: &[u8]) -> bool {
     }
     success
 }
+
+mod carriers;
+mod edit;
+pub use carriers::{CARRIER_COUNT, carriers};
+pub use edit::edit;
