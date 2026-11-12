@@ -229,6 +229,93 @@ fn supplied_preparation_checks_availability_and_cancellation_at_handoff() {
         }
     ));
 }
+
+struct StoredSupplied;
+impl SchemaEvaluator for StoredSupplied {
+    type Validator = SendValidator;
+    fn prepare(
+        &self,
+        request: EvaluationRequest<'_>,
+        _: &PreparationLimits,
+        _: &dyn WorkControl,
+    ) -> Result<Self::Validator, PreparationFailure> {
+        let SchemaRoot::Supplied(uri) = request.root else {
+            panic!("supplied root required")
+        };
+        let resource = request
+            .external_schemas
+            .iter()
+            .find(|resource| resource.uri == uri)
+            .expect("root is the stored retrieval identity");
+        assert_eq!(resource.document.view().as_bool(), Some(true));
+        Ok(SendValidator(Cell::new(0)))
+    }
+}
+
+#[test]
+fn supplied_root_lends_the_stored_normalized_identity() {
+    let external = ExternalSchemas::new([ExternalSchema {
+        uri: "urn:kind#".into(),
+        document: JsonValue::boolean(true),
+    }])
+    .unwrap();
+    for uri in ["urn:kind#", "urn:kind"] {
+        let prepared = external.prepare(uri, &StoredSupplied).unwrap();
+        assert_eq!(
+            prepared.evaluate(&JsonValue::null()),
+            ValueOutcome::Satisfies
+        );
+    }
+}
+
+#[test]
+fn supplied_root_lookup_refuses_oversized_work_storage_and_identity() {
+    let external = ExternalSchemas::default();
+    let uri = format!("https://private.example/{}", "x".repeat(100_000));
+    let control = AtomicBool::new(false);
+    for (limits, resource) in [
+        (
+            PreparationLimits {
+                max_sdk_work_units: 1,
+                ..PreparationLimits::default()
+            },
+            "preparation-sdk-work-units",
+        ),
+        (
+            PreparationLimits {
+                max_sdk_reservation_bytes: 1,
+                ..PreparationLimits::default()
+            },
+            "preparation-sdk-reservation-bytes",
+        ),
+        (
+            PreparationLimits {
+                max_identity_bytes: 1,
+                ..PreparationLimits::default()
+            },
+            "schema-identity-bytes",
+        ),
+    ] {
+        let failure = external
+            .prepare_with_control(&uri, &SendEvaluator, &limits, &control)
+            .unwrap_err();
+        assert_eq!(
+            failure.kind,
+            PreparationFailureKind::Limit {
+                resource: resource.into()
+            }
+        );
+        assert!(failure.origin.is_none());
+        assert!(!format!("{failure} {failure:?}").contains("private.example"));
+    }
+    let failure = external.prepare(&uri, &SendEvaluator).unwrap_err();
+    assert_eq!(
+        failure.kind,
+        PreparationFailureKind::Resolution {
+            cause: ResolutionFailureKind::ResourceUnavailable { uri },
+        }
+    );
+}
 struct ResolveOnly;
 impl SchemaEvaluator for ResolveOnly {
     type Validator = SendValidator;

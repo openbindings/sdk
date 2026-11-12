@@ -1,4 +1,4 @@
-use openbindings::{JsonKind, JsonObject, JsonRef, JsonStringRef, JsonValue};
+use openbindings::{JsonKind, JsonLimits, JsonObject, JsonRef, JsonStringRef, JsonValue};
 use openbindings_context::Context;
 use std::{collections::BTreeSet, fmt};
 
@@ -20,6 +20,8 @@ pub enum CarrierError {
     FieldType(&'static str),
     /// A required nonempty string is empty, labelled the same way.
     EmptyString(&'static str),
+    /// Encoding a typed request exceeds the default exact-JSON admission limits.
+    InputLimit,
     /// The operation-key support list repeats a key.
     DuplicateSupport,
     /// CONTEXT_REQUIRED must carry a validated context challenge, not a rejection.
@@ -40,6 +42,7 @@ impl fmt::Display for CarrierError {
             Self::MissingField(field) => write!(f, "the carrier requires {field}"),
             Self::FieldType(field) => write!(f, "the carrier field {field} has the wrong type"),
             Self::EmptyString(field) => write!(f, "the carrier field {field} must not be empty"),
+            Self::InputLimit => f.write_str("the request exceeds exact JSON admission limits"),
             Self::DuplicateSupport => f.write_str("the support list repeats an operation key"),
             Self::ReservedCode => f.write_str("the reserved code requires a context challenge"),
             Self::InconsistentPullSupport => {
@@ -410,6 +413,13 @@ carrier!(
     "The closed request identifying one kind to describe."
 );
 impl DescribeKindRequest {
+    /// Construct the closed request from a nonempty kind name.
+    ///
+    /// # Errors
+    /// Rejects an empty kind or exceeded default exact-JSON admission limits.
+    pub fn new(kind: impl Into<String>) -> Result<Self, CarrierError> {
+        Self::from_json(request_value(kind.into(), None, None)?)
+    }
     /// Admit exactly the required kind field.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = object(value, Some((&["kind"], false)))?;
@@ -423,6 +433,19 @@ carrier!(
     "A proposed source kind/data pair with separate optional runtime context."
 );
 impl CheckSourceRequest {
+    /// Construct a request from a nonempty kind, optional exact data and opaque
+    /// object context. Omission remains distinct from JSON null; nested values
+    /// retain number spellings, duplicate members and unpaired UTF-16 units.
+    ///
+    /// # Errors
+    /// Rejects an empty kind or exceeded default exact-JSON admission limits.
+    pub fn new(
+        kind: impl Into<String>,
+        data: Option<JsonValue>,
+        context: Option<Context>,
+    ) -> Result<Self, CarrierError> {
+        Self::from_json(request_value(kind.into(), data, context)?)
+    }
     /// Admit kind, optional data and optional object context without interpreting them.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = object(value, Some((&["kind", "data", "context"], false)))?;
@@ -446,6 +469,54 @@ impl CheckSourceRequest {
             .get("context")
             .map(|value| Context::new(value.to_owned().as_object().expect("admitted context")))
     }
+}
+
+fn request_value(
+    kind: String,
+    data: Option<JsonValue>,
+    context: Option<Context>,
+) -> Result<JsonValue, CarrierError> {
+    if kind.is_empty() {
+        return Err(CarrierError::EmptyString("kind"));
+    }
+    let kind = JsonValue::string(&kind).map_err(|_| CarrierError::InputLimit)?;
+    let fields = [
+        ("kind", Some(kind)),
+        ("data", data),
+        (
+            "context",
+            context.map(|context| context.value().value().clone()),
+        ),
+    ];
+    let limits = JsonLimits::default();
+    // Each field includes a comma; the first uses the opening brace instead.
+    // The initial byte accounts for the closing brace.
+    let mut size = 1usize;
+    for (name, value) in &fields {
+        if let Some(value) = value {
+            size = size
+                .checked_add(name.len() + 4)
+                .and_then(|size| size.checked_add(value.bytes().len()))
+                .filter(|size| *size <= limits.max_bytes)
+                .ok_or(CarrierError::InputLimit)?;
+        }
+    }
+    let mut text = String::with_capacity(size);
+    text.push('{');
+    for (name, value) in &fields {
+        if let Some(value) = value {
+            if text.len() > 1 {
+                text.push(',');
+            }
+            text.push('"');
+            text.push_str(name);
+            text.push_str("\":");
+            text.push_str(value.text());
+        }
+    }
+    text.push('}');
+    JsonValue::parse_owned_with_limits(text.into_bytes(), limits)
+        .map_err(|_| CarrierError::InputLimit)
 }
 carrier!(
     CheckedSource,

@@ -102,6 +102,96 @@ fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches() {
 }
 
 #[test]
+fn supplied_preparations_keep_each_attempts_inventory_limits_and_snapshot() {
+    let resources = || {
+        ExternalSchemas::new([
+            ExternalSchema {
+                uri: "urn:root".into(),
+                document: value(r#"{"$defs":{"child":true}}"#),
+            },
+            ExternalSchema {
+                uri: "urn:other".into(),
+                document: value("false"),
+            },
+        ])
+        .unwrap()
+    };
+    let external = resources();
+    let control = AtomicBool::new(false);
+    let request = EvaluationRequest {
+        root: SchemaRoot::Supplied("urn:root"),
+        external_schemas: &external,
+    };
+    let held = request
+        .environment(&PreparationLimits::default(), &control)
+        .unwrap();
+    for (limits, resource) in [
+        (
+            PreparationLimits {
+                max_schema_nodes: 1,
+                ..PreparationLimits::default()
+            },
+            "schema-nodes",
+        ),
+        (
+            PreparationLimits {
+                max_identity_bytes: "urn:root".len(),
+                ..PreparationLimits::default()
+            },
+            "schema-identity-bytes",
+        ),
+    ] {
+        for set in [&external, &resources()] {
+            let request = EvaluationRequest {
+                external_schemas: set,
+                ..request
+            };
+            assert_eq!(
+                request.environment(&limits, &control).unwrap_err().kind,
+                PreparationFailureKind::Limit {
+                    resource: resource.into()
+                }
+            );
+        }
+    }
+    let second = EvaluationRequest {
+        root: SchemaRoot::Supplied("urn:other"),
+        ..request
+    }
+    .environment(&PreparationLimits::default(), &control)
+    .unwrap();
+    assert_eq!(second.root().value().text(), "false");
+    assert_eq!(
+        request
+            .environment(&PreparationLimits::default(), &control)
+            .unwrap()
+            .root()
+            .value()
+            .text(),
+        held.root().value().text()
+    );
+    let other = ExternalSchemas::new([ExternalSchema {
+        uri: "urn:root".into(),
+        document: value("true"),
+    }])
+    .unwrap();
+    assert_eq!(
+        EvaluationRequest {
+            external_schemas: &other,
+            ..request
+        }
+        .environment(&PreparationLimits::default(), &control)
+        .unwrap()
+        .root()
+        .value()
+        .text(),
+        "true"
+    );
+    drop(external);
+    assert_eq!(held.root().value().text(), r#"{"$defs":{"child":true}}"#);
+}
+
+#[test]
 fn a_failed_attempt_does_not_materialize_an_unbounded_origin() {
     let name = "n".repeat(100_000);
     let text =

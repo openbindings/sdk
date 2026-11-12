@@ -134,15 +134,9 @@ impl SchemaEnvironment {
         maximum_identity: usize,
         control: &dyn openbindings_internal_schema::Control,
     ) -> Result<Self, PreparationFailure> {
-        control.charge_work(uri.len().saturating_add(1))?;
-        control.charge_allocation(uri.len().saturating_mul(8).saturating_add(256))?;
-        let index = external.resource_index(uri)?;
-        let space = Arc::new(SchemaSpace::supplied_bounded(
-            external,
-            maximum_nodes,
-            maximum_identity,
-            control,
-        )?);
+        let index = external.resource_index(uri, maximum_identity, control)?;
+        control.charge_allocation(256)?;
+        let space = external.supplied_space(maximum_nodes, maximum_identity, control)?;
         control.check()?;
         let root = space.supplied_root(index);
         Ok(Self {

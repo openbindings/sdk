@@ -158,6 +158,14 @@ impl<V: SchemaValidator> PreparedOperation<V> {
     pub fn operation(&self) -> &str {
         &self.operation
     }
+    /// Borrow the prepared input schema, absent when no input schema was declared.
+    pub fn input(&self) -> Option<&PreparedSchema<V>> {
+        self.schemas[0].as_ref()
+    }
+    /// Borrow the prepared output schema, absent when no output schema was declared.
+    pub fn output(&self) -> Option<&PreparedSchema<V>> {
+        self.schemas[1].as_ref()
+    }
     /// Select a binding of this prepared operation using only the retained
     /// document, the choice and [`InvocationSupport::can_invoke`] queries.
     /// No context is read and no provider invocation or schema work starts.
@@ -169,6 +177,9 @@ impl<V: SchemaValidator> PreparedOperation<V> {
     /// operation or no supported candidate; returns `ERR_BINDING_SELECTION_REQUIRED`
     /// for multiple candidates without a choice. The whole ordered list must
     /// belong to this operation before any support query.
+    /// This method does not admit the address: an empty ordered list or an empty
+    /// key in that list returns `ERR_BINDING_NOT_FOUND`. Invocation and preflight instead
+    /// reject those malformed lists with a [`BoundaryFailure`].
     pub fn select<P: InvocationSupport>(
         &self,
         provider: &P,

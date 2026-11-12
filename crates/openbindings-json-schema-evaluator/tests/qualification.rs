@@ -13,8 +13,8 @@ fn pinned_suite_and_adversarial_contracts() {
         }
     }
     assert!(report.is_success(), "{:?}", report.configuration_failures);
-    assert_eq!(report.observations.len(), 1546);
-    assert_eq!(report.refusal_count(), 0);
+    assert_eq!(report.observations.len(), 1553);
+    assert_eq!(report.refusal_count(), 1);
 }
 #[test]
 fn controls_reject_wrong_verdict_refusal_and_bogus_paths() {
@@ -106,6 +106,7 @@ fn controls_exercise_real_runner_and_reject_wrong_answers() {
 
 #[derive(Clone, Copy, Debug)]
 enum Fault {
+    RefuseSupplied,
     EmptyMismatch,
     UnknownSource,
     BroadUnsupported,
@@ -129,6 +130,15 @@ impl SchemaEvaluator for FaultyAdapter {
         limits: &PreparationLimits,
         control: &dyn WorkControl,
     ) -> Result<Self::Validator, PreparationFailure> {
+        if matches!(self.0, Fault::RefuseSupplied)
+            && matches!(request.root, SchemaRoot::Supplied(_))
+        {
+            return Err(PreparationFailure::new(
+                PreparationFailureKind::UnsupportedCapability {
+                    capability: "supplied-root".into(),
+                },
+            ));
+        }
         let prepared = openbindings_json_schema_evaluator::DefaultEvaluator::new()
             .prepare(request, limits, control)?;
         Ok(FaultyContract(prepared, self.0))
@@ -143,6 +153,7 @@ impl SchemaValidator for FaultyContract {
     ) -> ValueOutcome {
         let outcome = self.0.evaluate(value, detail, control);
         match self.1 {
+            Fault::RefuseSupplied => outcome,
             Fault::DetailedCheck => self.0.evaluate(value, Detail::Explain, control),
             Fault::DisagreeingExplanation if detail == Detail::Explain => match outcome {
                 ValueOutcome::Satisfies => ValueOutcome::Fails {
@@ -221,6 +232,7 @@ impl SchemaValidator for FaultyContract {
 #[test]
 fn real_runner_rejects_malformed_outcomes_fabricated_sources_and_broad_refusals() {
     for fault in [
+        Fault::RefuseSupplied,
         Fault::EmptyMismatch,
         Fault::UnknownSource,
         Fault::BroadUnsupported,

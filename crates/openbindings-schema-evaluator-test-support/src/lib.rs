@@ -101,6 +101,25 @@ pub fn suite() -> &'static Suite {
             .expect("packaged current fixture JSON")
     })
 }
+
+#[derive(Deserialize)]
+struct SuppliedGroup {
+    uri: String,
+    #[serde(flatten)]
+    group: Group,
+}
+#[derive(Deserialize)]
+struct SuppliedSuite {
+    resources: BTreeMap<String, Resource>,
+    groups: Vec<SuppliedGroup>,
+}
+fn supplied_suite() -> &'static SuppliedSuite {
+    static SUITE: OnceLock<SuppliedSuite> = OnceLock::new();
+    SUITE.get_or_init(|| {
+        serde_json::from_str(include_str!("../fixtures/supplied-roots.json"))
+            .expect("packaged supplied-root fixture JSON")
+    })
+}
 #[derive(Clone, Serialize)]
 /// Receipt for one case, preserving verdicts and refusals separately from contract-check failures.
 /// Later versions may add fields: read them by name and match with `..`.
@@ -116,7 +135,8 @@ pub struct Observation {
     pub outcome: Option<ValueOutcome>,
     /// Actual explanation outcome for the same value when preparation succeeded.
     pub explanation: Option<ValueOutcome>,
-    /// Contract-check failures for this observation; empty means the expected semantic answer was established.
+    /// Contract-check failures; empty means the expected semantic answer or
+    /// explicit missing-root preparation refusal was established.
     pub failures: Vec<String>,
 }
 impl std::fmt::Debug for Observation {
@@ -167,12 +187,20 @@ impl std::fmt::Debug for Report {
 }
 
 impl Report {
-    /// Whether configuration is valid, every evaluator case was observed and no observation violates the kit contract. Every refusal remains a gap when the case requires a semantic answer.
+    /// Whether configuration is valid, every evaluator case was observed and no
+    /// observation violates the kit contract. A refusal remains a gap when the
+    /// case requires a semantic answer. Missing-root cases require the specific
+    /// preparation refusal instead.
     pub fn is_success(&self) -> bool {
         self.configuration_failures.is_empty()
             && self.observations.iter().all(|o| o.failures.is_empty())
             && self.observations.len()
                 == suite().groups.iter().map(|g| g.cases.len()).sum::<usize>()
+                    + supplied_suite()
+                        .groups
+                        .iter()
+                        .map(|g| g.group.cases.len())
+                        .sum::<usize>()
     }
     /// Count established satisfies/fails observations, excluding preparation and evaluation refusals.
     pub fn verdict_count(&self) -> usize {
@@ -197,9 +225,11 @@ impl Report {
             .count()
     }
 }
-/// Apply the kit through the public conformant-operation route: each group's
-/// input schema is prepared once with the borrowed evaluator and its supplied
-/// resources, then every value is both checked and explained. Implementations
+/// Apply the kit through public contained and supplied-root preparation routes.
+/// Each group's schema is prepared once with the borrowed evaluator and its
+/// supplied resources, then every value is both checked and explained. A missing
+/// supplied URI must return a `ResourceUnavailable` preparation failure.
+/// Implementations
 /// must keep preparations independent, preserve borrowed input snapshots, and
 /// return honest unsupported/limit outcomes. Both calls must reach the same
 /// verdict; a cheap check reports no problems and never claims completeness.
@@ -209,14 +239,25 @@ impl Report {
 /// pointers start at the value passed.
 pub fn run<E: SchemaEvaluator + ?Sized>(evaluator: &E) -> Report {
     let suite = suite();
+    let supplied = supplied_suite();
     let mut report = Report {
         observations: Vec::new(),
         configuration_failures: Vec::new(),
     };
-    for group in &suite.groups {
+    let groups = suite
+        .groups
+        .iter()
+        .map(|group| (group, &suite.resources, None))
+        .chain(
+            supplied
+                .groups
+                .iter()
+                .map(|entry| (&entry.group, &supplied.resources, Some(entry.uri.as_str()))),
+        );
+    for (group, registry, uri) in groups {
         let document = Document::parse(&group.document).expect("packaged document JSON");
         let resources = ExternalSchemas::new(group.resources.iter().map(|id| {
-            let r = &suite.resources[id];
+            let r = &registry[id];
             ExternalSchema {
                 uri: r.uri.clone(),
                 document: JsonValue::parse(&r.document).expect("packaged resource JSON"),
@@ -228,16 +269,39 @@ pub fn run<E: SchemaEvaluator + ?Sized>(evaluator: &E) -> Report {
             .expect("supported fixture version")
             .conformant()
             .expect("conformant fixture document");
-        let operation = validated.resolve_operation("op");
-        let Some(input) = operation.as_ref().and_then(|operation| operation.input()) else {
-            report.configuration_failures.push(format!(
-                "{}: expected an input schema on operation op",
-                group.id
-            ));
-            continue;
+        let prepared = if let Some(uri) = uri {
+            resources.prepare(uri, evaluator)
+        } else {
+            let operation = validated.resolve_operation("op");
+            let Some(input) = operation.as_ref().and_then(|operation| operation.input()) else {
+                report.configuration_failures.push(format!(
+                    "{}: expected an input schema on operation op",
+                    group.id
+                ));
+                continue;
+            };
+            input.prepare(evaluator, &resources)
         };
-        let prepared = input.prepare(evaluator, &resources);
         for case in &group.cases {
+            if case.expected == "resource-unavailable" {
+                let expected = matches!(&prepared, Err(failure) if matches!(
+                    &failure.kind,
+                    PreparationFailureKind::Resolution {
+                        cause: ResolutionFailureKind::ResourceUnavailable { uri: missing }
+                    } if Some(missing.as_str()) == uri
+                ));
+                report.observations.push(Observation {
+                    id: case.id.clone(),
+                    expected: case.expected.clone(),
+                    outcome: None,
+                    explanation: None,
+                    preparation_refusal: prepared.as_ref().err().cloned(),
+                    failures: if expected { Vec::new() } else {
+                        vec!["missing supplied root did not produce the required preparation refusal".into()]
+                    },
+                });
+                continue;
+            }
             let value = JsonValue::parse(&case.value).expect("packaged instance JSON");
             let original = value.text().to_owned();
             let contract = match &prepared {

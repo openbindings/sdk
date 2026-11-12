@@ -2,6 +2,10 @@
 
 Qualify a schema evaluator through the public document and contextual schema
 workflow. The current pinned suite contains 1,546 value cases in 486 groups.
+The runner also checks six supplied-root value cases for local `$defs`,
+recursion and relative references to another supplied resource, plus a missing
+URI that must produce a `ResourceUnavailable` preparation refusal. An evaluator
+that refuses supplied roots cannot qualify.
 Every value is checked and explained. Failure explanations are also exercised
 under cancellation and as a value nested inside a larger exact input.
 
@@ -25,7 +29,9 @@ fn qualify(evaluator: &impl SchemaEvaluator) -> Report {
 A successful report establishes every finite expected semantic answer. It does
 not prove complete JSON Schema support. Unsupported capabilities, unavailable
 resources and other no-verdict results remain recorded separately from wrong
-verdicts; none can be exempted to make this suite pass. An established undefined
+verdicts; a required semantic answer cannot be exempted to make this suite pass.
+The missing-root case explicitly requires a preparation refusal and contributes
+one to `Report::refusal_count` in a successful report. An established undefined
 result is a semantic answer, distinct from declining to establish it.
 
 Diagnostics may be incomplete, but every reported location must exist in the

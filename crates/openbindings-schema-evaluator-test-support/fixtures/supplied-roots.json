@@ -1,0 +1,61 @@
+{
+  "resources": {
+    "local": {
+      "uri": "urn:qualification:local",
+      "documentJson": "{\"$defs\":{\"Text\":{\"type\":\"string\"}},\"$ref\":\"#/$defs/Text\"}"
+    },
+    "recursive": {
+      "uri": "urn:qualification:recursive",
+      "documentJson": "{\"type\":\"object\",\"properties\":{\"next\":{\"$ref\":\"#\"}}}"
+    },
+    "relative": {
+      "uri": "https://qualification.example/schemas/root",
+      "documentJson": "{\"$ref\":\"text\"}"
+    },
+    "text": {
+      "uri": "https://qualification.example/schemas/text",
+      "documentJson": "{\"type\":\"string\"}"
+    }
+  },
+  "groups": [
+    {
+      "id": "supplied/local-definitions",
+      "uri": "urn:qualification:local",
+      "document": "{\"openbindings\":\"0.2.0\",\"operations\":{}}",
+      "resources": ["local"],
+      "cases": [
+        {"id": "supplied/local-definitions/string", "value": "\"ok\"", "expected": "satisfies", "acceptable_paths": null},
+        {"id": "supplied/local-definitions/number", "value": "1", "expected": "fails", "acceptable_paths": [[""]]}
+      ]
+    },
+    {
+      "id": "supplied/recursion",
+      "uri": "urn:qualification:recursive",
+      "document": "{\"openbindings\":\"0.2.0\",\"operations\":{}}",
+      "resources": ["recursive"],
+      "cases": [
+        {"id": "supplied/recursion/object", "value": "{\"next\":{}}", "expected": "satisfies", "acceptable_paths": null},
+        {"id": "supplied/recursion/number", "value": "{\"next\":1}", "expected": "fails", "acceptable_paths": [["/next"]]}
+      ]
+    },
+    {
+      "id": "supplied/relative-reference",
+      "uri": "https://qualification.example/schemas/root",
+      "document": "{\"openbindings\":\"0.2.0\",\"operations\":{}}",
+      "resources": ["relative", "text"],
+      "cases": [
+        {"id": "supplied/relative-reference/string", "value": "\"ok\"", "expected": "satisfies", "acceptable_paths": null},
+        {"id": "supplied/relative-reference/number", "value": "1", "expected": "fails", "acceptable_paths": [[""]]}
+      ]
+    },
+    {
+      "id": "supplied/missing-uri",
+      "uri": "urn:qualification:missing",
+      "document": "{\"openbindings\":\"0.2.0\",\"operations\":{}}",
+      "resources": ["local"],
+      "cases": [
+        {"id": "supplied/missing-uri/refusal", "value": "null", "expected": "resource-unavailable", "acceptable_paths": null}
+      ]
+    }
+  ]
+}
