@@ -504,3 +504,20 @@ void exactBatch;
 using changedSnapshot: Document = parsedOnly.set("/description", "changed");
 using removedSnapshot: Document = changedSnapshot.remove("/description");
 using emptySnapshot: Document = parsedOnly.edit([]);
+
+function suppliedRoot(resources: ExternalSchemas) {
+  const result = resources.prepare("https://example.test/root", {
+    limits: { patternBytes: 1024 },
+    signal: new AbortController().signal,
+  });
+  if (result.status === "ready") {
+    result.schema.evaluate({ value: 1 });
+    result.schema.dispose();
+  } else {
+    const failure: string = result.failure.kind;
+    void failure;
+  }
+  // @ts-expect-error This owner supplies the resource set for preparation.
+  resources.prepare("https://example.test/root", { resources });
+}
+void suppliedRoot;

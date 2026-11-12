@@ -366,11 +366,17 @@ impl SchemaEvaluator for Custom {
     fn prepare(
         &self,
         request: EvaluationRequest<'_>,
-        _: &PreparationLimits,
-        _: &dyn WorkControl,
+        limits: &PreparationLimits,
+        control: &dyn WorkControl,
     ) -> Result<Self::Validator, PreparationFailure> {
         self.0.fetch_add(1, Ordering::SeqCst);
-        Ok(CustomPrepared(request.schema.location()))
+        Ok(CustomPrepared(
+            request
+                .environment(limits, control)?
+                .root()
+                .origin()
+                .clone(),
+        ))
     }
 }
 impl SchemaValidator for CustomPrepared {

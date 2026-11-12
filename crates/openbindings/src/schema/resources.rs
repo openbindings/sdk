@@ -125,6 +125,68 @@ impl fmt::Display for ExternalSchemaError {
 }
 impl std::error::Error for ExternalSchemaError {}
 impl ExternalSchemas {
+    /// Prepare a supplied resource as its own JSON Schema root, with default
+    /// preparation limits and no cancellation. The URI is its retrieval identity
+    /// for relative references and diagnostics; its own `$id` governs when present.
+    /// Other resources in this set remain available without acquisition.
+    ///
+    /// # Errors
+    /// Returns preparation failure, including `ResourceUnavailable` when this
+    /// set does not contain the requested retrieval URI. No value is judged.
+    pub fn prepare<E: SchemaEvaluator + ?Sized>(
+        &self,
+        uri: &str,
+        evaluator: &E,
+    ) -> Result<PreparedSchema<E::Validator>, PreparationFailure> {
+        self.prepare_with_control(
+            uri,
+            evaluator,
+            &PreparationLimits::default(),
+            &crate::control::NeverCancelled,
+        )
+    }
+    /// Prepare a supplied root with explicit limits and cooperative cancellation.
+    /// Cancellation observed as the evaluator finishes prevents returning its
+    /// validator. Failed attempts leave this immutable set usable for retries.
+    ///
+    /// # Errors
+    /// Returns preparation failure, separately from every per-value outcome.
+    pub fn prepare_with_control<E: SchemaEvaluator + ?Sized>(
+        &self,
+        uri: &str,
+        evaluator: &E,
+        limits: &PreparationLimits,
+        control: &dyn WorkControl,
+    ) -> Result<PreparedSchema<E::Validator>, PreparationFailure> {
+        control.check()?;
+        let result = self.resource_index(uri).and_then(|_| {
+            evaluator.prepare(
+                EvaluationRequest {
+                    root: SchemaRoot::Supplied(uri),
+                    external_schemas: self,
+                },
+                limits,
+                control,
+            )
+        });
+        control.check()?;
+        result.map(|validator| PreparedSchema { validator })
+    }
+    pub(crate) fn resource_index(&self, uri: &str) -> Result<usize, PreparationFailure> {
+        let normalized = crate::uri::compared_id(None, uri);
+        normalized
+            .and_then(|uri| {
+                self.inner
+                    .resources
+                    .binary_search_by(|r| r.uri.cmp(&uri))
+                    .ok()
+            })
+            .ok_or_else(|| {
+                PreparationFailure::new(PreparationFailureKind::Resolution {
+                    cause: ResolutionFailureKind::ResourceUnavailable { uri: uri.into() },
+                })
+            })
+    }
     /// Admit immutable resources without acquisition. Duplicate retrieval spellings
     /// after RFC resolution and empty-fragment removal are configuration errors.
     /// Canonical associations use the library's ordinary URI normalization;

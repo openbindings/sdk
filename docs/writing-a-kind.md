@@ -271,6 +271,16 @@ JSON Schema validity. For example, an object containing `"type":5` is not
 rejected on that basis. Test descriptions against your own admission rules.
 Omitted `data` and explicit JSON null are different; this kind accepts neither.
 
+Applications can check proposed data with the usual evaluator seam: supply a
+description's `source_data()` or `binding_data()` value as an `ExternalSchema`
+under a URI the caller chooses, build `ExternalSchemas`, then call
+`resources.prepare(uri, &evaluator)`. That URI is the resource's retrieval identity
+for relative references and diagnostics; its own `$id` governs when present.
+Put referenced resources in the same set. Preparing the resource as its own root
+preserves its `#/$defs/...` and `{"$ref":"#"}` meaning. Handle preparation failures
+separately from data value outcomes. This does not construct a core `Schema` or
+require a synthetic OBI.
+
 `SourceChecker` is optional and is not implemented here. Its hook accepts a
 `CheckSourceRequest` containing `{kind, data?, context?}` and returns a
 `CheckedSource`, or `CheckFailure`. A successful checked source is the source

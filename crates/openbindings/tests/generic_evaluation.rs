@@ -53,7 +53,7 @@ fn local_nonclone_validator_owns_only_what_it_retains() {
         evaluator
             .prepare(
                 EvaluationRequest {
-                    schema: &schema,
+                    root: SchemaRoot::Contained(&schema),
                     external_schemas: &external,
                 },
                 &PreparationLimits::default(),
@@ -182,6 +182,52 @@ fn preparation_cancellation_never_returns_or_leaks_a_ready_validator() {
             )
             .is_ok()
     );
+}
+#[test]
+fn supplied_preparation_checks_availability_and_cancellation_at_handoff() {
+    let uri = "https://example.test/schema";
+    let external = ExternalSchemas::new([ExternalSchema {
+        uri: uri.into(),
+        document: JsonValue::parse("true").unwrap(),
+    }])
+    .unwrap();
+    let calls = Cell::new(0);
+    let drops = Rc::new(Cell::new(0));
+    let limits = PreparationLimits::default();
+    for initially_cancelled in [true, false] {
+        let signal = AtomicBool::new(initially_cancelled);
+        let evaluator = CancelDuring {
+            signal: &signal,
+            calls: &calls,
+            drops: drops.clone(),
+        };
+        assert_eq!(
+            external
+                .prepare_with_control(uri, &evaluator, &limits, &signal)
+                .unwrap_err()
+                .kind,
+            PreparationFailureKind::Cancelled
+        );
+    }
+    assert_eq!(calls.get(), 1);
+    assert_eq!(drops.get(), 1);
+    let prepared = external
+        .prepare(uri, &LocalEvaluator(drops.clone()))
+        .unwrap();
+    assert!(matches!(
+        prepared.evaluate(&JsonValue::null()),
+        ValueOutcome::Satisfies
+    ));
+    // Even an evaluator that ignores the environment cannot prepare an absent root.
+    assert!(matches!(
+        external
+            .prepare("https://example.test/missing", &SendEvaluator)
+            .unwrap_err()
+            .kind,
+        PreparationFailureKind::Resolution {
+            cause: ResolutionFailureKind::ResourceUnavailable { .. }
+        }
+    ));
 }
 struct ResolveOnly;
 impl SchemaEvaluator for ResolveOnly {

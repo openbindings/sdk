@@ -1,0 +1,62 @@
+[
+  {
+    "name": "local definitions",
+    "uri": "https://schemas.example/root.json",
+    "schema": {"$defs": {"X": {"type": "string"}}, "$ref": "#/$defs/X"},
+    "values": [
+      {"value": "yes", "status": "satisfies"},
+      {"value": 1, "status": "fails", "pointer": "/$defs/X/type"}
+    ]
+  },
+  {
+    "name": "recursive root",
+    "uri": "https://schemas.example/recursive.json",
+    "schema": {"type": "object", "properties": {"next": {"$ref": "#"}}},
+    "values": [
+      {"value": {"next": {"next": {}}}, "status": "satisfies"},
+      {"value": {"next": {"next": 1}}, "status": "fails", "pointer": "/type"}
+    ]
+  },
+  {
+    "name": "relative retrieval base",
+    "uri": "https://schemas.example/path/root.json",
+    "schema": {"$ref": "leaf.json"},
+    "resources": {"https://schemas.example/path/leaf.json": {"type": "integer"}},
+    "values": [
+      {"value": 1, "status": "satisfies"},
+      {"value": "no", "status": "fails", "pointer": "/type", "source_uri": "https://schemas.example/path/leaf.json"}
+    ]
+  },
+  {
+    "name": "declared base with retrieval provenance",
+    "uri": "https://retrieval.example/root.json",
+    "schema": {"$id": "https://canonical.example/path/root.json", "type": "string", "allOf": [{"$ref": "leaf.json"}]},
+    "resources": {"https://canonical.example/path/leaf.json": {"minLength": 2}},
+    "values": [
+      {"value": "yes", "status": "satisfies"},
+      {"value": 1, "status": "fails", "pointer": "/type"},
+      {"value": "x", "status": "fails", "pointer": "/minLength", "source_uri": "https://canonical.example/path/leaf.json"}
+    ]
+  },
+  {
+    "name": "resource dialect",
+    "uri": "https://schemas.example/tuple.json",
+    "schema": {"$schema": "http://json-schema.org/draft-07/schema#", "items": [{"type": "string"}]},
+    "values": [
+      {"value": ["yes"], "status": "satisfies"},
+      {"value": [1], "status": "fails", "pointer": "/items/0/type"}
+    ]
+  },
+  {
+    "name": "boolean root",
+    "uri": "https://schemas.example/false.json",
+    "schema": false,
+    "values": [{"value": null, "status": "fails", "pointer": ""}]
+  },
+  {
+    "name": "unproductive recursion",
+    "uri": "https://schemas.example/cycle.json",
+    "schema": {"$ref": "#"},
+    "values": [{"value": null, "status": "undefined"}]
+  }
+]

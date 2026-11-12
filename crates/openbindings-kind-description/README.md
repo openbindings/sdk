@@ -15,6 +15,16 @@ conformance nor JSON Schema validity, availability, trust or permission to execu
 Applications inspect `CheckDescription::executes` before choosing to perform a
 check. Context is supplied separately from the source entry authored afterward.
 
+To evaluate proposed data against `KindDescription::source_data()` or
+`binding_data()`, supply that exact `JsonValue` as an `openbindings::ExternalSchema`
+under a URI the caller chooses, build `ExternalSchemas`, then call
+`resources.prepare(uri, &evaluator)`. The URI is the resource's retrieval identity
+for relative references and diagnostics; its own `$id` governs the reference base
+when present. Supply referenced resources in the same set. The resource is its own
+schema root, so `#/$defs/...` and `{"$ref":"#"}` stay inside it. Preparation failure is
+separate from every data value outcome. This uses the same evaluator seam as
+contained operation schemas and needs no synthetic OBI or core `Schema`.
+
 `KindDescriptor` provides the two capability queries; `SourceChecker` provides
 source checking. Their borrowed futures require no async runtime, `Send` bound or
 implicit network access. Implement `handle_list_kinds`, `handle_describe_kind` and

@@ -23,6 +23,17 @@ It preserves the exact schema, including the `oauth2` acquisition annotation,
 without evaluating it. An object-form schema is not a schema-validity proof.
 The message accessor preserves JSON strings that cannot be represented by `&str`.
 
+To check an acquired context object, supply `challenge.schema().into_value()` as an
+`openbindings::ExternalSchema` under a URI the caller chooses, build
+`ExternalSchemas`, then call `resources.prepare(uri, &evaluator)` and evaluate the
+context value. The URI is the resource's retrieval identity for relative
+references and diagnostics; its own `$id` governs the reference base when present.
+Supply referenced resources in the same set. This prepares the challenge schema
+as its own root through the usual evaluator seam, preserving `#/$defs/...` and
+`{"$ref":"#"}` without embedding it in an OBI. Handle preparation failure separately
+from value outcomes. Passing the schema still leaves disclosure and retry choices
+with the application.
+
 Clones share immutable JSON storage. Debug and error formatting omit producer and
 caller data. Acquiring context, deciding what to disclose, combining sources,
 storage and retry policy belong to the application. This package performs no I/O

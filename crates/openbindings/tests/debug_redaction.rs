@@ -44,6 +44,7 @@ impl SchemaEvaluator for PrivateEvaluator {
         control: &dyn WorkControl,
     ) -> Result<Self::Validator, PreparationFailure> {
         redacted(&request);
+        redacted(&request.root);
         redacted(&control);
         redacted(request.external_schemas);
         redacted(&request.environment(limits, control)?);
@@ -79,6 +80,14 @@ fn evaluator_requests_and_resources_redact_original_snapshots_and_identifiers() 
     let operation = document.resolve_operation("op").unwrap();
     let contract = operation.input().unwrap();
     redacted(&contract);
+    assert!(
+        resources
+            .prepare(
+                &format!("https://example.invalid/{SECRET}"),
+                &PrivateEvaluator
+            )
+            .is_err()
+    );
     assert!(
         contract
             .prepare_with_control(
