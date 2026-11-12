@@ -37,7 +37,8 @@ pub enum BoundaryFailureKind {
     UnexpectedMember,
     /// A required field is missing.
     MissingMember,
-    /// An interpreted member's decoded name is repeated.
+    /// An interpreted member's decoded name is repeated, or an object anywhere
+    /// in `/context` repeats a decoded member name.
     DuplicateMember,
     /// A field requires an object.
     ExpectedObject,

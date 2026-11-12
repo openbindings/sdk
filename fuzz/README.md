@@ -1,9 +1,9 @@
 # Fuzz harness
 
 This is a standalone, unpublished cargo-fuzz crate. No fuzz runtime is added to
-SDK dependencies. The six `fuzz_targets/` binaries call ordinary functions in
-`src/lib.rs`. `seeds/Cargo.toml` compiles that identical file on stable without
-resolving libfuzzer-sys (or its arbitrary dependency). Its lockfile is independent
+SDK dependencies. The eight `fuzz_targets/` binaries call ordinary functions in
+`src/lib.rs` and its modules. `seeds/Cargo.toml` compiles those identical files on
+stable without resolving libfuzzer-sys (or its arbitrary dependency). Its lockfile is independent
 of the workspace. `tools/verify.py` replays every committed corpus file.
 
 ```sh
@@ -26,14 +26,19 @@ fuzz/Cargo.toml` if libfuzzer-sys is not cached. The stable replay remains usabl
 | `pattern` | JSON `[pattern, string]`, or raw UTF-8 pattern | Prepare invokes the ECMAScript reader; verdicts agree across lanes and across string pattern and propertyNames |
 | `comparison` | Exact JSON `[left schema, right schema]` | Identity symmetry, directional reflexivity, identity implies compatibility, unaccounted references agree with plain identity |
 | `lanes` | JSON `[schema, value]` | Default-limit evaluate and explain agree whenever both establish a verdict |
+| `edit` | JSON `[document, [["set", pointer, value] \| ["remove", pointer], ...], optional [bytes, nodes, depth]]` | `Document::edit` leaves the original unchanged; a success reparses at the document's limits, equals an independent tree model of the batch and keeps the exact bytes of untouched members and elements |
+| `carriers` | First byte selects one of 26 companion decoders; the rest is exact JSON | After admission every public accessor runs and the carrier re-decodes to the same exact value (invocation carriers through their own encoders); error `Display` and `Debug` hold only SDK vocabulary and never the `FUZZ_PRIVATE` marker |
 
 Inputs retain raw number tokens. Decimal receives only lexically valid numbers;
 zero divisors are excluded from the arithmetic API's precondition. Unsupported
 patterns, invalid schemas, and evaluations without verdicts are valid outcomes.
-The stable replay requires at least one successful input per target, so it cannot
-pass with a corpus that exercises only rejection. All targets cap input at 16 KiB;
-this is a throughput choice, not evidence about larger inputs. Schema preparation
-and evaluation use default limits, including the compiled lane's admission checks.
+The stable replay requires at least one successful input per target, and per
+decoder for `carriers`, so it cannot pass with a corpus that exercises only
+rejection. Carrier seeds cover valid, empty, duplicate-name and admission-boundary
+inputs for every decoder; the edit seeds include successful batches. All targets
+cap input at 16 KiB; this is a throughput choice, not evidence about larger
+inputs. Schema preparation and evaluation use default limits, including the
+compiled lane's admission checks.
 Route counters are private to unit tests; the generated unit differential guards
 compiled coverage, while the external fuzz harness cannot count those entries.
 Both lanes share some parsing and arithmetic, so agreement is not an independent
@@ -47,6 +52,6 @@ stable CI replay. Hash-named generated corpus entries and artifacts are ignored.
 
 The separate `Fuzz` workflow runs weekly and on manual dispatch. It runs every
 target even after a preceding target fails, and uploads artifacts on failure.
-Six sequential two-minute campaigns cost 12 runner minutes of fuzzing, plus
-installation and compilation (estimate 17 to 22 minutes total on a cold runner,
-30-minute job cap). This estimate has not been measured on GitHub Actions.
+Eight sequential two-minute campaigns cost 16 runner minutes of fuzzing, plus
+installation and compilation (estimate 21 to 26 minutes total on a cold runner,
+40-minute job cap). This estimate has not been measured on GitHub Actions.

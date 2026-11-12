@@ -17,10 +17,23 @@ assert!(context.value().member("apiKey")?.is_some());
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-`Context` checks object shape and leaves every member opaque. `ContextChallenge`
-checks the closed outer carrier, a nonempty message and an object-form schema.
-It preserves the exact schema, including the `oauth2` acquisition annotation,
-without evaluating it. An object-form schema is not a schema-validity proof.
+`Context::new(JsonObject)` and `TryFrom<JsonValue>` return `ContextShapeError`
+(`ExpectedObject` or `DuplicateMember`) and leave members opaque.
+
+Context admission is SDK policy: every object in context, including objects
+inside arrays, must have unique decoded member names. The pinned context
+document is silent on duplicates. This follows the parser-differential reason
+in [OBI-01](https://github.com/openbindings/spec/blob/c1419c9fc3ae5a00c2b83da710c11bf67dab7934/openbindings.md#10-conformance):
+the same bytes can yield different values across parsers, and context carries
+credentials and endpoints. The SDK refuses ambiguity without interpreting
+members, using the exact JSON's existing duplicate index. Every request decoder
+that admits a context member applies the same check and reports it through its
+own error type.
+
+`ContextChallenge` checks the closed outer carrier, a nonempty message and an
+object-form schema. It preserves the exact schema, including the `oauth2`
+acquisition annotation, without evaluating it. An object-form schema is not a
+schema-validity proof.
 The message accessor preserves JSON strings that cannot be represented by `&str`.
 
 To check an acquired context object, supply `challenge.schema().into_value()` as an

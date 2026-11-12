@@ -106,8 +106,12 @@ arbitrary provider CPU remains the provider's cooperative responsibility.
 
 `BindingRequest` and `OperationRequest` own the original `ConformantDocument`,
 address and optional opaque `openbindings_context::Context`. Their JSON decoders
-admit closed opening payloads and require document conformance. Malformed requests
-return local `BoundaryFailure`; well-shaped missing names or keys, including empty operation-invoker
+admit closed opening payloads and require document conformance. Context follows
+the shared
+[SDK admission policy](https://github.com/openbindings/sdk/blob/main/crates/openbindings-context/README.md):
+an object anywhere in it that repeats a decoded member name is refused as
+`DuplicateMember` at `/context`. Malformed requests return local
+`BoundaryFailure`; well-shaped missing names or keys, including empty operation-invoker
 `operation` and `binding` names, produce the appropriate invocation terminal.
 Core's OBI-02 name grammar excludes empty keys and aliases.
 The binding-invoker carrier requires a nonempty binding name. Exact data preserves absence, null and original

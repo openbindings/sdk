@@ -153,6 +153,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures-core"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e"
+
+[[package]]
 name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -485,14 +491,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-context"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+]
+
+[[package]]
 name = "openbindings-fuzz-seeds"
 version = "0.0.0"
 dependencies = [
  "openbindings",
+ "openbindings-context",
  "openbindings-internal-json",
+ "openbindings-invocation",
  "openbindings-json-schema-evaluator",
+ "openbindings-kind-description",
  "openbindings-schema-comparison",
+ "openbindings-source-pull",
  "serde_json",
+]
+
+[[package]]
+name = "openbindings-internal-cancellation"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
 ]
 
 [[package]]
@@ -519,6 +543,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-invocation"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "futures-core",
+ "openbindings",
+ "openbindings-context",
+ "openbindings-internal-cancellation",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "openbindings-json-schema-evaluator"
 version = "0.2.0-alpha.1"
 dependencies = [
@@ -534,12 +570,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-kind-description"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-context",
+ "openbindings-internal-cancellation",
+]
+
+[[package]]
 name = "openbindings-schema-comparison"
 version = "0.2.0-alpha.1"
 dependencies = [
  "openbindings",
  "openbindings-internal-json",
  "openbindings-internal-schema",
+]
+
+[[package]]
+name = "openbindings-source-pull"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-context",
+ "openbindings-internal-cancellation",
+ "openbindings-internal-json",
 ]
 
 [[package]]

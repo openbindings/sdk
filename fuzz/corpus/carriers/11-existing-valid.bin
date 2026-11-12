@@ -1,0 +1,1 @@
+{"binding":"b","status":"stale","change":"dangerous","proposal":{"data":null,"input":true,"output":{},"uses":["schemas/s"]},"references":["schemas/s"],"reasonCode":"FUZZ_PRIVATE_reason","message":"FUZZ_PRIVATE_message","details":{}}

@@ -1,7 +1,7 @@
 //! Exact context carriage shared by invocation, pulling and kind checking.
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
-use openbindings::{JsonAccessError, JsonObject, JsonStringRef, JsonValue};
+use openbindings::{JsonObject, JsonStringRef, JsonValue};
 use std::fmt;
 
 /// Version of the adopted context document, independent of the SDK version.
@@ -12,13 +12,22 @@ pub const APPLIED_INTERFACE_REVISION: &str = "484c9399207de99bd56921cead5f44a7b5
 /// One opaque context object, supplied by value for an attempt.
 ///
 /// Its members have no SDK interpretation. Cloning retains the exact immutable
-/// value, including nulls, large numbers, unknown members and duplicate names.
+/// value, including nulls, large numbers and unknown members. Decoded member
+/// names must be unique in every object, including objects inside arrays.
 #[derive(Clone)]
 pub struct Context(JsonObject);
 impl Context {
     /// Retain an object without interpreting its members or combining sources.
-    pub fn new(value: JsonObject) -> Self {
-        Self(value)
+    ///
+    /// # Errors
+    /// Returns [`ContextShapeError::DuplicateMember`] when any object in the
+    /// context, at any depth and including objects inside arrays, repeats a
+    /// decoded member name.
+    pub fn new(value: JsonObject) -> Result<Self, ContextShapeError> {
+        if value.value().has_duplicate_names() {
+            return Err(ContextShapeError::DuplicateMember);
+        }
+        Ok(Self(value))
     }
     /// Borrow the exact context object. Presence remains distinct from omission.
     pub fn value(&self) -> &JsonObject {
@@ -30,9 +39,9 @@ impl Context {
     }
 }
 impl TryFrom<JsonValue> for Context {
-    type Error = JsonAccessError;
+    type Error = ContextShapeError;
     fn try_from(value: JsonValue) -> Result<Self, Self::Error> {
-        JsonObject::try_from(value).map(Self)
+        Self::new(JsonObject::try_from(value).map_err(|_| ContextShapeError::ExpectedObject)?)
     }
 }
 impl fmt::Debug for Context {
@@ -40,6 +49,30 @@ impl fmt::Debug for Context {
         f.debug_struct("Context").finish_non_exhaustive()
     }
 }
+
+/// Admission failure for opaque attempt context.
+///
+/// Refusing repeated names is SDK admission policy: the context document is
+/// silent on duplicates, and parsers that keep the first or the last value would
+/// read the same bytes differently (the reason OBI-01 refuses them in documents).
+/// Formatting contains only fixed SDK text, never member names or values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ContextShapeError {
+    /// Context must be an object.
+    ExpectedObject,
+    /// An object anywhere in context repeats a decoded member name.
+    DuplicateMember,
+}
+impl fmt::Display for ContextShapeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::ExpectedObject => "context must be an object",
+            Self::DuplicateMember => "a context member is repeated",
+        })
+    }
+}
+impl std::error::Error for ContextShapeError {}
 
 /// Structural admission failure for a context challenge.
 ///

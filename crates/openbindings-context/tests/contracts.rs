@@ -1,5 +1,7 @@
 use openbindings::{JsonKind, JsonValue};
-use openbindings_context::{ChallengeShapeError as Error, Context, ContextChallenge};
+use openbindings_context::{
+    ChallengeShapeError as Error, Context, ContextChallenge, ContextShapeError,
+};
 
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
@@ -65,11 +67,13 @@ fn checked_fields_use_decoded_names_and_reject_ambiguous_carriers() {
 
 #[test]
 fn exact_opaque_values_and_schema_owners_survive_the_envelope() {
-    let text =
-        r#"{"secret":9007199254740993,"large":1e99999,"null":null,"secret":2,"\ud800":"\udfff"}"#;
+    let text = r#"{"secret":9007199254740993,"large":1e99999,"null":null,"\ud800":"\udfff"}"#;
     let context = Context::try_from(json(text)).unwrap();
     assert_eq!(context.value().value().text(), text);
-    assert!(context.value().member("secret").is_err());
+    assert_eq!(
+        context.value().member("secret").unwrap().unwrap().text(),
+        "9007199254740993"
+    );
     assert_eq!(
         context.value().member("null").unwrap().unwrap().kind(),
         JsonKind::Null
@@ -121,5 +125,38 @@ fn applied_context_authority_is_separate_from_package_version() {
     assert_eq!(
         openbindings_context::APPLIED_INTERFACE_REVISION,
         "484c9399207de99bd56921cead5f44a7b5740d9e"
+    );
+}
+
+#[test]
+fn context_refuses_repeated_decoded_names_through_both_constructors() {
+    assert_eq!(
+        Context::try_from(json("null")).unwrap_err(),
+        ContextShapeError::ExpectedObject
+    );
+    for text in [
+        r#"{"PRIVATE":1,"\u0050RIVATE":2}"#,
+        r#"{"nested":{"PRIVATE":1,"PRIVATE":2}}"#,
+        r#"{"array":[{"PRIVATE":1,"PRIVATE":2}]}"#,
+    ] {
+        let value = json(text);
+        for error in [
+            Context::try_from(value.clone()).unwrap_err(),
+            Context::new(value.as_object().unwrap()).unwrap_err(),
+        ] {
+            assert_eq!(error, ContextShapeError::DuplicateMember);
+            assert!(!error.to_string().contains("PRIVATE"));
+            assert!(!format!("{error:?}").contains("PRIVATE"));
+        }
+    }
+    // A name may recur in different objects, including sibling array elements.
+    let text = r#"{"a":{"a":1},"list":[{"a":1},{"a":2}]}"#;
+    assert_eq!(
+        Context::try_from(json(text))
+            .unwrap()
+            .value()
+            .value()
+            .text(),
+        text
     );
 }

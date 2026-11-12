@@ -16,7 +16,11 @@ members stay `None`. Proposals carry restricted edit authority; retaining unknow
 authorize copying it into a document. No TypeScript interface API is implied.
 
 `PullRequest` retains a complete `ConformantDocument`, selected source key and
-optional shared `Context`. `SourcePuller` supplies borrowed finite work and its
+optional shared `Context`. `PullRequest::from_json` applies the shared
+[SDK admission policy](https://github.com/openbindings/sdk/blob/main/crates/openbindings-context/README.md)
+to context and refuses an object anywhere in it that repeats a decoded member
+name as `RequestError::Shape("duplicate-member")`.
+`SourcePuller` supplies borrowed finite work and its
 own native operational error through `handle_pull_source`. Import `SourcePullerExt`
 to call the SDK-owned `pull_source` method directly on the implementation. It checks source existence before dispatch,
 then checks key/alias collisions, selected-source attribution, report coverage,

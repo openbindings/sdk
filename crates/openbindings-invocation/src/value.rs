@@ -3,7 +3,7 @@ use crate::boundary::{
     BoundaryFailure, BoundaryFailureKind, encode, failure, nonempty, object, required, string,
 };
 use openbindings::{ConformantDocument, Document, JsonLimits, JsonRef, JsonValue};
-use openbindings_context::Context;
+use openbindings_context::{Context, ContextShapeError};
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use std::fmt;
 
@@ -45,8 +45,9 @@ impl BindingRequest {
     /// exact storage with a reference-count clone.
     ///
     /// # Errors
-    /// Rejects malformed fields, ambiguous outer names, or a document for which
-    /// the core cannot establish conformance. It does not acquire external data.
+    /// Rejects malformed fields, ambiguous outer names, context that repeats a
+    /// decoded member name at any depth, or a document for which the core cannot
+    /// establish conformance. It does not acquire external data.
     pub fn from_json(value: &JsonValue) -> Result<Self, BoundaryFailure> {
         Self::from_json_ref(value.view())
     }
@@ -121,8 +122,15 @@ pub(crate) fn context(value: JsonRef<'_>) -> Result<Option<Context>, BoundaryFai
     value
         .get("context")
         .map(|value| {
-            Context::try_from(value.to_owned())
-                .map_err(|_| failure(BoundaryFailureKind::ExpectedObject, "/context"))
+            Context::try_from(value.to_owned()).map_err(|error| {
+                failure(
+                    match error {
+                        ContextShapeError::DuplicateMember => BoundaryFailureKind::DuplicateMember,
+                        _ => BoundaryFailureKind::ExpectedObject,
+                    },
+                    "/context",
+                )
+            })
         })
         .transpose()
 }

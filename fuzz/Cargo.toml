@@ -10,6 +10,10 @@ cargo-fuzz = true
 [workspace]
 
 [dependencies]
+openbindings-context = { path = "../crates/openbindings-context" }
+openbindings-invocation = { path = "../crates/openbindings-invocation" }
+openbindings-source-pull = { path = "../crates/openbindings-source-pull" }
+openbindings-kind-description = { path = "../crates/openbindings-kind-description" }
 openbindings-schema-comparison = { path = "../crates/openbindings-schema-comparison" }
 libfuzzer-sys = "=0.4.10"
 openbindings = { path = "../crates/openbindings" }
@@ -55,6 +59,20 @@ bench = false
 [[bin]]
 name = "comparison"
 path = "fuzz_targets/comparison.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "edit"
+path = "fuzz_targets/edit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "carriers"
+path = "fuzz_targets/carriers.rs"
 test = false
 doc = false
 bench = false

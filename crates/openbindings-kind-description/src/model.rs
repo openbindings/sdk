@@ -1,5 +1,5 @@
 use openbindings::{JsonKind, JsonLimits, JsonObject, JsonRef, JsonStringRef, JsonValue};
-use openbindings_context::Context;
+use openbindings_context::{Context, ContextShapeError};
 use std::{collections::BTreeSet, fmt};
 
 /// A carrier field or local carrier relationship is invalid.
@@ -9,7 +9,8 @@ use std::{collections::BTreeSet, fmt};
 pub enum CarrierError {
     /// An object-form carrier was required.
     ExpectedObject,
-    /// An outer decoded member name occurs more than once.
+    /// An outer decoded member name occurs more than once, or an object anywhere
+    /// in a request's context repeats a decoded member name.
     DuplicateMember,
     /// A closed carrier contains a member it does not define.
     UnexpectedMember,
@@ -435,7 +436,8 @@ carrier!(
 impl CheckSourceRequest {
     /// Construct a request from a nonempty kind, optional exact data and opaque
     /// object context. Omission remains distinct from JSON null; nested values
-    /// retain number spellings, duplicate members and unpaired UTF-16 units.
+    /// retain number spellings and unpaired UTF-16 units. Data may retain duplicate
+    /// nested members; an admitted [`Context`] has none.
     ///
     /// # Errors
     /// Rejects an empty kind or exceeded default exact-JSON admission limits.
@@ -447,13 +449,18 @@ impl CheckSourceRequest {
         Self::from_json(request_value(kind.into(), data, context)?)
     }
     /// Admit kind, optional data and optional object context without interpreting them.
+    ///
+    /// # Errors
+    /// Rejects carrier shape failures, including [`CarrierError::DuplicateMember`]
+    /// for context in which any object, at any depth, repeats a decoded member name.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = object(value, Some((&["kind", "data", "context"], false)))?;
         kind(&object)?;
-        if let Some(context) = object.value().get("context")
-            && context.kind() != JsonKind::Object
-        {
-            return Err(CarrierError::FieldType("context"));
+        if let Some(context) = object.value().get("context") {
+            Context::try_from(context.to_owned()).map_err(|error| match error {
+                ContextShapeError::DuplicateMember => CarrierError::DuplicateMember,
+                _ => CarrierError::FieldType("context"),
+            })?;
         }
         Ok(Self(object))
     }
@@ -467,7 +474,7 @@ impl CheckSourceRequest {
         self.0
             .value()
             .get("context")
-            .map(|value| Context::new(value.to_owned().as_object().expect("admitted context")))
+            .map(|value| Context::try_from(value.to_owned()).expect("admitted context"))
     }
 }
 

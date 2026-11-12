@@ -1,5 +1,6 @@
 use crate::{Context, RequestError};
 use openbindings::{ConformantDocument, Document, JsonValue};
+use openbindings_context::ContextShapeError;
 use std::{fmt, sync::Arc};
 
 /// One explicit source of an original, immutable conformant document.
@@ -42,6 +43,12 @@ impl PullRequest {
     /// Parsing and this admission precede the caller's handoff limits; callers
     /// accepting bytes should first use explicit exact-JSON admission limits.
     /// A missing selected source is refused by the checked caller before dispatch.
+    ///
+    /// # Errors
+    /// Returns [`RequestError::Shape`] for a malformed closed carrier, including
+    /// `"duplicate-member"` for a repeated outer name or for context in which any
+    /// object, at any depth, repeats a decoded member name. Document admission
+    /// failures are [`RequestError::Version`] and [`RequestError::Interface`].
     pub fn from_json(value: &JsonValue) -> Result<Self, RequestError> {
         let mut seen = [false; 3];
         for member in value
@@ -74,7 +81,12 @@ impl PullRequest {
             .ok_or(RequestError::Interface(validation))?;
         let context = value
             .get("context")
-            .map(|v| Context::try_from(v.to_owned()).map_err(|_| RequestError::Shape("context")))
+            .map(|v| {
+                Context::try_from(v.to_owned()).map_err(|error| match error {
+                    ContextShapeError::DuplicateMember => RequestError::Shape("duplicate-member"),
+                    _ => RequestError::Shape("context"),
+                })
+            })
             .transpose()?;
         Ok(Self {
             interface,

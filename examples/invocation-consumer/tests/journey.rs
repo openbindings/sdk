@@ -134,7 +134,7 @@ async fn two_local_kinds_cross_description_authoring_pull_drift_context_and_invo
                     proposed.get("data").map(|value| value.to_owned()),
                     proposed
                         .get("context")
-                        .map(|value| Context::new(value.to_owned().as_object().unwrap())),
+                        .map(|value| Context::new(value.to_owned().as_object().unwrap()).unwrap()),
                 )
                 .unwrap(),
                 CancellationToken::new(),

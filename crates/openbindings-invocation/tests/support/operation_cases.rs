@@ -146,7 +146,7 @@ async fn binding_is_lazy_owned_exact_and_descriptorless() {
     let provider = Provider::new(Mode::Echo);
     let client = &provider;
     let context = Context::try_from(json(
-        r#"{"opaque":{"x":1,"x":2},"number":1e9999,"text":"\ud800"}"#,
+        r#"{"opaque":{"x":1},"number":1e9999,"text":"\ud800"}"#,
     ))
     .unwrap();
     let request = BindingRequest::new(document("{}"), "a").with_context(context.clone());
@@ -686,7 +686,7 @@ fn current_wire_addressing_is_closed_and_preserves_exact_values() {
         r#""binding":"a""#,
     ] {
         let text = format!(
-            r#"{{"interface":{}, {},"context":{{"x":1e9999,"x":"\ud800"}}}}"#,
+            r#"{{"interface":{}, {},"context":{{"x":1e9999,"text":"\ud800"}}}}"#,
             doc.text(),
             address
         );
@@ -694,7 +694,7 @@ fn current_wire_addressing_is_closed_and_preserves_exact_values() {
         let encoded = request.to_json().unwrap();
         assert_eq!(
             encoded.get("context").unwrap().text(),
-            r#"{"x":1e9999,"x":"\ud800"}"#
+            r#"{"x":1e9999,"text":"\ud800"}"#
         );
     }
     for address in [
@@ -1072,8 +1072,7 @@ async fn absent_schema_operation_forwards_all_exact_values_context_and_original_
         DefaultEvaluator::default(),
         ExternalSchemas::default(),
     );
-    let context =
-        Context::try_from(json(r#"{"secret":1e9999,"duplicate":1,"duplicate":2}"#)).unwrap();
+    let context = Context::try_from(json(r#"{"secret":1e9999,"opaque":1}"#)).unwrap();
     let interface = document("{}");
     let original = interface.value().to_owned();
     let call = client
@@ -1287,8 +1286,7 @@ async fn concurrent_prepared_clones_keep_selection_context_cancellation_and_evid
             &control(),
         )
         .unwrap();
-    let context_a =
-        Context::try_from(json(r#"{"token":"A","n":1e9999,"same":1,"same":2}"#)).unwrap();
+    let context_a = Context::try_from(json(r#"{"token":"A","n":1e9999,"same":1}"#)).unwrap();
     let context_b = Context::try_from(json(r#"{"token":"B","n":9007199254740993}"#)).unwrap();
     let parent = control();
     let a = prepared

@@ -1,7 +1,7 @@
 //! Current document/key requests and shared context replace legacy copied carriers.
 use openbindings::{Document, JsonLimits, JsonValue};
 use openbindings_invocation::{
-    BindingRequest, BoundaryFailureKind, ContextChallenge, InvocationError,
+    BindingRequest, BoundaryFailureKind, ContextChallenge, InvocationError, OperationRequest,
 };
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
@@ -16,7 +16,7 @@ fn owned_document_request_preserves_exact_payloads_and_owners() {
     let original = request(
         r#", "data":{"n":-0.00e+2,"unit":"\ud800\udc00"},"x-binding":[1e-10000,9007199254740993]"#,
         r#", "data":{"n":9007199254740993,"large":1e9999},"x-source":"\ud800\udc00""#,
-        r#", "context":{"secret":null,"secret":false}"#,
+        r#", "context":{"secret":null,"opaque":false}"#,
     );
     let proof = Document::from_json(original.get("interface").unwrap().to_owned())
         .validate()
@@ -32,7 +32,7 @@ fn owned_document_request_preserves_exact_payloads_and_owners() {
     );
     assert_eq!(
         again.context.as_ref().unwrap().value().value().text(),
-        r#"{"secret":null,"secret":false}"#
+        r#"{"secret":null,"opaque":false}"#
     );
     assert_eq!(serde_json::to_string(&input).unwrap(), wire.text());
     assert_eq!(
@@ -261,5 +261,24 @@ fn request_decoding_rejects_duplicate_and_unpaired_document_data() {
             proof.report().evidence["OBI-01"],
             openbindings::Evidence::Violated
         );
+    }
+}
+
+#[test]
+fn request_decoding_refuses_repeated_context_names_at_every_depth() {
+    for context in [
+        r#"{"PRIVATE":1,"\u0050RIVATE":2}"#,
+        r#"{"n":{"PRIVATE":1,"PRIVATE":2}}"#,
+        r#"{"a":[{"PRIVATE":1,"PRIVATE":2}]}"#,
+    ] {
+        let value = request("", "", &format!(r#", "context":{context}"#));
+        for error in [
+            BindingRequest::from_json(&value).unwrap_err(),
+            OperationRequest::from_json(&value).unwrap_err(),
+        ] {
+            assert_eq!(error.kind(), BoundaryFailureKind::DuplicateMember);
+            assert_eq!(error.path(), "/context");
+            assert!(!format!("{error} {error:?}").contains("PRIVATE"));
+        }
     }
 }

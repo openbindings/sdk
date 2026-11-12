@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-11 panel decisions (unreleased)
+
+### Changed
+
+- Breaking: `Context::new` now returns `Result<Context, ContextShapeError>`, and
+  `TryFrom<JsonValue> for Context` returns `ContextShapeError` instead of
+  `JsonAccessError`. Context refuses an object anywhere in it, including inside
+  arrays, that repeats a decoded member name. This is SDK admission policy (the
+  context document is silent on duplicates) following OBI-01's parser-differential
+  reason.
+- Every request decoder that admits context applies the same check through its
+  own error: `BindingRequest` and `OperationRequest` return
+  `BoundaryFailureKind::DuplicateMember` at `/context`, `PullRequest` returns
+  `RequestError::Shape("duplicate-member")` and `CheckSourceRequest` returns
+  `CarrierError::DuplicateMember`. Diagnostics stay value-free.
+
+### Added
+
+- `ContextShapeError` with `ExpectedObject` and `DuplicateMember`.
+- The adapter guide states when `can_invoke` and a descriptor's `supports` must
+  agree, with a checked public-API test in the kind adapter example.
+- `edit` and `carriers` fuzz targets with committed seeds and stable replay.
+
 ## 2026-11-11 review follow-ups (unreleased)
 
 - Lend prepared input and output schemas from `PreparedOperation` for checks

@@ -19,7 +19,11 @@ Use `DescribeKindRequest::new(kind)` or
 `CheckSourceRequest::new(kind, data, context)` to construct requests from typed
 values. Both apply the same carrier checks as `from_json`, escape the kind name,
 and use default exact-JSON admission limits. Data and context retain their exact
-JSON, including duplicate nested members and number spellings.
+JSON and number spellings. Data may retain duplicate nested members. Context
+follows the shared
+[SDK admission policy](https://github.com/openbindings/sdk/blob/main/crates/openbindings-context/README.md):
+`CheckSourceRequest::from_json` refuses an object anywhere in it that repeats a
+decoded member name as `CarrierError::DuplicateMember`.
 
 To evaluate proposed data against `KindDescription::source_data()` or
 `binding_data()`, supply that exact `JsonValue` as an `openbindings::ExternalSchema`
