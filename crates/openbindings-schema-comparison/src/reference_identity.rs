@@ -74,7 +74,7 @@ pub fn identical_with_references(
         &std::sync::atomic::AtomicBool::new(false),
     )
 }
-/// Reference-rule identity with one monotone allowance and cooperative control.
+/// Reference-rule identity with one shared work and memory policy and cooperative control.
 /// The callback receives each original reference and its resource context.
 pub fn identical_with_references_and_control(
     left: Option<&SchemaInput>,

@@ -105,7 +105,11 @@ They do not consult an external table of historical or announced leap seconds.
 
 `PreparationLimits` keeps inventory footprint (`max_schema_nodes`,
 `max_identity_bytes`) separate from cooperative SDK work and explicit storage
-reservations (`max_sdk_work_units`, `max_sdk_reservation_bytes`). A completed cached
+reservations (`max_sdk_work_units`, `max_sdk_reservation_bytes`). Work is optional
+and off by default (`None`); the caller chooses a time bound through `WorkControl`
+cancellation or `Some(work_units)`. Storage keeps its 512 MiB default allowance
+for memory held at once. The dated [host measurement](performance-boundaries.md#limits-principle-november-2026)
+gives a work-unit suggestion for about 250 ms on that host. A completed cached
 inventory still checks the requested footprint bounds; work and storage already
 shared are not charged again. Nested preparation cannot renew a spent allowance,
 and cancellation retains its distinct cause. A failed limit check can omit origin
@@ -113,7 +117,10 @@ details rather than allocating an unbounded diagnostic path.
 
 The counters cover cooperative SDK sites in environment inventory, reference
 queries, retained operands, semantic proofs and nested meta-schema validation.
-Storage reservations include temporary and failed SDK construction. They do not
+Storage reservations include temporary and failed SDK construction while held.
+Local syntax checks, traversal scratch and nested meta-evaluation scratch release
+their reservations when dropped. Retained programs and indexes stay charged;
+mixed construction estimates conservatively stay charged with their owner. They do not
 count every dependency operation, allocator request or custom callback, and are
 not deadlines or process memory ceilings. A custom evaluator must declare its own
 resource scope. Dependency construction requires separate structural admission,

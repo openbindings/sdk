@@ -69,6 +69,12 @@ with `JsonValue::parse` or `parse_with_limits`, then call `evaluate(&value)`.
 Admission failure is separate from the four value outcomes. `explain` requests
 diagnostics for the same verdict. Undefined establishes semantic dependence on a
 known undefined result; no-verdict means the implementation could not answer.
+Preparation work is optional and off by default (`max_sdk_work_units: None`);
+a time bound is the caller's choice through `WorkControl` cancellation or
+`Some(work_units)`. The 512 MiB reservation allowance bounds conservative
+estimates of memory held at once. Dropped scratch is released and retained
+indexes/programs stay charged. See the dated
+[host-specific 250 ms suggestion](../../docs/performance-boundaries.md#limits-principle-november-2026).
 Each preparation is independent. Ownership and thread-safety follow the concrete
 validator; the default evaluator shares compiled state when cloned.
 

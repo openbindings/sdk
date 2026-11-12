@@ -90,12 +90,15 @@ remain separate fields as the table prescribes: merging const with enum or lower
 with upper bounds does not invoke a general satisfiability solver. An identical
 merged object can still admit no values; identity is a structural profile claim.
 
-One monotone attempt covers both sides, reference lookup, normalization, merges
+One shared attempt covers both sides, reference lookup, normalization, merges
 and comparison. Conjunction checks index closed branches and branches declaring
 properties, charge every remaining pair check and stop once retention is known.
 Conjunctions of empty objects need only linear work in their branch count.
-Default limits are 20 million work units, 64 MiB of conservative
-cumulative allocation reservations and depth 128. Depth can be tightened but the
+Work is uncapped by default (`max_work: None`). A time bound is the caller's
+choice, through `WorkControl` cancellation or `Some(work_units)`. Memory keeps
+a default 64 MiB conservative allowance for storage held at once, and depth 128.
+Slot scratch is released after each check; reports, persistent reference indexes
+and shared normalized targets stay charged. Depth can be tightened but the
 fixed ceiling remains 128. Work units and reservations are SDK policy, not a
 portable cost metric or a bound on caller-owned input storage. A refused attempt
 stays refused; fresh retries use unchanged inputs. `identical_with_control` observes
@@ -192,9 +195,10 @@ Exhaustion is sticky and remains in slots. Observed cancellation always returns
 `Err(ComparisonFailure::Cancelled)`, including during the final slot. Normalized
 reference targets are reused within the call when scope and depth agree;
 reference-rule calls retain their path-dependent accounting.
-A self-comparison of 200 operations using 40 shared eight-property records
-completes at default limits. Measurements at 400 and 1,000 operations exhaust
-the shared work allowance; larger interfaces can need explicit higher limits.
+Release measurements of self-comparison with 40 shared eight-property records
+at 1,000 and 3,000 operations complete under default limits. See the dated
+[limits measurements](../../docs/performance-boundaries.md#limits-principle-november-2026)
+for peak memory and elapsed time. Work units are not a portable time estimate.
 
 ## Source puller's reference rule
 
@@ -210,7 +214,7 @@ Union and conjunction branches can match spellings across their variants.
 The rule also applies to references under retained applicators and `$dynamicRef`. Their siblings normalize, but stay unmerged, as does an allOf containing
 such a leaf. Other references are followed. All other identity normalization,
 exact equality and failure rules apply. `identical_with_references_and_control`
-adds cooperative cancellation; each call uses one monotone budget, including
+adds cooperative cancellation; each call uses one shared work and memory policy, including
 reference inventory and comparison work.
 
 ```rust

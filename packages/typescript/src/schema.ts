@@ -361,7 +361,7 @@ export interface EvaluatorLimits {
   totalPatternMemory: number;
   /** Cumulative SDK evaluation storage reservations; default 50,331,648 bytes. Includes proof, memo, scratch, search-cache and diagnostic storage. These are SDK estimates, not allocator requests, peak live memory, immutable pattern-program size or a process-memory bound. */
   evaluationSdkReservationBytes: number;
-  /** Reached schema-resource bound; null (default) sets no additional resource-count cap. Original-environment preparation still has its own footprint, work and allocation bounds. */
+  /** Reached schema-resource bound; null (default) sets no additional resource-count cap. Original-environment preparation keeps its own footprint and 512 MiB storage allowance, with no work cap by default. */
   schemaResources: number | null;
 }
 

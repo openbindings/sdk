@@ -174,6 +174,8 @@ pub trait Control: Send + Sync {
     fn charge_allocation(&self, _bytes: usize) -> Result<(), Failure> {
         self.check()
     }
+    /// Release an earlier successful reservation after the covered storage drops.
+    fn release_allocation(&self, _bytes: usize) {}
     /// Keep an exhausted nested allocation allowance sticky in every enclosing
     /// attempt. Ordinary cancellation controls have no allocation state.
     fn allocation_limit_reached(&self) {}

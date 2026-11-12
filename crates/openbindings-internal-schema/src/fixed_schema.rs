@@ -297,7 +297,10 @@ pub fn dialect_validity_bounded(
         control.charge_allocation(allocation)?;
         control.charge_work(work)?;
     }
-    local::reserve(value.view(), dialect, control)?;
+    // The fixed compiler stays charged. Per-position operand/checking scratch
+    // has no retained output and ends when this Boolean check returns.
+    let scratch = crate::preparation::Scratch::new(control);
+    local::reserve(value.view(), dialect, &scratch)?;
     let result = dialect_validity(value, dialect);
     control.check()?;
     result.map_err(|_| {

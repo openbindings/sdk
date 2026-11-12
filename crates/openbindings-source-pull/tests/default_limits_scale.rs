@@ -148,3 +148,48 @@ fn a_result_the_size_limits_admit_is_not_refused_for_its_bytes() {
     });
     validate(document, result).unwrap();
 }
+
+#[test]
+fn relationship_memory_releases_each_uses_check_and_still_bounds_indexes() {
+    let (document, mut result) = first(40);
+    let schemas: Map<_, _> = (0..40).map(|i| (format!("S{i}"), json!(true))).collect();
+    // The first() fixture still needs these three reference targets.
+    result["additions"]["schemas"] = json!(schemas);
+    for name in ["A", "B", "C"] {
+        result["additions"]["schemas"][name] = json!(true);
+    }
+    let labels: Vec<_> = (0..40).map(|i| format!("schemas/S{i}")).collect();
+    for entry in result["report"]["added"].as_array_mut().unwrap() {
+        entry["uses"] = json!(labels);
+    }
+    let request = PullRequest::new(
+        Document::parse(document.to_string())
+            .unwrap()
+            .validate()
+            .unwrap()
+            .conformant()
+            .unwrap(),
+        "s",
+    );
+    let result = PullResult::from_json(JsonValue::parse(result.to_string()).unwrap()).unwrap();
+    let limits = PullLimits {
+        max_relationship_allocation_bytes: 512 * 1024,
+        ..Default::default()
+    };
+    result
+        .validate_for(&request, &limits, &AtomicBool::new(false))
+        .unwrap();
+    let (_, mut wide) = first(1);
+    let schemas: Map<_, _> = (0..1600).map(|i| (format!("S{i}"), json!(true))).collect();
+    wide["additions"]["schemas"] = json!(schemas);
+    for name in ["A", "B", "C"] {
+        wide["additions"]["schemas"][name] = json!(true);
+    }
+    let wide = PullResult::from_json(JsonValue::parse(wide.to_string()).unwrap()).unwrap();
+    assert!(matches!(
+        wide.validate_for(&request, &limits, &AtomicBool::new(false)),
+        Err(PullValidationError::LimitExceeded(
+            "relationship-allocation-bytes"
+        ))
+    ));
+}

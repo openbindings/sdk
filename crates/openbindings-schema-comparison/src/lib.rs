@@ -41,7 +41,7 @@ pub fn identical(
         &std::sync::atomic::AtomicBool::new(false),
     )
 }
-/// Compare with one shared monotone allowance and cooperative caller control.
+/// Compare with one shared work and memory policy and cooperative caller control.
 pub fn identical_with_control(
     left: Option<&SchemaInput>,
     right: Option<&SchemaInput>,

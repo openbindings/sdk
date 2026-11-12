@@ -315,7 +315,11 @@ requests, live heap or immutable pattern-program size.
 
 The original schema environment also has preparation footprint, work and
 allocation bounds, using Rust's default `PreparationLimits` in this facade.
-Those preparation settings are not currently exposed as TypeScript options.
+Preparation work is uncapped by default and memory keeps a 512 MiB conservative
+allowance for storage held at once, releasing completed scratch. A time bound is
+the application's choice; use a Worker to enforce an elapsed-time policy for this
+synchronous facade. Those preparation settings are not currently exposed as
+TypeScript options. See the dated Rust [host-specific 250 ms suggestion](../../docs/performance-boundaries.md#limits-principle-november-2026).
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning;
 simple Boolean identities add no proof-work unit. Growing loops retain cooperative
 checks, and fast results do not reset shared preparation budgets.

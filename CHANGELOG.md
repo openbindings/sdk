@@ -1,5 +1,23 @@
 # Changelog
 
+## Limits principle (unreleased)
+
+### Changed
+
+- Breaking: `ComparisonLimits::max_work` is now `Option<usize>`, `None` by default.
+- Breaking: `PreparationLimits::max_sdk_work_units` is now `Option<usize>`, `None` by default.
+- Breaking: `PullLimits::max_relationship_work` is now `Option<usize>`, `None` by default.
+- Time bounds belong to the caller, through cooperative cancellation or an explicit
+  work allowance. Preparation documentation includes a host-specific suggestion
+  for about 250 ms; work units are not portable durations or hard deadlines.
+
+### Fixed
+
+- Comparison, preparation and pull relationship memory allowances release
+  completed scratch, keeping their existing default sizes. Retained reports,
+  indexes and prepared programs stay charged; conservative mixed construction
+  estimates remain charged with their owner.
+
 ## 2026-11-12 review follow-ups (unreleased)
 
 ### Changed

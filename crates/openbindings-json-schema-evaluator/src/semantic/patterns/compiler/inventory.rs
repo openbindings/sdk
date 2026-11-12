@@ -221,6 +221,8 @@ pub(super) fn inspect(tree: Ast, control: &dyn Control) -> std::result::Result<I
 }
 
 fn walk(root: &Ast, control: &dyn Control) -> std::result::Result<Summary, Error> {
+    let scratch = openbindings_internal_schema::preparation::Scratch::new(control);
+    let control: &dyn Control = &scratch;
     control.check().map_err(Error::Attempt)?;
     let mut totals = Summary::default();
     let mut stack: Vec<Frame<'_>> = Vec::new();

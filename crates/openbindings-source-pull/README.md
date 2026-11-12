@@ -77,8 +77,12 @@ references and binding data `uses` the same way. The source-pull consumer's
 shows both as application code.
 
 `PullLimits` defaults to 32 MiB request/response handoffs, 100,000 indexed entries
-and uses labels, 64 million relationship work units and 64 MiB cumulative
-relationship-index/edit-metadata reservations. They exclude provider work and
+and uses labels, no relationship work cap (`max_relationship_work: None`),
+and 64 MiB of conservative reservations for storage held at once. Each uses
+check releases its scratch, and relationship indexes drop before edit metadata
+is built. A time bound is the caller's choice through `WorkControl` cancellation
+or `Some(work_units)`; units are not a portable duration. See the dated
+[measurements](../../docs/performance-boundaries.md#limits-principle-november-2026). They exclude provider work and
 already admitted carriers. Core prospective rebuilding/validation uses the
 original document's JSON limits and core finding limits, not the relationship
 ledger; cancellation is checked before and after those synchronous calls.
@@ -86,10 +90,11 @@ Requests read through `from_json` are admitted before caller limits, so byte
 consumers should first choose explicit JSON parsing limits. Native operational
 errors are not measured as JSON; exact context challenges are.
 
-The work default supports the intended 10,000-item catalog workflow while staying
-finite. Its checked B-tree search accounting follows the supported Rust node
-fanout. Wider keys, denser relationships or larger catalogs may require
-caller-selected limits. These allowances are SDK policy, not specification
+The default memory and entry limits support the intended 10,000-item catalog
+workflow. Checked B-tree search accounting follows the supported Rust node
+fanout when a caller selects a work cap. Wider keys, denser relationships or
+larger retained indexes may require caller-selected memory limits.
+These allowances are SDK policy, not specification
 requirements or a whole-call memory guarantee.
 
 Binding proposals carry `data`, `input`, `output`, or a nonempty `remove` list

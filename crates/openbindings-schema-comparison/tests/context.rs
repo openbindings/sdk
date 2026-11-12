@@ -26,7 +26,7 @@ fn shared_record_interfaces_fit_default_limits() {
         })
         .collect::<Vec<_>>()
         .join(",");
-    let count = 200;
+    let count = 400;
     let operations = (0..count)
             .map(|i| {
                 let s = i % 40;
@@ -164,7 +164,7 @@ fn cancelled_and_refused_indexing_leave_contexts_usable() {
                 Some(&selected),
                 Some(&expected),
                 &ComparisonLimits {
-                    max_work: allowance,
+                    max_work: Some(allowance),
                     ..limits
                 }
             ),

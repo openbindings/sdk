@@ -172,6 +172,10 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
         checks: AtomicUsize::new(0),
         at: usize::MAX,
     };
+    let stop = Stop {
+        checks: AtomicUsize::new(0),
+        at: 0,
+    };
     let construction = Construction::new(environment.clone(), Limits::default(), &count).unwrap();
     count.checks.store(0, Ordering::Relaxed);
     construction.check_standard(node).unwrap();
@@ -181,19 +185,16 @@ fn cancelled_misses_cannot_publish_and_hits_still_check_the_attempt() {
             checks: AtomicUsize::new(0),
             at: usize::MAX,
         };
-        let mut construction =
-            Construction::new(environment.clone(), Limits::default(), &stop).unwrap();
+        let initial = &stop;
         let stop = Stop {
             checks: AtomicUsize::new(0),
             at,
         };
+        let mut construction =
+            Construction::new(environment.clone(), Limits::default(), initial).unwrap();
         construction.control = &stop;
         assert!(construction.check_standard(node).is_err(), "{at}");
     }
-    let stop = Stop {
-        checks: AtomicUsize::new(0),
-        at: 0,
-    };
     let mut construction = Construction::new(environment, Limits::default(), &|| false).unwrap();
     construction.check_standard(node).unwrap();
     construction.control = &stop;

@@ -294,7 +294,7 @@ fn wide_empty_conjunctions_fit_a_linear_work_allowance() {
     let left = SchemaInput::new(schema.clone(), schema);
     let right = SchemaInput::new(json("{}"), json("{}"));
     let limits = ComparisonLimits {
-        max_work: 256 * width,
+        max_work: Some(256 * width),
         ..ComparisonLimits::default()
     };
     assert_eq!(identical(Some(&left), Some(&right), &limits), Ok(true));
@@ -310,7 +310,7 @@ fn a_retained_conjunction_stops_checking_branch_pairs() {
     let schema = json(&format!(r#"{{"allOf":[{}]}}"#, branches.join(",")));
     let input = SchemaInput::new(schema.clone(), schema);
     let limits = ComparisonLimits {
-        max_work: 10_000_000,
+        max_work: Some(10_000_000),
         ..ComparisonLimits::default()
     };
     assert_eq!(identical(Some(&input), Some(&input), &limits), Ok(true));

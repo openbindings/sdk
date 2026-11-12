@@ -40,7 +40,8 @@ pub(super) fn validate(
     root: &Plan,
     construction: &Construction<'_>,
 ) -> Result<(), PreparationFailure> {
-    let attempt = construction.control();
+    let scratch = openbindings_internal_schema::preparation::Scratch::new(construction.control());
+    let attempt = &scratch;
     if root.custom.is_empty() {
         return Ok(());
     }
@@ -124,10 +125,12 @@ pub(super) fn validate(
                     .ok_or_else(|| unsupported("custom-consumer-resource-root"))?;
                 let value = &root.environment.space().node(original).value;
                 let mut unavailable = None;
+                let evaluation_scratch =
+                    openbindings_internal_schema::preparation::Scratch::new(attempt);
                 let outcome = plans[&meta].evaluate_tracking_unavailable(
                     value,
                     &cancelled,
-                    Some(attempt),
+                    Some(&evaluation_scratch),
                     &mut unavailable,
                 );
                 attempt.check()?;

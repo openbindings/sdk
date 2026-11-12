@@ -54,7 +54,7 @@ fn default_checked_pull_completes_a_ten_thousand_item_catalog() {
     assert!(original.operations().is_empty());
     assert!(original.value().get("bindings").is_none());
     let insufficient = PullLimits {
-        max_relationship_work: 20_000_000,
+        max_relationship_work: Some(20_000_000),
         ..PullLimits::default()
     };
     assert!(matches!(

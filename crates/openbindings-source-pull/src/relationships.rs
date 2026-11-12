@@ -95,6 +95,14 @@ impl<'a> Additions<'a> {
         own_binding: Option<&str>,
         attempt: &mut Attempt<'_>,
     ) -> Result<(), Failure> {
+        attempt.scratch(|attempt| self.check_uses(value, own_binding, attempt))
+    }
+    fn check_uses(
+        &self,
+        value: Option<JsonRef<'a>>,
+        own_binding: Option<&str>,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<(), Failure> {
         let mut uses = Labels::new();
         if let Some(value) = value {
             for label in value.elements().expect("admitted uses") {

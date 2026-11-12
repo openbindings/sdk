@@ -126,7 +126,7 @@ pub fn compare(
         &std::sync::atomic::AtomicBool::new(false),
     )
 }
-/// Compare with one monotone budget and cooperative cancellation.
+/// Compare with one shared work and memory policy and cooperative cancellation.
 pub fn compare_with_control(
     direction: Direction,
     target: &SchemaInput,

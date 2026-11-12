@@ -176,6 +176,14 @@ pub(crate) fn equal(
     depth: usize,
     attempt: &mut Attempt<'_>,
 ) -> Result<bool, Failure> {
+    attempt.scratch(|attempt| equal_scratch(left, right, depth, attempt))
+}
+fn equal_scratch(
+    left: &Value,
+    right: &Value,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
     attempt.depth(depth)?;
     if let (Value::Shared(a), Value::Shared(b)) = (left, right)
         && std::sync::Arc::ptr_eq(a, b)
@@ -322,7 +330,7 @@ mod tests {
         let control = AtomicBool::new(false);
         for limits in [
             ComparisonLimits {
-                max_work: 1,
+                max_work: Some(1),
                 ..Default::default()
             },
             ComparisonLimits {

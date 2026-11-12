@@ -42,7 +42,11 @@ and can be admitted by validating it again with larger limits through
 `validate_document_with_limits`. Schema preparation
 has separate footprint, cooperative SDK work and explicit SDK storage reservation
 bounds through `PreparationLimits` (`max_sdk_work_units`,
-`max_sdk_reservation_bytes`). These are not allocator-wide or CPU accounting for
+`max_sdk_reservation_bytes`). Work is optional and off by default (`None`);
+explicit SDK storage keeps a 512 MiB default allowance for storage held at once.
+A time bound belongs to the caller through cancellation or `Some(work_units)`.
+See the host-specific [250 ms suggestion](docs/performance-boundaries.md#limits-principle-november-2026).
+These are not allocator-wide or CPU accounting for
 dependencies and custom callbacks. Dependency construction needs separate
 structural admission and measured resource qualification,
 plus the selected evaluator's capability and execution limits. Parser-limit
@@ -126,8 +130,11 @@ normalized targets, and `$defs` retention is local to each schema subtree. Refer
 keep same-spelled accounted references as leaves and ask whether remaining drift
 lies only behind unaccounted targets. The caller supplies accounting.
 Missing/cyclic followed references, repeated-first-enum intersection ambiguity,
-resource exhaustion and cancellation are failures with no verdict. Defaults are 20 million
-work units, 64 MiB cumulative allocation reservations and depth 128; the depth
+resource exhaustion and cancellation are failures with no verdict. Defaults are
+no work cap (`max_work: None`), 64 MiB conservative reservations for storage held
+at once and depth 128. The caller chooses a time bound through cancellation or
+`Some(work_units)`. Scratch drops after each slot; shared indexes, normalized
+targets and retained reports stay charged. The depth
 ceiling cannot be raised. Plain-name anchors and nested resource bases are supported.
 Comparison remains independent of core conformance.
 
@@ -162,8 +169,11 @@ original-document requests, borrowed providers and checked lazy callers. The SDK
 checks mechanically knowable report relationships and core conformance of a
 prospective all-additions snapshot. It does not establish kind-owned fidelity,
 offered-schema identity or opaque dependency closure, and it never applies
-proposals. Default handoffs are 32 MiB; relationship indexing has separate entry,
-work and allocation bounds. These do not cover provider work or core prospective
+proposals. Default handoffs are 32 MiB; relationship indexing admits 100,000
+entries/uses labels and 64 MiB of conservative reservations for storage held at
+once. Relationship work is uncapped (`max_relationship_work: None`) by default;
+the caller chooses a time bound through cancellation or `Some(work_units)`.
+Per-check uses scratch and completed relationship indexes are released. These do not cover provider work or core prospective
 rebuild/validation internals, which retain core limits. Cancellation is checked
 around those synchronous core calls. These checks do not qualify an application
 or adapter for deployment.

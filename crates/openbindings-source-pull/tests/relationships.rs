@@ -196,6 +196,7 @@ fn request_decoding_refuses_repeated_context_names_at_every_depth() {
 
 #[test]
 fn request_and_response_boundaries_refuse_before_prospective_work() {
+    assert_eq!(PullLimits::default().max_relationship_work, None);
     let request = PullRequest::new(
         checked(r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"example@1"}}}"#),
         "s",
@@ -214,7 +215,7 @@ fn request_and_response_boundaries_refuse_before_prospective_work() {
             ..PullLimits::default()
         },
         PullLimits {
-            max_relationship_work: 0,
+            max_relationship_work: Some(0),
             ..PullLimits::default()
         },
     ] {
