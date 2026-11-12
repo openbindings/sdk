@@ -1,0 +1,1 @@
+{"openbindings":"0.2.0","operations":{"check":{"input":{"$ref":"https://example.test/value"}},"op0":{"input":{"type":"integer"}},"op1":{"input":{"type":"integer"}},"op2":{"input":{"type":"integer"}},"op3":{"input":{"type":"integer"}},"op4":{"input":{"type":"integer"}},"op5":{"input":{"type":"integer"}}}}

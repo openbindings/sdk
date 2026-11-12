@@ -1,0 +1,14 @@
+test_campaign_requires_explicit_label_and_bound_archives (__main__.PreparationTests.test_campaign_requires_explicit_label_and_bound_archives) ... ok
+test_exact_baseline_and_repository_remain_frozen (__main__.PreparationTests.test_exact_baseline_and_repository_remain_frozen) ... ok
+test_pending_candidate_or_download_digest_refuses (__main__.PreparationTests.test_pending_candidate_or_download_digest_refuses) ... ok
+test_reviewed_harness_and_synthetic_fixture_seed (__main__.PreparationTests.test_reviewed_harness_and_synthetic_fixture_seed) ... ok
+test_safe_node_style_relative_symlink_and_empty_destination (__main__.PreparationTests.test_safe_node_style_relative_symlink_and_empty_destination) ... ok
+test_same_repo_explicit_actor_and_no_rerun_gate (__main__.PreparationTests.test_same_repo_explicit_actor_and_no_rerun_gate) ... ok
+test_tar_traversal_duplicate_and_escaping_links_refused (__main__.PreparationTests.test_tar_traversal_duplicate_and_escaping_links_refused) ... ok
+test_timeout_targets_only_its_created_process_group (__main__.PreparationTests.test_timeout_targets_only_its_created_process_group) ... ok
+test_zip_traversal_refused_before_extraction (__main__.PreparationTests.test_zip_traversal_refused_before_extraction) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.160s
+
+OK

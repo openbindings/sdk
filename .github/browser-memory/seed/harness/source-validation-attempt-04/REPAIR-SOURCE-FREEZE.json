@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "implemented-awaiting-independent-owner-review",
+  "recordedAt": "2026-10-10T22:51:06.395062+00:00",
+  "baseCommit": "de9c853cffdc7721be42e68a81415cfc1f63e6d4",
+  "sourceFiles": {
+    "campaign.py": "8fc7d832254e37dc97078e0f456f56e215d9d93f2691c2cc4a50a6c0807dca74",
+    "test_harness.py": "0dc8298309993fa2c783fe80d1c9cbc279ea3d5380f5c6637a2339431991db78"
+  },
+  "files": {
+    "INPUT-EVIDENCE.json": "f36a340c7603ff266443bff2bdadf7e53a11d5d896d4a8482d0e4d5e702352a3",
+    "REPAIR.diff": "21c6d44c487751510205d212b66d903bc55333fdf363e21c1c2f5e282773a4da",
+    "REPAIR.md": "cce5eedf910fcc68c2ef5dfe229a2166e925330417c23db75f0142d1325f69a9",
+    "before/campaign.py": "87692d3ca6aca5db1f88faacfc2a6de0ad5f89a4db34d6982a8175eec4478a02",
+    "before/test_harness.py": "6bf47e755e6c55857454409d39985a698e3e80ca00a88d708d3d2434aba6cbb7",
+    "source/campaign.py": "8fc7d832254e37dc97078e0f456f56e215d9d93f2691c2cc4a50a6c0807dca74",
+    "source/test_harness.py": "0dc8298309993fa2c783fe80d1c9cbc279ea3d5380f5c6637a2339431991db78",
+    "validation-attempt-01/VALIDATION.json": "2c37a764d4b0d7b39c606f09f82be5de2e3f7de523843fd45b2ac3afe31318c1",
+    "validation-attempt-01/source/campaign.py": "8fc7d832254e37dc97078e0f456f56e215d9d93f2691c2cc4a50a6c0807dca74",
+    "validation-attempt-01/source/test_harness.py": "0dc8298309993fa2c783fe80d1c9cbc279ea3d5380f5c6637a2339431991db78",
+    "validation-attempt-01/stderr.txt": "48d933aeba80c0fa2e165f2515d69e64806f381085bd256d6692ec05a6f0864e",
+    "validation-attempt-01/stdout.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "validation-attempt-02/VALIDATION.json": "9694988b243513c621fc3b934e6800d6ca9a11cbf6d56cd9618e041de5f4a04d",
+    "validation-attempt-02/source/campaign.py": "8fc7d832254e37dc97078e0f456f56e215d9d93f2691c2cc4a50a6c0807dca74",
+    "validation-attempt-02/source/test_harness.py": "0dc8298309993fa2c783fe80d1c9cbc279ea3d5380f5c6637a2339431991db78",
+    "validation-attempt-02/stderr.txt": "71c9aa9d6e1d8fbfe5d8f661a6863d43629269e79293a6557691d8b94f491eb2",
+    "validation-attempt-02/stdout.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "finalValidation": "validation-attempt-02/VALIDATION.json",
+  "testsPassed": 20,
+  "firstSandboxDeniedOutcomePreserved": true,
+  "originalActivationEvidenceUnchanged": true,
+  "originalSdkAttemptAbsent": true,
+  "activeSealsRefreshed": false,
+  "sdkOrBrowserOrCampaignExecuted": false,
+  "nextStep": "Independent root owner review only; no automatic execution"
+}

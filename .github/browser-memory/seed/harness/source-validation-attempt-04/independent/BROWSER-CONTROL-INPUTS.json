@@ -1,0 +1,25 @@
+{
+  "files": {
+    "campaign.py": {
+      "originalPath": "/Users/matt/Code/ob-pj/openbindings/sdk-browser-memory-qualification/.github/browser-memory/seed/harness/campaign.py",
+      "sha256": "8fc7d832254e37dc97078e0f456f56e215d9d93f2691c2cc4a50a6c0807dca74"
+    },
+    "test_harness.py": {
+      "originalPath": "/Users/matt/Code/ob-pj/openbindings/sdk-browser-memory-qualification/.github/browser-memory/seed/harness/test_harness.py",
+      "sha256": "0dc8298309993fa2c783fe80d1c9cbc279ea3d5380f5c6637a2339431991db78"
+    },
+    "kernel.py": {
+      "originalPath": "/Users/matt/Code/ob-pj/openbindings/sdk-browser-memory-qualification/.github/browser-memory/seed/harness/kernel.py",
+      "sha256": "4e533197cd68d530e68931e017f64ef614a774ce5e9d253995554ddb8cde21ef"
+    },
+    "identity.py": {
+      "originalPath": "/Users/matt/Code/ob-pj/openbindings/sdk-browser-memory-qualification/.github/browser-memory/seed/harness/identity.py",
+      "sha256": "3b7e56040417e3f5d8b9b0ea398133caa3f1b9a03f2df34ea227b12584495e86"
+    },
+    "touch.py": {
+      "originalPath": "/Users/matt/Code/ob-pj/openbindings/sdk-browser-memory-qualification/.github/browser-memory/seed/harness/touch.py",
+      "sha256": "7be37b0ee7852449ff71c76a21555886dbd1769a2309699386a4158293366e3d"
+    }
+  },
+  "scope": "Unchanged SDK-free test source; copied so test fixtures write only in review directory. Scratch controls create and remove their own /tmp directories."
+}

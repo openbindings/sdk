@@ -1,0 +1,22 @@
+{
+  "recordedAt": "2026-10-10T22:50:21.243017+00:00",
+  "scope": "SDK-free unit controls, including real local AF_UNIX sockets; no browser, SDK, Cargo, Linux cgroup or timing campaign",
+  "reasonForSecondAttempt": "First local validation retained: sandbox denied AF_UNIX bind with EPERM; source unchanged. One authorized sandbox-escalated local verification.",
+  "command": [
+    "/opt/homebrew/opt/python@3.13/bin/python3.13",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "test_harness"
+  ],
+  "cwd": "/Users/matt/Code/ob-pj/openbindings/sdk-browser-memory-qualification/.github/browser-memory/seed/harness",
+  "python": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.3.19.1)]",
+  "sourceFiles": {
+    "campaign.py": "8fc7d832254e37dc97078e0f456f56e215d9d93f2691c2cc4a50a6c0807dca74",
+    "test_harness.py": "0dc8298309993fa2c783fe80d1c9cbc279ea3d5380f5c6637a2339431991db78"
+  },
+  "exitCode": 0,
+  "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderrSha256": "71c9aa9d6e1d8fbfe5d8f661a6863d43629269e79293a6557691d8b94f491eb2"
+}

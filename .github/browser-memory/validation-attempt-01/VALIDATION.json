@@ -1,0 +1,61 @@
+{
+  "scope": "SDK-free preparation helper checks and pending-input refusal only; no build, SDK, browser or cgroup execution",
+  "recordedAt": "2026-10-10T21:01:28.306386+00:00",
+  "python": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.3.19.1)]",
+  "sourceFiles": {
+    "ACTIVATION.template.json": "e5d83cf8dbcb2fab35e2fc16b83d3ade2523233063acdee49c8aa1fcfb427e06",
+    "HANDOFF.md": "8edbce48418d2a817b6da1623e5ed6ffe79a5e186a29fbd2808a2dd48fab3cc3",
+    "REQUEST.template.json": "350b851f9607154cc2329d8300dc08784b44c980000123c161fc756ee0cfa6a2",
+    "SEED-MANIFEST.json": "391a2b230f94d6d98a9912d0726088a5fd68e43d1f74b8de292b1112ad549e39",
+    "activate.py": "c3306b522540e5e61722481f6290fa734f4d9f236ed7ef686d371c9fa1b41e92",
+    "browser-memory-pr.proposal.yml": "058d946cb154cb4c6b492690cecbf03ad5c9b8ff7e08ae6d73122a117006eafd",
+    "common.py": "68d53827556705d3a582cda2cb0c5bf248ceeb269e42e86ba10da6dcf835f410",
+    "gate.py": "da2939cf4be51fbdd4b333282e874b0f89866ab42485bf1a3a1d70c3f2362e5f",
+    "prepare.py": "36d6d732b2a5d50ddb60eb3c920d87946667d822d28b14d4c38275f528a7b78e",
+    "test_preparation.py": "aa6348de418c4b06d675f3f4ad39e3a0790b65f42d353b63b480f7881871161f"
+  },
+  "commands": [
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.13/bin/python3.13",
+        "-B",
+        "test_preparation.py"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "fdcf904e5b5eabcd4cc306ad730be3f2aa0df69f0291bfec6cab483f65f280a6"
+    },
+    {
+      "argv": [
+        "/usr/bin/ruby",
+        "-rpsych",
+        "-e",
+        "Psych.parse_file(ARGV[0]); puts \"Workflow proposal YAML parsed\"",
+        "browser-memory-pr.proposal.yml"
+      ],
+      "exitCode": 0,
+      "expectedExitCode": 0,
+      "stdoutSha256": "0f0df14e3cb64f339144f86fa9e22617270e51975df77a5bcad0147761cf295a",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "/opt/homebrew/opt/python@3.13/bin/python3.13",
+        "-B",
+        "prepare.py",
+        "--request",
+        "REQUEST.template.json",
+        "--seed",
+        "seed",
+        "--evidence",
+        "/Users/matt/Code/ob-pj/design/sdk-maturity-loop-2026-10-10/rounds/01/continuation/browser-kernel-preparation/validation-attempt-01/pending-admission"
+      ],
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "stdoutSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "allExpectedOutcomes": true
+}
