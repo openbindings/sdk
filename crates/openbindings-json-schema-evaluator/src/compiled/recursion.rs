@@ -25,6 +25,10 @@ pub(super) fn qualifies(
     own: &HashMap<usize, expansion::Own>,
     control: &dyn Control,
 ) -> Result<Result<Proof, &'static str>, PreparationFailure> {
+    // Only scalar proof weights escape; all graph and selector storage drops
+    // before this scope releases its conservative reservations.
+    let scratch = openbindings_internal_schema::preparation::Scratch::new(control);
+    let control: &dyn Control = &scratch;
     // Cycle reachability, reverse edges, finite folds and entry sets are
     // preparation owners only. The existing selector scan prepays its own data.
     control

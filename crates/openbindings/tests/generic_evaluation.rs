@@ -276,7 +276,7 @@ fn supplied_root_lookup_refuses_oversized_work_storage_and_identity() {
     for (limits, resource) in [
         (
             PreparationLimits {
-                max_sdk_work_units: 1,
+                max_sdk_work_units: Some(1),
                 ..PreparationLimits::default()
             },
             "preparation-sdk-work-units",

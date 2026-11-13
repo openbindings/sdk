@@ -56,4 +56,11 @@ itself reads and writes, not the library's compiled program (see the
 Prepare such schemas in an isolated worker or process with an operating-system
 memory limit. Value evaluation uses static compiled admission or Original heap frames and
 sampled stack checks. A caller-selected work cap selects Original. SDK limits
-are not a hard CPU deadline or a whole-process memory ceiling.
+are not a hard CPU deadline or a whole-process memory ceiling. Comparison,
+preparation and pull relationship work budgets are optional and off by default.
+A time bound is the caller's choice through cancellation or the corresponding
+`Option<usize>` field. Memory allowances retain defaults (64 MiB comparison,
+512 MiB preparation, 64 MiB pull relationships) for conservative reservations of
+storage held at once. Scratch releases its reservations when dropped; retained
+programs, indexes and reports stay charged. See the dated
+[host-specific 250 ms preparation suggestion](performance-boundaries.md#limits-principle-november-2026).

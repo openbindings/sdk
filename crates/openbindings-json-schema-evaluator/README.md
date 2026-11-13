@@ -166,7 +166,11 @@ allocator requests, live heap or immutable pattern-program size.
 
 `PreparationLimits` bounds the original schema environment's footprint, cooperative
 SDK work (`max_sdk_work_units`) and explicit SDK storage reservations
-(`max_sdk_reservation_bytes`). A local
+(`max_sdk_reservation_bytes`, 512 MiB by default). `max_sdk_work_units` is
+optional and off by default (`None`). A time bound is the caller's choice through
+`WorkControl` cancellation or `Some(work_units)`; the dated
+[host measurement](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026)
+gives a work-unit suggestion for about 250 ms on that host. A local
 undefined operation cannot bypass construction accounting: the semantic path
 walks known original references and applicators, counts resources and checks
 pattern budgets before becoming ready. Proof work, exact effect keys, annotations
@@ -179,8 +183,12 @@ Simple Boolean identities reuse an existing result without another proof-work
 unit. Growing annotation and match-count loops keep explicit cooperative checks;
 a fast result never clears an exhausted shared preparation attempt.
 
+Storage reservations bound conservative estimates of storage held at once.
+Local syntax checks, traversal scratch and nested meta-evaluation scratch release
+reservations when dropped; retained programs and indexes stay charged. Mixed
+construction estimates conservatively stay charged with their owner.
 These counters cover the SDK sites described above, including temporary and failed
-SDK construction; they do not count every dependency operation, allocator request
+SDK construction while held; they do not count every dependency operation, allocator request
 or custom callback. Dependency construction has separate structural and retained
 representation limits, with measured resource qualification on supported builds.
 Patterns are prepared once; equivalent normalized forms share an immutable

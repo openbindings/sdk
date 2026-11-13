@@ -72,7 +72,7 @@ fn form_bytes(pattern: &str) -> usize {
             &DefaultEvaluator::default(),
             &openbindings::ExternalSchemas::default(),
             &openbindings::PreparationLimits {
-                max_sdk_work_units: 20_000_000,
+                max_sdk_work_units: Some(20_000_000),
                 ..Default::default()
             },
             &std::sync::atomic::AtomicBool::new(false),

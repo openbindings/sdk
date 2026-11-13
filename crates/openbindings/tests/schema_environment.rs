@@ -32,7 +32,7 @@ fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches() {
     for (limits, resource) in [
         (
             PreparationLimits {
-                max_sdk_work_units: 0,
+                max_sdk_work_units: Some(0),
                 ..PreparationLimits::default()
             },
             "preparation-sdk-work-units",
@@ -59,13 +59,13 @@ fn preparation_attempts_bound_work_and_allocations_without_poisoning_caches() {
     // Completed immutable inventory is shared rather than charged again as a
     // new allocation. The returned environment handle still reserves its cost.
     let warm = PreparationLimits {
-        max_sdk_work_units: 100,
+        max_sdk_work_units: Some(100),
         max_sdk_reservation_bytes: 256,
         ..PreparationLimits::default()
     };
     assert!(selected.environment(&external, &warm, &control).is_ok());
     let stopped = PreparationLimits {
-        max_sdk_work_units: 0,
+        max_sdk_work_units: Some(0),
         ..warm
     };
     assert_eq!(
@@ -861,7 +861,7 @@ fn external_registration_accepts_empty_fragments_and_preserves_subtree_bytes() {
     // register it without funding another input-sized copy.
     let body = format!("{{\"const\":\"{}\"}}", "x".repeat(20_000));
     let limits = PreparationLimits {
-        max_sdk_work_units: 10_000,
+        max_sdk_work_units: Some(10_000),
         max_sdk_reservation_bytes: 100_000,
         ..PreparationLimits::default()
     };

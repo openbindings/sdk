@@ -200,7 +200,7 @@ fn combined(
         json!({ "properties": properties }),
         ExternalSchemas::default(),
         &PreparationLimits {
-            max_sdk_work_units: 256 * 1024 * 1024,
+            max_sdk_work_units: Some(256 * 1024 * 1024),
             max_sdk_reservation_bytes: 1024 * 1024 * 1024,
             ..PreparationLimits::default()
         },

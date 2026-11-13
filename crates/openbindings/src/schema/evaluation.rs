@@ -16,11 +16,18 @@ pub struct PreparationLimits {
     pub max_identity_bytes: usize,
     /// Shared budget at cooperative SDK work sites, including environment
     /// inventory, reference queries, semantic proofs and nested meta-validation.
-    /// Default 100 million. A cache hit charges its checks rather than replaying completed work.
+    /// None by default. A time bound is the caller's choice, through WorkControl
+    /// cancellation or this field. A cache hit charges its checks, not completed work.
+    /// Host observation (2026-11-12, arm64 macOS, release): Some(250_000_000)
+    /// reached its cap in about 250 ms on a 5,500-record supplied schema. This is
+    /// a starting suggestion to measure on the caller's host, not a deadline.
     /// This is neither an instruction count nor a deadline for dependency calls.
-    pub max_sdk_work_units: usize,
-    /// Monotone reservations at explicit SDK storage sites, including temporary
-    /// and failed construction. Reservations are estimates, not allocator-wide
+    pub max_sdk_work_units: Option<usize>,
+    /// Conservative reservations for storage held at once; default 512 MiB.
+    /// Local syntax checks and traversal scratch release reservations when dropped;
+    /// retained indexes and programs stay charged. Mixed construction estimates
+    /// conservatively stay charged until their owning construction ends.
+    /// Reservations are estimates, not allocator-wide
     /// accounting or a process memory ceiling. Dependency constructors require
     /// their evaluator's separate structural and representation limits.
     pub max_sdk_reservation_bytes: usize,
@@ -30,7 +37,7 @@ impl Default for PreparationLimits {
         Self {
             max_schema_nodes: 100_000,
             max_identity_bytes: openbindings_internal_schema::DEFAULT_IDENTITY_BYTES,
-            max_sdk_work_units: openbindings_internal_schema::preparation::DEFAULT_WORK_UNITS,
+            max_sdk_work_units: None,
             max_sdk_reservation_bytes:
                 openbindings_internal_schema::preparation::DEFAULT_ALLOCATION_BYTES,
         }

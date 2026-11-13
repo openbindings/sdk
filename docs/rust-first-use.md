@@ -119,7 +119,12 @@ and immutable; the SDK never fetches them. A preparation failure judges no value
 and absence is a separate `None` before preparation. Core conformance requires no
 caller-supplied evaluator. `prepare` uses default `PreparationLimits` and no
 cancellation. Use `prepare_with_control(&evaluator, &external_schemas, &limits, control)`
-for explicit preparation limits or cancellation. See [evaluator integration](schema-evaluators.md).
+for explicit preparation limits or cancellation. `max_sdk_work_units` is
+`None` by default: a time bound is the caller's choice through cancellation or
+`Some(work_units)`. The 512 MiB storage allowance bounds conservative reservations
+for memory held at once; completed scratch is released, retained programs stay
+charged. See the host-specific [250 ms suggestion](performance-boundaries.md#limits-principle-november-2026)
+and [evaluator integration](schema-evaluators.md).
 
 First admit exact JSON with `let value = JsonValue::parse(text_or_bytes)?` under
 default limits: 32 MiB, 10,000 container levels and 1,000,000 nodes. Admission

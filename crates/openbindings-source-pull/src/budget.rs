@@ -1,7 +1,7 @@
 use crate::{PullRequest, PullValidationError as Failure};
 use openbindings::WorkControl;
 
-/// Finite local handoff and relationship-checking policy.
+/// Local handoff/memory bounds and an optional relationship work cap.
 /// Provider work and prior JSON admission are outside these allowances. A pull
 /// makes core edit and validation passes bounded by the JSON and core limits.
 /// Relationship indexes and edit metadata use the allocation ledger.
@@ -14,9 +14,13 @@ pub struct PullLimits {
     pub max_response_bytes: usize,
     /// Cumulative indexed entries and declared uses labels; default 100,000.
     pub max_entries: usize,
-    /// Monotone relationship scanning/search work; default 64 million.
-    pub max_relationship_work: usize,
-    /// Cumulative reservations for relationship indexes and edit metadata; default 64 MiB.
+    /// Optional cooperative relationship scanning/search work cap; None by default.
+    /// A time bound is the caller's choice, through WorkControl cancellation or
+    /// this field. Work units are not a portable duration or a hard deadline.
+    pub max_relationship_work: Option<usize>,
+    /// Conservative reservations for storage held at once; default 64 MiB.
+    /// Each uses check releases its scratch; relationship indexes are released
+    /// before edit metadata is built. Estimates are not allocator accounting.
     pub max_relationship_allocation_bytes: usize,
 }
 
@@ -26,7 +30,7 @@ impl Default for PullLimits {
             max_request_bytes: 32 * 1024 * 1024,
             max_response_bytes: 32 * 1024 * 1024,
             max_entries: 100_000,
-            max_relationship_work: 64_000_000,
+            max_relationship_work: None,
             max_relationship_allocation_bytes: 64 * 1024 * 1024,
         }
     }
@@ -65,11 +69,18 @@ impl<'a> Attempt<'a> {
     }
     pub(crate) fn work(&mut self, amount: usize) -> Result<(), Failure> {
         self.check()?;
+        if self.limits.max_relationship_work.is_none() {
+            return Ok(());
+        }
         self.work = self
             .work
             .checked_add(amount)
             .ok_or_else(|| self.refuse("relationship-work"))?;
-        if self.work > self.limits.max_relationship_work {
+        if self
+            .limits
+            .max_relationship_work
+            .is_some_and(|maximum| self.work > maximum)
+        {
             return Err(self.refuse("relationship-work"));
         }
         Ok(())
@@ -84,6 +95,14 @@ impl<'a> Attempt<'a> {
             return Err(self.refuse("relationship-allocation-bytes"));
         }
         Ok(())
+    }
+    /// All storage allocated in this check is dropped before it returns.
+    /// Work, entry admission, cancellation and sticky refusals are unchanged.
+    pub(crate) fn scratch<T>(&mut self, run: impl FnOnce(&mut Self) -> T) -> T {
+        let allocation = self.allocation;
+        let result = run(self);
+        self.allocation = allocation;
+        result
     }
     pub(crate) fn entry(&mut self) -> Result<(), Failure> {
         self.work(1)?;
@@ -202,7 +221,7 @@ mod tests {
         let control = AtomicBool::new(false);
         let mut attempt = Attempt::new(
             PullLimits {
-                max_relationship_work: usize::MAX,
+                max_relationship_work: Some(usize::MAX),
                 ..PullLimits::default()
             },
             &control,
@@ -275,7 +294,7 @@ mod tests {
         for route in 0..5 {
             let mut attempt = Attempt::new(
                 PullLimits {
-                    max_relationship_work: usize::MAX,
+                    max_relationship_work: Some(usize::MAX),
                     max_relationship_allocation_bytes: usize::MAX,
                     ..PullLimits::default()
                 },

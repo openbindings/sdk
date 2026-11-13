@@ -1,12 +1,11 @@
 //! One synchronous preparation attempt, never retained by a completed artifact.
 //! Cooperative SDK work has one authority: the nested thread-local allowance.
-//! Explicit SDK storage reservations are monotone and shared through this
+//! Explicit SDK storage reservations are shared through this
 //! borrowed control. Neither counter certifies every dependency operation or
 //! allocator request; dependency construction has a separate supported profile.
 use crate::{Control, Failure, FailureReason};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-pub const DEFAULT_WORK_UNITS: usize = 100_000_000;
 pub const DEFAULT_ALLOCATION_BYTES: usize = 512 * 1024 * 1024;
 
 /// Version-locked bridge to the core's original environment. The companion
@@ -66,7 +65,7 @@ impl<'a> Attempt<'a> {
     /// left. A nested attempt must receive the outer attempt as its control to
     /// retain the aggregate allocation ledger as well.
     pub fn run<T>(
-        maximum_work: usize,
+        maximum_work: impl Into<Option<usize>>,
         maximum_allocation: usize,
         control: &'a dyn Control,
         prepare: impl FnOnce(&Self) -> T,
@@ -78,7 +77,10 @@ impl<'a> Attempt<'a> {
             allocated: AtomicUsize::new(0),
             allocation_spent: AtomicBool::new(false),
         };
-        let result = openbindings_internal_json::work::scope(maximum_work, || prepare(&attempt));
+        let result = match maximum_work.into() {
+            Some(maximum) => openbindings_internal_json::work::scope(maximum, || prepare(&attempt)),
+            None => Ok(prepare(&attempt)),
+        };
         // Cancellation remains cancellation; an exhausted work/allocation
         // allowance cannot be hidden by a fallback or ignored inner error.
         control.check()?;
@@ -148,8 +150,64 @@ impl Control for Attempt<'_> {
         self.allocation_spent.store(true, Ordering::Relaxed);
         self.control.allocation_limit_reached();
     }
+    fn release_allocation(&self, bytes: usize) {
+        self.allocated.fetch_sub(bytes, Ordering::Relaxed);
+        self.control.release_allocation(bytes);
+    }
     fn allocation_is_exhausted(&self) -> bool {
         self.allocation_spent.load(Ordering::Relaxed) || self.control.allocation_is_exhausted()
+    }
+}
+
+/// Borrowed scratch lifetime. Returned artifacts must not retain its storage.
+/// Refusals propagate to the parent and remain sticky after scratch is released.
+pub struct Scratch<'a> {
+    control: &'a dyn Control,
+    allocated: AtomicUsize,
+}
+impl std::fmt::Debug for Scratch<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Scratch").finish_non_exhaustive()
+    }
+}
+impl<'a> Scratch<'a> {
+    pub fn new(control: &'a dyn Control) -> Self {
+        Self {
+            control,
+            allocated: AtomicUsize::new(0),
+        }
+    }
+}
+impl Drop for Scratch<'_> {
+    fn drop(&mut self) {
+        self.control
+            .release_allocation(self.allocated.load(Ordering::Relaxed));
+    }
+}
+impl Control for Scratch<'_> {
+    fn is_cancelled(&self) -> bool {
+        self.control.is_cancelled()
+    }
+    fn check(&self) -> Result<(), Failure> {
+        self.control.check()
+    }
+    fn charge_work(&self, units: usize) -> Result<(), Failure> {
+        self.control.charge_work(units)
+    }
+    fn charge_allocation(&self, bytes: usize) -> Result<(), Failure> {
+        self.control.charge_allocation(bytes)?;
+        self.allocated.fetch_add(bytes, Ordering::Relaxed);
+        Ok(())
+    }
+    fn release_allocation(&self, bytes: usize) {
+        self.allocated.fetch_sub(bytes, Ordering::Relaxed);
+        self.control.release_allocation(bytes);
+    }
+    fn allocation_limit_reached(&self) {
+        self.control.allocation_limit_reached();
+    }
+    fn allocation_is_exhausted(&self) -> bool {
+        self.control.allocation_is_exhausted()
     }
 }
 

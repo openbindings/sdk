@@ -193,7 +193,7 @@ fn reference_rule_variants_apply_limits_and_cooperative_control() {
     );
     for limits in [
         ComparisonLimits {
-            max_work: 1,
+            max_work: Some(1),
             ..Default::default()
         },
         ComparisonLimits {

@@ -212,7 +212,7 @@ fn wide_enum_search_and_later_interface_slots_share_the_finite_allowance() {
         values.into_iter().rev().collect::<Vec<_>>().join(",")
     );
     let limits = ComparisonLimits {
-        max_work: 200_000,
+        max_work: Some(200_000),
         ..Default::default()
     };
     let (target, candidate) = (schema(&t), schema(&c));
@@ -258,6 +258,7 @@ impl openbindings::WorkControl for Control {
 }
 #[test]
 fn controlled_directional_calls_refuse_resources_and_cancel_without_a_verdict() {
+    assert_eq!(ComparisonLimits::default().max_work, None);
     let target = schema(r#"{"anyOf":[{"type":"number","minimum":1},{"type":"string"}]}"#);
     let candidate = schema(r#"{"anyOf":[{"type":"string"},{"type":"number","minimum":0}]}"#);
     compare(
@@ -301,7 +302,7 @@ fn controlled_directional_calls_refuse_resources_and_cancel_without_a_verdict() 
     }
     for limits in [
         ComparisonLimits {
-            max_work: 1,
+            max_work: Some(1),
             ..Default::default()
         },
         ComparisonLimits {
@@ -327,6 +328,73 @@ fn controlled_directional_calls_refuse_resources_and_cancel_without_a_verdict() 
             &AtomicBool::new(true)
         ),
         Err(ComparisonFailure::Cancelled)
+    );
+}
+
+#[test]
+fn interface_memory_allows_sequential_slots_but_refuses_one_large_slot() {
+    let literal = "x".repeat(8192);
+    let contract = serde_json::json!({"enum":[literal]});
+    let operations: serde_json::Map<_, _> = (0..32)
+        .map(|i| (format!("o{i}"), serde_json::json!({"input":contract})))
+        .collect();
+    let document =
+        doc(&serde_json::json!({"openbindings":"0.2.0","operations":operations}).to_string());
+    let limits = ComparisonLimits {
+        max_allocation_bytes: 128 * 1024,
+        ..Default::default()
+    };
+    let report = check_interface(
+        &document,
+        &document,
+        &|_, _| Some(OperationRole::Realized),
+        &limits,
+    )
+    .unwrap();
+    assert_eq!(report.operations().len(), 32);
+    assert_eq!(report.issues().count(), 0);
+    let wide = schema(&serde_json::json!({"enum":vec![literal; 32]}).to_string());
+    assert_eq!(
+        compare(Direction::Input, &wide, &wide, &limits),
+        Err(ComparisonFailure::LimitExceeded("allocation-bytes"))
+    );
+}
+
+#[test]
+fn interface_memory_keeps_retained_report_reasons_charged() {
+    let document = |letter: &str| {
+        let operations: serde_json::Map<_, _> = (0..64)
+            .map(|i| {
+                (
+                    format!("o{i:02}"),
+                    serde_json::json!({"input":{"const":letter.repeat(512)}}),
+                )
+            })
+            .collect();
+        doc(&serde_json::json!({"openbindings":"0.2.0","operations":operations}).to_string())
+    };
+    let report = check_interface(
+        &document("a"),
+        &document("b"),
+        &|_, _| Some(OperationRole::Realized),
+        &ComparisonLimits {
+            max_allocation_bytes: 64 * 1024,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        report.operations()[0]
+            .input()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .verdict(),
+        Verdict::Incompatible
+    );
+    assert_eq!(
+        report.operations().last().unwrap().input(),
+        Some(&Err(ComparisonFailure::LimitExceeded("allocation-bytes")))
     );
 }
 

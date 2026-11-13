@@ -307,6 +307,8 @@ fn leaf(
 /// Inspect once with ancestor-only scratch. A saturated child is not a refusal:
 /// zero copies can annihilate it, so the caller checks only the completed root.
 pub(super) fn inspect(hir: &Hir, control: &dyn Control) -> Result<Scores, Error> {
+    let scratch = openbindings_internal_schema::preparation::Scratch::new(control);
+    let control: &dyn Control = &scratch;
     compiler_path(hir, control)?;
     let mut utf8 = None;
     let mut ancestors: Vec<Frame<'_>> = Vec::new();

@@ -97,7 +97,7 @@ impl Resources {
             .iter()
             .any(|c| Arc::ptr_eq(&c.index, &index))
         {
-            attempt.allocate(2 * std::mem::size_of::<ComparisonContext>())?;
+            attempt.retain(2 * std::mem::size_of::<ComparisonContext>())?;
             attempt.contexts.push(context.clone());
         }
         let result = Self { index };
@@ -134,13 +134,13 @@ impl Resources {
         local.local_root = Some(top.to_owned());
         local.parent = Some(result.index.clone());
         for scope in 1..local.entries.len() {
-            attempt.allocate(256)?;
+            attempt.retain(256)?;
             local.imports.insert(scope, scope);
         }
         let result = Self {
             index: Arc::new(Mutex::new(local)),
         };
-        attempt.allocate(2 * std::mem::size_of::<(usize, (usize, usize), Self)>())?;
+        attempt.retain(2 * std::mem::size_of::<(usize, (usize, usize), Self)>())?;
         attempt.local_resources.push((key.0, key.1, result.clone()));
         Ok(result)
     }
@@ -255,7 +255,9 @@ impl Index {
         if !self.entries.is_empty() {
             return attempt.check();
         }
-        let mut entries = attempt.vector(context.data.resources.len().saturating_add(1))?;
+        let count = context.data.resources.len().saturating_add(1);
+        attempt.retain(count.saturating_mul(std::mem::size_of::<Resource>()))?;
+        let mut entries = Vec::with_capacity(count);
         entries.push(Resource {
             base: context
                 .data
@@ -268,7 +270,7 @@ impl Index {
         });
         let mut uris = BTreeMap::new();
         if let Some(base) = &entries[0].base {
-            attempt.allocate(base.len().saturating_add(2048))?;
+            attempt.retain(base.len().saturating_add(2048))?;
             uris.insert(base.clone(), Some(0));
         }
         for (base, document) in &context.data.resources {
@@ -282,7 +284,7 @@ impl Index {
             if uris.contains_key(&base) {
                 return Err(Failure::InvalidReference);
             }
-            attempt.allocate(base.len().saturating_add(2048))?;
+            attempt.retain(base.len().saturating_add(2048))?;
             uris.insert(base.clone(), Some(entries.len()));
             entries.push(Resource {
                 base: Some(base),
@@ -346,7 +348,7 @@ impl Index {
         {
             scope = self.declare(schema, scope, attempt)?;
         }
-        attempt.allocate(4 * std::mem::size_of_val(&(key, scope)))?;
+        attempt.retain(4 * std::mem::size_of_val(&(key, scope)))?;
         self.scopes.insert(key, scope);
         Ok(scope)
     }
@@ -398,7 +400,7 @@ impl Index {
                     }
                 }
             }
-            attempt.allocate(
+            attempt.retain(
                 base.len()
                     .saturating_add(2048)
                     .saturating_add(2 * std::mem::size_of::<Resource>()),
@@ -470,6 +472,9 @@ impl Index {
         failure.map_or(Ok(()), Err)
     }
     fn catalog(&mut self, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
+        attempt.scratch(|attempt| self.catalog_scratch(attempt))
+    }
+    fn catalog_scratch(&mut self, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
         if self.catalog {
             return Ok(());
         }
@@ -526,7 +531,7 @@ impl Index {
                     attempt.allocate(2 * std::mem::size_of::<(JsonValue, usize)>())?;
                     pending.push((child, scope));
                 }
-                attempt.allocate(128)?;
+                attempt.retain(128)?;
                 visited.insert(node);
             }
         }
@@ -536,6 +541,9 @@ impl Index {
         Ok(())
     }
     fn anchors(&mut self, scope: usize, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
+        attempt.scratch(|attempt| self.anchors_scratch(scope, attempt))
+    }
+    fn anchors_scratch(&mut self, scope: usize, attempt: &mut Attempt<'_>) -> Result<(), Failure> {
         if self.anchored.contains(&scope) {
             return Ok(());
         }
@@ -553,7 +561,7 @@ impl Index {
                             .saturating_add(1)
                             .saturating_mul(anchors.len().saturating_add(1).ilog2() as usize + 1),
                     )?;
-                    attempt.allocate(name.len().saturating_add(256))?;
+                    attempt.retain(name.len().saturating_add(256))?;
                     // Every declaration counts, including both anchor keywords
                     // on one schema. Ambiguity fails only if selected.
                     anchors
@@ -564,7 +572,7 @@ impl Index {
             }
             Self::children(schema.view(), &mut pending, attempt)?;
         }
-        attempt.allocate(256)?;
+        attempt.retain(256)?;
         attempt.check()?;
         self.anchors.extend(anchors);
         self.anchored.insert(scope);
@@ -580,7 +588,7 @@ impl Index {
             return Ok(*local);
         }
         let resource = &parent.entries[scope];
-        attempt.allocate(
+        attempt.retain(
             resource
                 .base
                 .as_ref()

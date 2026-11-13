@@ -19,6 +19,7 @@ fn selected(body: &str) -> Schema {
 
 #[test]
 fn neither_compiled_nor_semantic_preparation_can_ignore_an_exhausted_attempt() {
+    assert_eq!(PreparationLimits::default().max_sdk_work_units, None);
     for body in [
         r#"{"type":"integer"}"#,
         r#"{"anyOf":[{"type":"integer"},{"$ref":"https://missing.test/schema"}]}"#,
@@ -38,7 +39,7 @@ fn neither_compiled_nor_semantic_preparation_can_ignore_an_exhausted_attempt() {
             for (limits, resource) in [
                 (
                     PreparationLimits {
-                        max_sdk_work_units: 0,
+                        max_sdk_work_units: Some(0),
                         ..PreparationLimits::default()
                     },
                     "preparation-sdk-work-units",
@@ -79,6 +80,56 @@ fn neither_compiled_nor_semantic_preparation_can_ignore_an_exhausted_attempt() {
 }
 
 #[test]
+fn preparation_memory_releases_local_checks_and_refuses_large_positions() {
+    let evaluator = DefaultEvaluator::default();
+    let resources = ExternalSchemas::default();
+    // Initialize the immutable fixed compiler before exercising a smaller
+    // per-attempt allowance. Its startup storage has a separate lifetime.
+    selected(r#"{"type":"string"}"#)
+        .prepare(&evaluator, &resources)
+        .unwrap();
+    let literal = "x".repeat(4096);
+    let properties: serde_json::Map<_, _> = (0..64)
+        .map(|i| (format!("p{i}"), serde_json::json!({"const":literal})))
+        .collect();
+    let supplied = |body: serde_json::Value| {
+        ExternalSchemas::new([ExternalSchema {
+            uri: "https://memory.test/entry".into(),
+            document: JsonValue::parse(body.to_string()).unwrap(),
+        }])
+        .unwrap()
+    };
+    let resources = supplied(serde_json::json!({"properties":properties}));
+    let limits = PreparationLimits {
+        max_sdk_reservation_bytes: 8 * 1024 * 1024,
+        ..Default::default()
+    };
+    resources
+        .prepare_with_control(
+            "https://memory.test/entry",
+            &evaluator,
+            &limits,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+    let wide = supplied(serde_json::json!({"const": literal.repeat(64)}));
+    let failure = wide
+        .prepare_with_control(
+            "https://memory.test/entry",
+            &evaluator,
+            &limits,
+            &AtomicBool::new(false),
+        )
+        .unwrap_err();
+    assert_eq!(
+        failure.kind,
+        PreparationFailureKind::Limit {
+            resource: "preparation-sdk-reservation-bytes".into()
+        }
+    );
+}
+
+#[test]
 fn a_cached_inventory_does_not_reset_the_remaining_compiler_work() {
     let body = format!(
         r#"{{"allOf":[{}{{"type":"integer"}}]}}"#,
@@ -94,7 +145,7 @@ fn a_cached_inventory_does_not_reset_the_remaining_compiler_work() {
         )
         .unwrap();
     let limits = PreparationLimits {
-        max_sdk_work_units: 50,
+        max_sdk_work_units: Some(50),
         ..PreparationLimits::default()
     };
     let failure = schema
@@ -169,7 +220,7 @@ fn original_meta_matching_obeys_each_attempt_and_retries_without_poisoning() {
                 if allocation {
                     limits.max_sdk_reservation_bytes = allowance;
                 } else {
-                    limits.max_sdk_work_units = allowance;
+                    limits.max_sdk_work_units = Some(allowance);
                 }
                 schema.prepare_with_control(
                     &DefaultEvaluator::default(),
@@ -183,7 +234,7 @@ fn original_meta_matching_obeys_each_attempt_and_retries_without_poisoning() {
                 if allocation {
                     defaults.max_sdk_reservation_bytes
                 } else {
-                    defaults.max_sdk_work_units
+                    100_000_000
                 },
             );
             while low < high {

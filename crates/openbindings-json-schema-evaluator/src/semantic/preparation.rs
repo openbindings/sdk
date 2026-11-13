@@ -3,6 +3,7 @@
 //! branches. Syntax admission separately covers declared schema positions.
 mod queries;
 use super::*;
+use openbindings_internal_schema::Control;
 use openbindings_internal_schema::{child_shape, schema_index::SchemaSelector};
 use std::collections::{BTreeSet, VecDeque};
 
@@ -46,7 +47,8 @@ pub(super) fn meta_syntax(
     entry: usize,
 ) -> Result<Vec<usize>, PreparationFailure> {
     let space = construction.environment().space();
-    let control = construction.control();
+    let scratch = openbindings_internal_schema::preparation::Scratch::new(construction.control());
+    let control = &scratch;
     control.charge_allocation(512)?;
     let mut queue = vec![entry];
     let mut custom = BTreeSet::new();
@@ -104,9 +106,12 @@ pub(super) fn meta_syntax(
                     queue.push(child);
                 }
             }
+            control.release_allocation(64);
         }
     }
-    control.charge_allocation(custom.len().saturating_mul(8))?;
+    construction
+        .control()
+        .charge_allocation(custom.len().saturating_mul(8))?;
     Ok(custom.into_iter().collect())
 }
 
@@ -129,7 +134,8 @@ pub(super) fn check_from(
     let space = construction.environment().space();
     let control = construction.control();
     let limits = construction.limits();
-    control.charge_allocation(512)?;
+    let scratch = openbindings_internal_schema::preparation::Scratch::new(control);
+    scratch.charge_allocation(512)?;
     let mut queue = VecDeque::from([entry]);
     let mut visited = HashSet::new();
     let mut resources = HashSet::new();
@@ -149,7 +155,7 @@ pub(super) fn check_from(
         if visited.contains(&node) {
             continue;
         }
-        control.charge_allocation(1024)?;
+        scratch.charge_allocation(1024)?;
         visited.insert(node);
         let original = space.node(node);
         if original.depth > 256 {
@@ -168,7 +174,7 @@ pub(super) fn check_from(
                     control.check()?;
                     if is_dynamic {
                         control.charge_work(name.len().saturating_mul(8).saturating_add(1))?;
-                        control
+                        scratch
                             .charge_allocation(name.len().saturating_mul(2).saturating_add(256))?;
                     }
                     if is_dynamic
@@ -265,15 +271,15 @@ pub(super) fn check_from(
                                 .get("$recursiveAnchor")
                                 .and_then(|v| v.as_bool())
                                 == Some(true)
-                            && use_name(&mut used, RECURSIVE_SCOPE, control)?
+                            && use_name(&mut used, RECURSIVE_SCOPE, &scratch)?
                         {
-                            enqueue_dynamic(&mut queue, &dynamic, RECURSIVE_SCOPE, control)?;
+                            enqueue_dynamic(&mut queue, &dynamic, RECURSIVE_SCOPE, &scratch)?;
                         }
                         if keyword == "$dynamicRef"
                             && let Some(name) = &target.dynamic_name
-                            && use_name(&mut used, name, control)?
+                            && use_name(&mut used, name, &scratch)?
                         {
-                            enqueue_dynamic(&mut queue, &dynamic, name, control)?;
+                            enqueue_dynamic(&mut queue, &dynamic, name, &scratch)?;
                         }
                     }
                     Err(QueryFailure::ResourceUnavailable(uri)) => {
@@ -284,7 +290,7 @@ pub(super) fn check_from(
                                 .saturating_mul(missing.len().saturating_add(2))
                                 .saturating_add(1),
                         )?;
-                        control.charge_allocation(uri.len().saturating_add(32))?;
+                        scratch.charge_allocation(uri.len().saturating_add(32))?;
                         missing.insert(uri.clone());
                         count_resources(resources.len(), missing.len(), limits)?;
                     }
@@ -330,7 +336,7 @@ pub(super) fn check_from(
                 let Some(selector) = profile.selector(keyword, field.value) else {
                     continue;
                 };
-                control.charge_allocation(64)?;
+                scratch.charge_allocation(64)?;
                 let children: Box<dyn Iterator<Item = JsonRef<'_>>> = match selector {
                     SchemaSelector::Map | SchemaSelector::MapOrStringArray => {
                         Box::new(field.value.members().into_iter().flatten().map(|m| m.value))
@@ -347,10 +353,11 @@ pub(super) fn check_from(
                         .positions
                         .get(&backend::ref_id(child))
                     {
-                        control.charge_allocation(64)?;
+                        scratch.charge_allocation(64)?;
                         queue.push_back(child);
                     }
                 }
+                scratch.release_allocation(64);
             }
         }
         if leaf {
@@ -422,8 +429,13 @@ fn use_name(
             .saturating_mul(used.len().saturating_add(2))
             .saturating_add(1),
     )?;
-    control.charge_allocation(name.len().saturating_add(256))?;
-    Ok(used.insert(name.into()))
+    let bytes = name.len().saturating_add(256);
+    control.charge_allocation(bytes)?;
+    let inserted = used.insert(name.into());
+    if !inserted {
+        control.release_allocation(bytes);
+    }
+    Ok(inserted)
 }
 fn count_resources(
     known: usize,

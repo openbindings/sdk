@@ -147,6 +147,14 @@ disposal is not a promise that process RSS or Wasm capacity shrinks.
 ## Schemas and value results
 
 A `Schema` owns its original location and conformant context. Rust
+`PreparationLimits::max_sdk_work_units`, `ComparisonLimits::max_work` and
+`PullLimits::max_relationship_work` are `Option<usize>`, all `None` by default.
+A time bound belongs to the caller through `WorkControl` cancellation or
+`Some(work_units)`. The corresponding memory allowances keep 512 MiB, 64 MiB
+and 64 MiB defaults, measuring conservative reservations for storage held at once.
+Dropped scratch is released; retained programs, indexes and reports stay charged.
+See the dated [host-specific 250 ms preparation suggestion](performance-boundaries.md#limits-principle-november-2026).
+
 `schema.prepare(&evaluator, &external)` uses default preparation limits and no
 cancellation and returns
 `Result<PreparedSchema<E::Validator>, PreparationFailure>`. Use
@@ -370,7 +378,7 @@ the caller's; only `Verdict::collapse` supplies profile dominance over verdicts.
 caller accounting predicate. `ReferenceContext::target()` exposes the initial
 resolved target or failure alongside spelling, original schema, resource and base.
 Repeating with `&|_| true` asks whether drift lies only behind unaccounted targets.
-All controlled calls share one monotone `ComparisonLimits` allowance per call.
+All controlled calls share one shared `ComparisonLimits` work and memory policy per call.
 Public diagnostic formatting omits reasons and document values.
 
 `DefaultOperationInvoker::select(&interface, &address)` and

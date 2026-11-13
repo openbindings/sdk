@@ -195,7 +195,7 @@ pub fn check_interface(
         &std::sync::atomic::AtomicBool::new(false),
     )
 }
-/// Interface checking with one monotone allowance and cooperative control.
+/// Interface checking with one shared work and memory policy and cooperative control.
 /// The callback selects each match's flow as in check_interface. Setup failure
 /// returns no report. After setup, exhausted allowances stay in slots and later
 /// slots retain the sticky failure. Observed cancellation always returns
@@ -227,6 +227,7 @@ pub fn check_interface_with_control(
         attempt.work(key.len().saturating_add(1))?;
         let operation = required.operation(key).expect("required operation");
         let mut matches = std::collections::BTreeMap::new();
+        let mut match_bytes = 0usize;
         for name in std::iter::once(key).chain(
             member
                 .value
@@ -242,7 +243,9 @@ pub fn check_interface_with_control(
                     .saturating_mul(12),
             )?;
             if let Some(operation) = provided.resolve_operation(name) {
-                attempt.allocate(operation.key().len().saturating_add(512))?;
+                let bytes = operation.key().len().saturating_add(512);
+                attempt.allocate(bytes)?;
+                match_bytes += bytes;
                 matches.insert(operation.key().to_owned(), operation.value().to_owned());
             }
         }
@@ -295,6 +298,8 @@ pub fn check_interface_with_control(
                 add(Some(key.clone()), Some(value.clone()))?;
             }
         }
+        drop(matches);
+        attempt.release(match_bytes);
     }
     attempt.work(
         name_bytes
@@ -317,11 +322,19 @@ pub fn check_interface_with_control(
             };
             let t = required_context.schema(t.to_owned());
             let c = provided_context.schema(c.to_owned());
-            Some(if role == Some(OperationRole::Consumed) {
-                directional::inputs(direction, &c, &t, &mut attempt)
-            } else {
-                directional::inputs(direction, &t, &c, &mut attempt)
-            })
+            Some(attempt.scratch(|attempt| {
+                let result = if role == Some(OperationRole::Consumed) {
+                    directional::inputs(direction, &c, &t, attempt)
+                } else {
+                    directional::inputs(direction, &t, &c, attempt)
+                };
+                // Only the final report reason escapes this slot. Formatting
+                // scratch and intermediate reasons have already been dropped.
+                if let Ok(comparison) = &result {
+                    attempt.retain(comparison.reason().map_or(0, str::len))?;
+                }
+                result
+            }))
         };
         let output = check(Direction::Output, "output");
         let input = check(Direction::Input, "input");

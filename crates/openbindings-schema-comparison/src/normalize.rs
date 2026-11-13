@@ -94,6 +94,9 @@ fn keep_defs(
     _depth: usize,
     attempt: &mut Attempt<'_>,
 ) -> Result<bool, Failure> {
+    attempt.scratch(|attempt| keep_defs_scratch(schema, attempt))
+}
+fn keep_defs_scratch(schema: JsonRef<'_>, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
     let mut pending = attempt.vector(1)?;
     pending.push(schema.to_owned());
     while let Some(schema) = pending.pop() {
@@ -242,6 +245,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
                 return Ok(Value::Shared(value));
             }
         }
+        let mark = attempt.allocation_mark();
         let result = self.schema(schema, scope, depth, attempt)?;
         if !REFERENCES {
             attempt.allocate(2048)?;
@@ -250,6 +254,9 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
                 value => std::sync::Arc::new(value),
             };
             attempt.normalized.insert(key, cached.clone());
+            // The target and its conservative construction estimate remain
+            // owned by the shared cache for the rest of this comparison.
+            attempt.retain_since(mark);
             return Ok(Value::Shared(cached));
         }
         Ok(result)

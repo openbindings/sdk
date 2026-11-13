@@ -43,6 +43,8 @@ struct Ancestor<'a> {
 /// compiler. Literal alternatives use its iterative trie and are descent leaves.
 /// The traversal retains ancestors only, never a width-sized metadata tree.
 fn compiler_path(hir: &Hir, control: &dyn Control) -> Result<usize, Error> {
+    let scratch = openbindings_internal_schema::preparation::Scratch::new(control);
+    let control: &dyn Control = &scratch;
     let mut ancestors: Vec<Ancestor<'_>> = Vec::new();
     let (mut node, mut prefix, mut maximum) = (hir, 0, 0);
     loop {

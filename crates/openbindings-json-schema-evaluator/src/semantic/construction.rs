@@ -15,6 +15,14 @@ pub(super) struct Construction<'a> {
     pattern_budget: patterns::compiler::profile::Budget,
 }
 
+impl Drop for Construction<'_> {
+    fn drop(&mut self) {
+        let bytes = self.syntax.len() * size_of::<Cell<usize>>();
+        drop(std::mem::take(&mut self.syntax));
+        self.control.release_allocation(bytes);
+    }
+}
+
 impl<'a> Construction<'a> {
     pub(super) fn compiled_reading(
         &self,

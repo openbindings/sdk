@@ -31,7 +31,17 @@ pub(crate) fn validate(
     attempt: &mut Attempt<'_>,
 ) -> Result<ConformantDocument, Failure> {
     attempt.response(result.value().value().text().len())?;
-    relationships::check(request, result, attempt)?;
+    attempt.scratch(|attempt| relationships::check(request, result, attempt))?;
+    attempt.scratch(|attempt| prospective(result, request, attempt))
+}
+
+// Edit paths and their vector belong only to this construction. The resulting
+// core document is admitted by the original JSON limits, outside this ledger.
+fn prospective(
+    result: &PullResult,
+    request: &PullRequest,
+    attempt: &mut Attempt<'_>,
+) -> Result<ConformantDocument, Failure> {
     let root = request.interface().value();
     let additions = result
         .value()

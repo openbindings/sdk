@@ -1,12 +1,16 @@
 use crate::ComparisonFailure;
 use openbindings::WorkControl;
 
-/// Finite local work policy for a single comparison, including failed work.
+/// Local memory policy and optional work budget, including failed work.
 #[derive(Clone, Copy, Debug)]
 pub struct ComparisonLimits {
-    /// Monotone work allowance for normalization and comparison; default 20 million.
-    pub max_work: usize,
-    /// Conservative cumulative allocation reservations; default 64 MiB.
+    /// Optional cooperative normalization/comparison work cap; None by default.
+    /// A time bound is the caller's choice, through WorkControl cancellation or
+    /// this field. Work units are not a portable duration or a hard deadline.
+    pub max_work: Option<usize>,
+    /// Conservative reservations for storage held at once; default 64 MiB.
+    /// Scratch is released after each slot; shared indexes, normalized targets
+    /// and retained reports stay charged. Estimates are not allocator accounting.
     pub max_allocation_bytes: usize,
     /// Maximum normalization/comparison nesting; default and fixed ceiling 128.
     /// Smaller values tighten the local policy; larger values do not raise the ceiling.
@@ -15,7 +19,7 @@ pub struct ComparisonLimits {
 impl Default for ComparisonLimits {
     fn default() -> Self {
         Self {
-            max_work: 20_000_000,
+            max_work: None,
             max_allocation_bytes: 64 * 1024 * 1024,
             max_depth: 128,
         }
@@ -31,6 +35,7 @@ pub(crate) struct Attempt<'a> {
     limits: ComparisonLimits,
     work: usize,
     allocation: usize,
+    retained: usize,
     failure: Option<ComparisonFailure>,
     control: &'a dyn WorkControl,
 }
@@ -43,6 +48,7 @@ impl<'a> Attempt<'a> {
             limits,
             work: 0,
             allocation: 0,
+            retained: 0,
             failure: None,
             control,
         }
@@ -63,11 +69,18 @@ impl<'a> Attempt<'a> {
     }
     pub(crate) fn work(&mut self, amount: usize) -> Result<(), ComparisonFailure> {
         self.check()?;
+        if self.limits.max_work.is_none() {
+            return Ok(());
+        }
         self.work = self
             .work
             .checked_add(amount)
             .ok_or_else(|| self.exhausted("work"))?;
-        if self.work > self.limits.max_work {
+        if self
+            .limits
+            .max_work
+            .is_some_and(|maximum| self.work > maximum)
+        {
             Err(self.exhausted("work"))
         } else {
             Ok(())
@@ -84,6 +97,29 @@ impl<'a> Attempt<'a> {
         } else {
             Ok(())
         }
+    }
+    /// Indexes and shared normalized targets survive scratch scopes.
+    pub(crate) fn retain(&mut self, bytes: usize) -> Result<(), ComparisonFailure> {
+        self.allocate(bytes)?;
+        self.retained += bytes;
+        Ok(())
+    }
+    pub(crate) fn allocation_mark(&self) -> (usize, usize) {
+        (self.allocation, self.retained)
+    }
+    /// Promote newly allocated storage when publishing a shared cached target.
+    pub(crate) fn retain_since(&mut self, mark: (usize, usize)) {
+        self.retained += (self.allocation - mark.0) - (self.retained - mark.1);
+    }
+    pub(crate) fn release(&mut self, bytes: usize) {
+        self.allocation -= bytes;
+    }
+    /// The closure drops its scratch before returning; retained data stays charged.
+    pub(crate) fn scratch<T>(&mut self, run: impl FnOnce(&mut Self) -> T) -> T {
+        let mark = self.allocation_mark();
+        let result = run(self);
+        self.allocation = mark.0 + (self.retained - mark.1);
+        result
     }
     pub(crate) fn depth(&mut self, depth: usize) -> Result<(), ComparisonFailure> {
         self.work(1)?;
@@ -111,7 +147,7 @@ mod tests {
     fn every_resource_refusal_remains_sticky() {
         let control = AtomicBool::new(false);
         let limits = ComparisonLimits {
-            max_work: usize::MAX,
+            max_work: Some(usize::MAX),
             max_allocation_bytes: usize::MAX,
             max_depth: 128,
         };

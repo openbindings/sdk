@@ -17,6 +17,60 @@ arm64, Rust 1.99.0 and wasm-bindgen 0.2.129, with later dates stated locally.
 Matched candidate performance and final hosted-platform qualification require
 separate runs. The performance workflow's timing remains advisory.
 
+## Limits principle (November 2026)
+
+Comparison `max_work`, preparation `max_sdk_work_units` and pull
+`max_relationship_work` are `Option<usize>`, all `None` by default. A time bound
+is the caller's choice through `WorkControl` cancellation or `Some(work_units)`.
+Their memory defaults remain 64 MiB, 512 MiB and 64 MiB, respectively, for
+conservative reservations of storage held at once. Scratch releases its charge
+when dropped; retained reports, shared normalized targets, indexes and prepared
+programs stay charged. Mixed construction estimates remain conservative until
+their owning construction ends. These are SDK estimates, not total process
+memory bounds or allocator accounting.
+
+On this host, a starting preparation suggestion is
+`max_sdk_work_units: Some(250_000_000)`. On 2026-11-12 it reached its work cap in
+250.8 ms preparing a large supplied schema with 5,500 eight-property records,
+each with a distinct bounded name pattern. With `Some(300_000_000)` that same
+schema completed in 242.1 to 249.6 ms (three fresh processes, median 245.9 ms).
+This is an observation of this host, Darwin 25.6.0 arm64 with Rust 1.99.0,
+release thin LTO and one codegen unit. It is a suggestion to measure against an
+application's own documents and hardware. Units do not bound every dependency
+operation and do not establish a portable duration or hard deadline. An explicit
+preparation work cap selects Original; eligible uncapped default calls retain
+compiled admission. Use cancellation for an application elapsed-time policy.
+
+The sequential public API probe used the workspace's pinned dependencies. The
+interface workload is the maintainer's 40 named eight-property record schemas,
+with inputs and outputs referencing them. Pull adds one operation and binding per
+item, 40 shared records, and 20 declared uses per binding. Preparation uses an
+object containing 1,000 or 3,000 eight-property records, as both a contained and
+a supplied schema. Each call starts from a fresh process and an already parsed
+input; ingestion and conformance are outside the elapsed preparation/comparison
+measurement. No other Cargo or benchmark job runs concurrently.
+
+The measurement table records median release elapsed time and maximum observed
+requested live heap across three samples. The peak includes the input baseline;
+the incremental peak is measured above that baseline. System allocator metadata,
+arenas, stack and internal realloc overlap are excluded. Peak RSS was unavailable:
+the sandbox denied `/usr/bin/time -l` access to `sysctl kern.clockrate`.
+
+| Public operation | Items | Elapsed ms | Peak heap MiB | Incremental peak MiB |
+| --- | ---: | ---: | ---: | ---: |
+| Interface self-comparison | 1,000 | 14.516 | 4.896 | 1.451 |
+| Interface self-comparison | 3,000 | 42.617 | 13.708 | 3.028 |
+| Pull relationships | 1,000 | 4.957 | 9.542 | 1.843 |
+| Pull relationships | 3,000 | 13.971 | 22.386 | 3.394 |
+| Preparation, contained | 1,000 | 68.865 | 55.049 | 42.262 |
+| Preparation, contained | 3,000 | 242.370 | 165.321 | 132.582 |
+| Preparation, supplied | 1,000 | 9.235 | 19.489 | 1.739 |
+| Preparation, supplied | 3,000 | 28.023 | 48.911 | 5.288 |
+
+The decision receipt records all release boundaries, conservative sites left
+cumulative, commands and raw samples. These observations are not a release or
+hosted-platform performance qualification.
+
 ## Prepared value contracts
 
 Retain a `PreparedSchema` for repeated validation. Reusing a conformant
