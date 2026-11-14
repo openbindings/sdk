@@ -8,6 +8,8 @@ mod decimal_scratch;
 mod expansion;
 mod generated;
 mod literal_scratch;
+mod projection_generated;
+mod projection_limits;
 mod regex_search;
 
 /// Independent preparation of the pinned current original-schema Plan. It does
