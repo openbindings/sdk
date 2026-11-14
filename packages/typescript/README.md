@@ -383,7 +383,32 @@ with the parser offset and null pointer. Messages contain plain limit explanatio
 without API advice. To admit more, call `validateDocument` with a larger
 `limits.maxBytes`, `limits.maxDepth` or `limits.maxNodes`, respectively.
 
-Findings are capped at 4,096 and 8 MiB of source pointers. The pinned 0.2 schema's
+By default findings are capped at 4,096 and 8 MiB of generated source-pointer text.
+`document.validate({ limits: { maxFindings, maxPointerBytes } })` overrides retention;
+`validationLimits()` returns a frozen copy of the defaults. The signature is
+`document.validate(options?: ValidationOptions)`, where `ValidationOptions` has
+an optional `limits: Partial<ValidationLimits>`. Calls without options or without
+`limits` use the cached default assessment. Unknown option names are rejected.
+Zero allowances still assess every rule and preserve the conclusion. Custom
+reports leave default validation unchanged.
+
+Reference inspection requires a completion choice:
+
+```ts
+const report = document.references({ limits: { maxReportBytes: 16 * 1024 * 1024 } });
+if (report.complete) {
+  for (const reference of report.references) console.log(reference.keyword);
+} else {
+  // A diagnostic prefix cannot serve as the inventory for a rename.
+  console.log(report.retained.length, report.limitation.code);
+}
+```
+
+Only the complete branch has `references`; the incomplete branch has `retained`
+and a required `limitation`. `referenceLimits()` returns the default 8 MiB text
+allowance. This is separate from JSON admission and inventory protection.
+
+The pinned 0.2 schema's
 largest serialized `[keyword, schema, details]` tuple is 198 bytes in TypeScript
 JSON (199 in Rust JSON). An exhaustive schema test guards this fixed property;
 there is no runtime fact-size cap. `findingsTruncated` records count and

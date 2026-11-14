@@ -1,4 +1,7 @@
+#[path = "common/reference_report.rs"]
+mod reference_report;
 use openbindings::*;
+use reference_report::complete;
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -73,7 +76,7 @@ fn findings_locations_and_references_replace_units_without_changing_stored_point
     assert!(exact.as_str().is_none());
     assert!(draft.value().at_pointer(exact).is_some());
     let report = draft.references();
-    let reference = &report.references[0];
+    let reference = &complete(&report)[0];
     assert_eq!(
         serialized(reference)["location"]["pointer"],
         "/operations/op/input/properties/�/$ref"

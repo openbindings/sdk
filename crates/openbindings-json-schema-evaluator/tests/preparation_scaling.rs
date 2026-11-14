@@ -738,11 +738,16 @@ fn a_schema_nested_more_than_256_levels_deep_refuses_whatever_the_limits() {
         Document::parse(document(&[], &input)).unwrap().references()
     };
     for levels in [255, 256] {
-        let report = inspect(levels);
-        assert!(report.complete && report.limitation.is_none());
-        assert_eq!(report.references.len(), 2);
+        let ReferenceReport::Complete {
+            references: observations,
+        } = inspect(levels)
+        else {
+            panic!("complete inventory required")
+        };
+
+        assert_eq!(observations.len(), 2);
         assert_eq!(
-            report.references[1].spelling.as_deref(),
+            observations[1].spelling.as_deref(),
             Some("https://depth.test/inner")
         );
     }

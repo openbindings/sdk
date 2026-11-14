@@ -22,6 +22,11 @@
   errors prefix known report rows with `/report`.
 - Breaking: `RequestError`, `PullValidationError`, `PullFailure` and `PullError`
   are now non-exhaustive. Downstream matches must handle unknown failures.
+- Breaking: reference inspection returns `ReferenceReport::Complete { references }`
+  or `Incomplete { retained, limitation }`. TypeScript discriminates on `complete`
+  and exposes `references` only in the complete branch. Serialization follows
+  these alternatives. Validation findings, value problems and pull reports keep
+  their fields.
 
 ### Added
 
@@ -35,6 +40,15 @@
   before retrying, and use `parse_with_limits` on incomplete input at final EOF.
   Admission limits apply through the value end. Invalid UTF-8 in later buffered
   bytes is deferred.
+- `ReferenceLimits { max_report_bytes }`, `references_with_limits` and
+  `references_with_resources_and_limits`; TypeScript reference options accept
+  `limits.maxReportBytes` and `referenceLimits()` exposes the defaults. The default
+  retained-text allowance remains 8 MiB.
+- `ValidationLimits { max_findings, max_pointer_bytes }` and
+  `Document::validate_with_limits`; TypeScript offers `validate({ limits })` with
+  `ValidationOptions` and `validationLimits()`. Defaults remain 4,096 findings and
+  8 MiB of generated
+  source-pointer text. Retention never changes rule evidence or the conclusion.
 
 ## 2026-11-13 experiment repairs (unreleased)
 

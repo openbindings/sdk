@@ -107,7 +107,19 @@ A host that needs other limits passes `JsonLimits` to
 (`Document::limits`) for its edits.
 Checked ordinary Serde conversion has a 128-container ceiling. Exact parsing is
 the route for existing JSON tokens. Findings retain at most 4,096 entries and
-8 MiB of pointers. OBI-02 also carries `keyword`, `schema` (a `SchemaOrigin` in
+8 MiB of pointers by default. `Document::validate_with_limits` takes
+`ValidationLimits { max_findings, max_pointer_bytes }` to select other allowances,
+including zero. Every rule's evidence and the conclusion remain independent of
+retention. Custom reports leave the cached default report unchanged.
+
+Reference inspection returns `ReferenceReport::Complete { references }` or
+`ReferenceReport::Incomplete { retained, limitation }`. Match the completion case
+before reading the inventory; complete traversal can still contain unresolved
+references. `ReferenceLimits { max_report_bytes }` sets retained text through
+`references_with_limits` or `references_with_resources_and_limits`, with the
+8 MiB default unchanged. This is a text allowance, not a total heap bound.
+
+OBI-02 also carries `keyword`, `schema` (a `SchemaOrigin` in
 `https://openbindings.com/schema/openbindings-0.2.0.json`) and optional `details`
 using `ValueProblemDetails`. Required facts name one missing member per finding;
 type facts list expected types. Disallowed members use their source pointer and

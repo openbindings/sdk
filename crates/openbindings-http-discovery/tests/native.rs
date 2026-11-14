@@ -276,10 +276,13 @@ async fn real_http_media_types_statuses_compression_and_location_independence() 
             r.metadata.unwrap().final_url,
             Some(format!("{}{WELL_KNOWN_PATH}", server.origin))
         );
-        let refs = document.document().references();
-        assert!(refs.complete);
+        let openbindings::ReferenceReport::Complete { references } =
+            document.document().references()
+        else {
+            panic!("complete inventory required")
+        };
         assert!(matches!(
-            refs.references[0].resolution,
+            references[0].resolution,
             openbindings::ReferenceResolution::Located { .. }
         ));
     }

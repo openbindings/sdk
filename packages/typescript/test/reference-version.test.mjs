@@ -83,8 +83,8 @@ test("missing and malformed versions inspect every reference under 0.2", () => {
     const supplied = valid.references({ resources });
     assert.equal(expected.complete, true);
     assert.equal(supplied.complete, true);
-    assert.equal(expected.limitation, null);
-    assert.equal(supplied.limitation, null);
+    assert.equal(Object.hasOwn(expected, "limitation"), false);
+    assert.equal(Object.hasOwn(supplied, "limitation"), false);
     assert.equal(expected.references.length, 4);
     assert.equal(supplied.references.length, 5);
     assert.deepEqual(supplied.references[0].resolution, {
@@ -154,7 +154,7 @@ test("unsupported versions and duplicate members still refuse inspection", () =>
     try {
       const report = draft.references();
       assert.equal(report.complete, false);
-      assert.deepEqual(report.references, []);
+      assert.deepEqual(report.retained, []);
       assert.equal(report.limitation.code, code);
       assert.equal(report.limitation.reason, reason);
       assert.equal(report.limitation.location, null);

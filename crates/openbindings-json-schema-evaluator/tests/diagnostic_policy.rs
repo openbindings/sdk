@@ -249,8 +249,13 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
     ] {
         let doc = document(serde_json::json!({"$ref":reference}));
         let references = doc.references();
-        let ReferenceResolution::Unresolved { detail } = &references.references[0].resolution
+        let ReferenceReport::Complete {
+            references: observations,
+        } = references
         else {
+            panic!("complete inventory required")
+        };
+        let ReferenceResolution::Unresolved { detail } = &observations[0].resolution else {
             panic!()
         };
         safe(&detail.message);
@@ -260,7 +265,7 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         );
         // Source text is still explicitly available through the reference spelling.
         assert_eq!(
-            references.references[0].spelling.as_deref(),
+            observations[0].spelling.as_deref(),
             Some(reference.as_str())
         );
         if reference.contains('\n') {
@@ -299,7 +304,13 @@ fn reference_and_resource_messages_do_not_echo_source_identifiers() {
         serde_json::json!({"$ref":"https://example.invalid/SECRET-id", "$defs":{"a":{"$id":"https://example.invalid/SECRET-id"},"b":{"$id":"https://example.invalid/SECRET-id"}}}),
     );
     let refs = doc.references();
-    let ReferenceResolution::Unresolved { detail } = &refs.references[0].resolution else {
+    let ReferenceReport::Complete {
+        references: observations,
+    } = refs
+    else {
+        panic!("complete inventory required")
+    };
+    let ReferenceResolution::Unresolved { detail } = &observations[0].resolution else {
         panic!()
     };
     assert_eq!(detail.reason, ReferenceRefusalReason::IdentityConflict);

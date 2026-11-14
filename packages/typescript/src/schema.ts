@@ -9,6 +9,7 @@ import {
 } from "./diagnostics.js";
 import type { InputFailure, SourceLocation } from "./diagnostics.js";
 import { requireReady } from "./runtime.js";
+import { reportLimits } from "./report-limits.js";
 import {
   ExactJson,
   ORDINARY_LIMITS,
@@ -331,15 +332,34 @@ export interface Reference {
 
 /** Original-context reference inspection, separate from normative proof and preparation. complete describes traversal completion; a complete report can still contain unresolved reference results.
  * Missing or malformed openbindings declarations use 0.2's rules, matching validation of a text declaring no version. This adds no limitation; a complete traversal is complete. Well-formed unsupported declarations and duplicate member names still prevent inspection.
- * Retains at most 8 MiB of generated and source text in reference entries: all location, resource-root, target and refusal pointers, every origin's sourceUri, keywords, spellings, refusal codes/messages and unavailable-resource URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per UTF-16 unit. This is a text allowance, not total heap usage. Each whole entry is charged before materializing or cloning its text. The first entry that does not fit stops traversal, sets complete to false and reports a limit-exceeded limitation with code `reference-report-bytes` and no omitted location.
+ * By default retains at most 8 MiB of generated and source text in reference entries: all location, resource-root, target and refusal pointers, every origin's sourceUri, keywords, spellings, refusal codes/messages and unavailable-resource URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per UTF-16 unit. ReferenceOptions.limits overrides this text allowance, which is not total heap usage. Each whole entry is charged before materializing or cloning its text. The first entry that does not fit stops traversal, sets complete to false and reports a limit-exceeded limitation with code `reference-report-bytes` and no omitted location.
  */
-export interface ReferenceReport {
-  /** Retained reference observations in traversal order. */
-  references: readonly Reference[];
-  /** Whether traversal completed; unresolved entries can occur even when true. */
-  complete: boolean;
-  /** Traversal-level limitation when incomplete, otherwise null. Inspection has no separate schema nesting bound beyond document admission. */
-  limitation: ReferenceRefusal | null;
+export type ReferenceReport =
+  | {
+      /** Traversal completed; individual references may still be unresolved. */
+      complete: true;
+      /** Full reference inventory in traversal order. */
+      references: readonly Reference[];
+    }
+  | {
+      /** Traversal stopped before the full inventory was established. */
+      complete: false;
+      /** Observations retained before traversal stopped, in traversal order. */
+      retained: readonly Reference[];
+      /** Traversal-level cause, separate from per-reference refusals. */
+      limitation: ReferenceRefusal;
+    };
+
+/** Retained reference-report text allowance, separate from inventory and JSON admission limits. */
+export interface ReferenceLimits {
+  /** Maximum generated and source text bytes in complete entries; default 8 MiB. A nonnegative 32-bit integer. */
+  maxReportBytes: number;
+}
+
+/** Return a fresh frozen copy of the default reference-report text allowance. Requires initialization. */
+export function referenceLimits(): Readonly<ReferenceLimits> {
+  requireReady();
+  return Object.freeze({ maxReportBytes: wasm.referenceLimits() });
 }
 
 /** Cooperative work control. A pre-aborted signal returns cancellation. Synchronous Wasm does not yield to same-thread JavaScript, so use a worker plus host scheduling to interrupt long synchronous work externally. This is not a wall-clock deadline. */
@@ -376,6 +396,8 @@ export interface PrepareOptions extends WorkOptions {
 
 /** Explicit resources and cooperative cancellation for reference inspection; no retrieval or global resource registry is used. */
 export interface ReferenceOptions extends WorkOptions {
+  /** Override the retained-text allowance; unspecified entries use referenceLimits(). */
+  limits?: Partial<ReferenceLimits>;
   /** Explicit resource set borrowed for inspection; no owner is transferred and no URI is fetched. */
   resources?: ExternalSchemas;
 }
@@ -611,6 +633,7 @@ function prepareOptions(options: PrepareOptions): {
 /** @internal */
 export function referenceOptions(options: ReferenceOptions): {
   resources?: ExternalSchemas;
+  maxReportBytes: number;
   aborted: boolean;
 } {
   if (!options || typeof options !== "object" || Array.isArray(options))
@@ -618,14 +641,19 @@ export function referenceOptions(options: ReferenceOptions): {
       "invalid-work-options",
       "Reference options must be an object.",
     );
-  const { resources, ...work } = options;
+  const { resources, limits, ...work } = options;
+  const { maxReportBytes } = reportLimits(
+    referenceLimits(),
+    limits,
+    "invalid-reference-limits",
+  );
   const signal = workSignal(work);
   if (resources !== undefined && !(resources instanceof ExternalSchemas))
     throw new SdkError(
       "invalid-work-options",
       "resources must be an ExternalSchemas owner.",
     );
-  return { resources, aborted: isAborted(signal) };
+  return { resources, maxReportBytes, aborted: isAborted(signal) };
 }
 
 function workSignal(options: WorkOptions): AbortSignal | undefined {

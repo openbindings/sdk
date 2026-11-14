@@ -1,4 +1,7 @@
+#[path = "common/reference_report.rs"]
+mod reference_report;
 use openbindings::*;
+use reference_report::complete;
 use serde_json::{Value, json};
 use std::sync::atomic::AtomicBool;
 
@@ -19,9 +22,12 @@ fn resource_roots_agree_on_drafts_proofs_and_schema_nodes() {
         let draft = Document::parse(body.to_string()).unwrap();
         let control = AtomicBool::new(false);
         let expected_report = draft.references_with_resources(resources.clone(), &control);
-        assert!(expected_report.complete, "{}", case["name"]);
-        let mut actual: Vec<Value> = expected_report
-            .references
+        assert!(
+            matches!(expected_report, ReferenceReport::Complete { .. }),
+            "{}",
+            case["name"]
+        );
+        let mut actual: Vec<Value> = complete(&expected_report)
             .iter()
             .map(|r| {
                 json!({"location": r.location, "resource_root": r.resource_root,
@@ -50,7 +56,7 @@ fn resource_roots_agree_on_drafts_proofs_and_schema_nodes() {
                     .references_with_resources(resources.clone(), &control),
                 expected_report
             );
-            for reference in &expected_report.references {
+            for reference in complete(&expected_report) {
                 let holder = reference
                     .location
                     .pointer

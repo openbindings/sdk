@@ -14,7 +14,7 @@ test("inspection reports present and missing targets at validation's depth", () 
       try {
         const report = document.references();
         assert.equal(report.complete, true);
-        assert.equal(report.limitation, null);
+        assert.equal(Object.hasOwn(report, "limitation"), false);
         assert.equal(report.references.length, 1);
         const reference = report.references[0];
         const holder = `/schemas/entry${"/not".repeat(depth)}`;
@@ -54,7 +54,7 @@ test("deep relative identities refuse cleanly at the identity allowance", () => 
       const report = document.references();
       if (depth === 2000) {
         assert.equal(report.complete, true);
-        assert.equal(report.limitation, null);
+        assert.equal(Object.hasOwn(report, "limitation"), false);
         assert.equal(report.references.length, 1);
         assert.equal(report.references[0].resolution.status, "located");
         assert.equal(
@@ -63,7 +63,7 @@ test("deep relative identities refuse cleanly at the identity allowance", () => 
         );
       } else {
         assert.equal(report.complete, false);
-        assert.deepEqual(report.references, []);
+        assert.deepEqual(report.retained, []);
         assert.equal(report.limitation.reason, "limit-exceeded");
         assert.equal(report.limitation.code, "schema-identity-bytes");
         assert.equal(report.limitation.location, null);

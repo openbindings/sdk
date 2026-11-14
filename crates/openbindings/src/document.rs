@@ -194,11 +194,26 @@ impl Document {
     /// # Errors
     /// Returns a version refusal only for a well-formed declaration outside the supported line. Malformed input and other rule violations are returned as validation evidence, not as this error.
     pub fn validate(&self) -> Result<DocumentValidation, VersionRefusal> {
-        let report = self
-            .inner
-            .validation
-            .get_or_init(|| assess_value(self).map(Arc::new))
-            .clone()?;
+        self.validate_with_limits(ValidationLimits::default())
+    }
+    /// Assess every rule with caller-selected finding retention. Rule evidence,
+    /// conclusion and conformance proof are independent of retained findings.
+    /// The default report is cached; custom allowances do not replace it.
+    ///
+    /// # Errors
+    /// Returns the same version refusals as [`Self::validate`].
+    pub fn validate_with_limits(
+        &self,
+        limits: ValidationLimits,
+    ) -> Result<DocumentValidation, VersionRefusal> {
+        let report = if limits == ValidationLimits::default() {
+            self.inner
+                .validation
+                .get_or_init(|| assess_value(self, limits).map(Arc::new))
+                .clone()?
+        } else {
+            Arc::new(assess_value(self, limits)?)
+        };
         Ok(DocumentValidation {
             document: Some(self.clone()),
             report,

@@ -1,4 +1,7 @@
+#[path = "common/reference_report.rs"]
+mod reference_report;
 use openbindings::*;
+use reference_report::incomplete;
 use serde_json::json;
 use std::sync::atomic::AtomicBool;
 
@@ -26,14 +29,14 @@ fn entry_bytes(reference: &Reference) -> usize {
         }
 }
 fn assert_bounded(report: &ReferenceReport) -> usize {
-    assert!(!report.complete);
-    let limitation = report.limitation.as_ref().unwrap();
+    assert!(matches!(report, ReferenceReport::Incomplete { .. }));
+    let limitation = incomplete(report).1;
     assert_eq!(limitation.reason, ReferenceRefusalReason::LimitExceeded);
     assert_eq!(limitation.code, "reference-report-bytes");
     assert!(limitation.location.is_none());
     assert!(limitation.resource_uri.is_none());
-    assert!(!report.references.is_empty());
-    let bytes = report.references.iter().map(entry_bytes).sum::<usize>();
+    assert!(!incomplete(report).0.is_empty());
+    let bytes = incomplete(report).0.iter().map(entry_bytes).sum::<usize>();
     assert!(bytes <= ALLOWANCE, "{bytes}");
     bytes
 }
@@ -51,8 +54,8 @@ fn missing_directory_names_charge_expansion_before_retention() {
     let proof = document.validate().unwrap().conformant().unwrap();
     for report in [document.references(), proof.document().references()] {
         let bytes = assert_bounded(&report);
-        assert_eq!(report.references.len(), 7);
-        for (i, reference) in report.references.iter().enumerate() {
+        assert_eq!(incomplete(&report).0.len(), 7);
+        for (i, reference) in incomplete(&report).0.iter().enumerate() {
             assert_eq!(
                 reference.location.pointer,
                 format!("/schemas/entry/allOf/{i}/$ref")
@@ -66,7 +69,7 @@ fn missing_directory_names_charge_expansion_before_retention() {
             );
         }
         // The next site and spelling have the same byte lengths through index 9.
-        assert!(bytes + entry_bytes(&report.references[0]) > ALLOWANCE);
+        assert!(bytes + entry_bytes(&incomplete(&report).0[0]) > ALLOWANCE);
     }
 }
 
@@ -94,9 +97,9 @@ fn supplied_source_uris_charge_every_origin_copy() {
                 .references_with_resources(resources.clone(), &AtomicBool::new(false)),
         ] {
             let bytes = assert_bounded(&report);
-            assert_eq!(report.references.len(), 11);
-            assert!(bytes + entry_bytes(&report.references[1]) > ALLOWANCE);
-            for reference in &report.references[1..] {
+            assert_eq!(incomplete(&report).0.len(), 11);
+            assert!(bytes + entry_bytes(&incomplete(&report).0[1]) > ALLOWANCE);
+            for reference in &incomplete(&report).0[1..] {
                 assert_eq!(reference.location.source_uri.as_ref(), Some(&uri));
                 let root = reference.resource_root.as_ref().unwrap();
                 assert_eq!(root.source_uri.as_ref(), Some(&uri));
@@ -116,9 +119,9 @@ fn source_spellings_use_utf8_bytes_and_share_the_report_allowance() {
     .unwrap();
     let report = document.references();
     let bytes = assert_bounded(&report);
-    assert_eq!(report.references.len(), 31);
-    assert!(bytes + entry_bytes(&report.references[0]) > ALLOWANCE);
-    for reference in &report.references {
+    assert_eq!(incomplete(&report).0.len(), 31);
+    assert!(bytes + entry_bytes(&incomplete(&report).0[0]) > ALLOWANCE);
+    for reference in incomplete(&report).0 {
         assert_eq!(reference.spelling.as_deref(), Some(spelling.as_str()));
         let ReferenceResolution::Unresolved { detail } = &reference.resolution else {
             panic!("invalid URI")
@@ -141,9 +144,9 @@ fn resource_root_pointers_share_the_allowance_in_both_representations() {
         )).unwrap();
         let report = document.references();
         let bytes = assert_bounded(&report);
-        assert_eq!(report.references.len(), if unpaired { 5 } else { 10 });
-        assert!(bytes + entry_bytes(&report.references[0]) > ALLOWANCE);
-        for reference in &report.references {
+        assert_eq!(incomplete(&report).0.len(), if unpaired { 5 } else { 10 });
+        assert!(bytes + entry_bytes(&incomplete(&report).0[0]) > ALLOWANCE);
+        for reference in incomplete(&report).0 {
             let root = reference.resource_root.as_ref().unwrap();
             let ReferenceResolution::Located { target, .. } = &reference.resolution else {
                 panic!("located")

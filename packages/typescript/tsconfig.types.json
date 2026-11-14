@@ -6,5 +6,5 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": ["test/api.types.ts"]
+  "include": ["test/api.types.ts", "test/reference.types.ts"]
 }

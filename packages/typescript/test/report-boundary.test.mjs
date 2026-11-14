@@ -47,12 +47,8 @@ test("repeated reference origins stay detached and independently mutable", () =>
     document.dispose();
   }
   assert.equal(report.complete, true);
-  assert.equal(report.limitation, null);
-  assert.deepEqual(Object.keys(report), [
-    "references",
-    "complete",
-    "limitation",
-  ]);
+  assert.equal(Object.hasOwn(report, "limitation"), false);
+  assert.deepEqual(Object.keys(report), ["complete", "references"]);
   for (const [i, reference] of report.references.entries()) {
     assert.deepEqual(Object.keys(reference), [
       "location",

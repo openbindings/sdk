@@ -177,8 +177,12 @@ fn identity_refusal(doc: &Document, supplied: &ExternalSchemas, operation: &str)
     }
 }
 fn reference(doc: &Document, supplied: &ExternalSchemas, pointer: &str) -> ReferenceResolution {
-    doc.references_with_resources(supplied.clone(), &std::sync::atomic::AtomicBool::new(false))
-        .references
+    let ReferenceReport::Complete { references } =
+        doc.references_with_resources(supplied.clone(), &std::sync::atomic::AtomicBool::new(false))
+    else {
+        panic!("complete inventory required")
+    };
+    references
         .into_iter()
         .find(|r| r.location.pointer == pointer)
         .unwrap()
@@ -1107,10 +1111,10 @@ fn precancelled_identity_queries_allow_healthy_independent_retries() {
         .kind,
         PreparationFailureKind::Cancelled
     );
-    assert!(
-        !doc.references_with_resources(supplied.clone(), &control)
-            .complete
-    );
+    assert!(matches!(
+        doc.references_with_resources(supplied.clone(), &control),
+        ReferenceReport::Incomplete { .. }
+    ));
     verdicts(&ready(&proof, &supplied, "op"), &[("2", "satisfies")]);
 }
 #[test]

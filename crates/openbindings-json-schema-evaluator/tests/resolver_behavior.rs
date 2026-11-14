@@ -43,8 +43,13 @@ fn encoded_plain_names_resolve_in_each_original_resource() {
                 supplied.clone(),
                 &std::sync::atomic::AtomicBool::new(false),
             );
-            let reference = report
-                .references
+            let ReferenceReport::Complete {
+                references: observations,
+            } = report
+            else {
+                panic!("complete inventory required")
+            };
+            let reference = observations
                 .iter()
                 .find(|r| r.location.pointer == "/operations/op/input/$ref")
                 .unwrap();

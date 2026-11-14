@@ -804,7 +804,9 @@ adapter above, and need these imports:
 
 <!-- guide:prelude -->
 ```rust
-use openbindings::{ConformantDocument, Edit, JsonValue, ReferenceResolution, WorkControl};
+use openbindings::{
+    ConformantDocument, Edit, JsonValue, ReferenceReport, ReferenceResolution, WorkControl,
+};
 use openbindings_source_pull::{
     Change, ExistingEntry, ExistingTarget, Proposal, PullLimits, PullRequest, PullResult,
 };
@@ -826,10 +828,9 @@ pub fn keep_part(
 ) -> Result<ConformantDocument, Error> {
     // References resolve in the document holding every addition.
     let everything = result.validate_for(request, limits, control)?;
-    let references = everything.document().references();
-    if !references.complete {
+    let ReferenceReport::Complete { references } = everything.document().references() else {
         return Err("reference inspection stopped early".into());
-    }
+    };
 
     let additions = result.additions();
     let is_addition = |pointer: &str| additions.value().value().at(pointer).is_some();
@@ -865,7 +866,7 @@ pub fn keep_part(
         }
         // Everything this entry refers to, through additions and existing entries.
         let inside = format!("{root}/");
-        for reference in &references.references {
+        for reference in &references {
             let from = reference.location.pointer.as_str().unwrap_or_default();
             if let (true, ReferenceResolution::Located { target, .. }) =
                 (from.starts_with(&inside), &reference.resolution)

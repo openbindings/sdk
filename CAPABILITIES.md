@@ -61,16 +61,20 @@ plus the selected evaluator's capability and execution limits. Parser-limit
 findings use `byte-limit`, `depth-limit` or `node-limit` and describe the limit
 without API advice. The [Rust guide](docs/rust-first-use.md) explains how to
 choose admission limits. Ordinary Rust Serde conversion has a 128-container
-ceiling. Document reports retain at most 4,096 findings and 8 MiB of pointers;
-truncation leaves rule evidence intact. OBI-02 findings include fixed-schema
+ceiling. Document reports retain at most 4,096 findings and 8 MiB of pointers by
+default. `ValidationLimits` and `Document::validate_with_limits` select other
+retention allowances. Truncation leaves rule evidence intact. OBI-02 findings include fixed-schema
 keyword, origin and optional facts, as documented in the
 [API reference](docs/api-reference.md#document-finding-codes).
 
 Reference inspection works on drafts, including missing or malformed version
 declarations, under 0.2's rules and throughout the admitted depth. Unsupported
 versions and duplicate names produce incomplete reports. `resource_root` names
-the site's resource origin, absent exactly for the document resource. An 8 MiB
-retained-text allowance can stop inspection with `reference-report-bytes`.
+the site's resource origin, absent exactly for the document resource. A
+caller-selected retained-text allowance, 8 MiB by default, can stop inspection
+with `reference-report-bytes`. Match `ReferenceReport::Complete { references }`
+or `Incomplete { retained, limitation }` before consuming observations.
+`ReferenceLimits` is accepted by the `_with_limits` reference methods.
 See [reference inspection](docs/api-reference.md#schemas-and-value-results) for
 completion, resources and accounting details.
 

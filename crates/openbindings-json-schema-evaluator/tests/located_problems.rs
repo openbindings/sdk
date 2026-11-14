@@ -394,7 +394,13 @@ fn draft_references_beneath_unpaired_names_are_exact() {
     )
     .unwrap();
     let report = draft.references();
-    let reference = &report.references[0];
+    let ReferenceReport::Complete {
+        references: observations,
+    } = report
+    else {
+        panic!("complete inventory required")
+    };
+    let reference = &observations[0];
     let at = unpaired("/operations/op/input/properties/\0/properties/q/$ref");
     assert_eq!(reference.location, SchemaOrigin::new(None, at.clone()));
     assert_eq!(

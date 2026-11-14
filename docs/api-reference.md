@@ -99,10 +99,28 @@ from a proof. It acquires no resources and proves neither document conformance
 nor value decidability. Supplied resources use `references_with_resources` on
 the same document snapshot.
 
+Match `ReferenceReport::Complete { references }` or
+`ReferenceReport::Incomplete { retained, limitation }` before reading observations.
+The TypeScript union uses `complete: true` with `references` and `complete: false`
+with `retained` and `limitation`. An incomplete inventory has no `references` field.
+`ReferenceLimits { max_report_bytes }` selects retained text through
+`references_with_limits` or `references_with_resources_and_limits`; TypeScript
+uses `references({ limits: { maxReportBytes } })`. The default stays 8 MiB.
+
 `Evidence` is `Met`, `Violated`, `Inconclusive` or `NotApplicable`. A document's
 `Conformance` is conformant, nonconformant or undetermined. Findings explain rule
 evidence; omitted findings do not erase an established violation. Use rule IDs,
 codes and evidence for logic, and treat explanatory messages as display text.
+`ValidationLimits { max_findings, max_pointer_bytes }` passed to
+`Document::validate_with_limits` controls finding retention only. The defaults
+remain 4,096 findings and 8 MiB of generated source-pointer text. TypeScript uses
+`document.validate({ limits: { maxFindings, maxPointerBytes } })` and exposes
+`validationLimits()` for the defaults. Its signature is
+`Document.validate(options?: ValidationOptions): DocumentValidation`, with
+`ValidationOptions { limits?: Partial<ValidationLimits> }`. Omitted options or
+limits use the cached default assessment; unknown option names are rejected.
+Zero allowances still assess every rule. Custom reports do not replace the
+cached default report.
 
 Plain Rust records whose fields are public data expose `code`
 and `kind` as fields. Enums and types whose private fields protect an invariant
@@ -136,7 +154,8 @@ The pinned OBI-02 schema has no `oneOf`. `pattern` and `uniqueItems` have no mat
 detail variant either. Guidance never copies document values or evaluates example
 or caller values. If keyword guidance is unavailable, the generic finding remains.
 
-`ValidationReport` retains at most 4096 findings and 8 MiB of source-pointer bytes.
+`ValidationReport` retains at most 4096 findings and 8 MiB of source-pointer bytes
+by default, adjustable through `ValidationLimits`.
 The pinned 0.2 schema's largest complete serialized `[keyword, schema, details]`
 tuple is 199 bytes in Rust JSON (198 in TypeScript JSON). An exhaustive schema
 test guards this fixed property; there is no runtime fact-size cap. Count and
@@ -264,14 +283,14 @@ top resource uses that source's URI and an empty pointer, even without `$id`.
 This is a location, not the resolved base; conformant Rust callers can use
 `SchemaNode::resource_base` for the base.
 
-Inspection has no separate schema nesting bound beyond document admission. One
-8 MiB allowance covers all generated and source text retained in reference
+Inspection has no separate schema nesting bound beyond document admission. The
+caller-selected allowance, 8 MiB by default, covers all generated and source text retained in reference
 entries: location, resource-root, target and refusal pointers, every origin's
 source URI, keywords, spellings, refusal codes/messages and unavailable-resource
 URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per
 UTF-16 unit. This bounds text, not total heap usage. Each whole entry is charged
 before its text is materialized or cloned. The first entry that does not fit
-stops traversal with `complete` false and a `LimitExceeded` limitation (TypeScript
+stops traversal with `ReferenceReport::Incomplete` and a `LimitExceeded` limitation (TypeScript
 `limit-exceeded`) with code `reference-report-bytes` and no omitted location. For
 unavailable resources, the refusal's `resource_uri` (TypeScript `resourceUri`)
 gives the resolved missing identity. Preparation can still succeed; evaluation
