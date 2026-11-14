@@ -70,6 +70,11 @@ may select sorted candidates only when exact comparisons are charged.
 
 ## Resolver implementation
 
+Schema comparison shares the core's `canonical_resolved_uri` normalizer for
+resource lookup keys. Resolved base spelling is retained until relative
+resolution completes; OBI-13 conformance and retrieval registration keep their
+spelling-preserving identity rules.
+
 The bundled resolver and default evaluator give a unique contained declared ID
 priority over supplied names; packaged standards are the final fallback. Supplied
 retrieval aliases and declared IDs compete equally when no contained ID owns the

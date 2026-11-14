@@ -18,4 +18,5 @@ openbindings-internal-json = { version = "=0.2.0-alpha.1", path = "../openbindin
 openbindings-internal-schema = { version = "=0.2.0-alpha.1", path = "../openbindings-internal-schema" }
 
 [dev-dependencies]
+openbindings-json-schema-evaluator = { version = "=0.2.0-alpha.1", path = "../openbindings-json-schema-evaluator" }
 serde_json.workspace = true

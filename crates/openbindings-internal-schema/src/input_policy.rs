@@ -42,7 +42,7 @@ pub(crate) fn canonical_uri(name: &str) -> Option<String> {
 /// Canonical alias of an absolute base from a spelling-preserving resolution.
 /// Keep normalization in the URI library. Its normalizer removes dot segments
 /// from absolute paths; rootless paths still need the ordinary resolver.
-pub(crate) fn canonical_resolved_uri(name: &str) -> Option<String> {
+pub fn canonical_resolved_uri(name: &str) -> Option<String> {
     normalized_hierarchical_uri(name)
         .map(jsonschema::Uri::into_string)
         .or_else(|| canonical_uri(name))
@@ -59,6 +59,12 @@ fn normalized_hierarchical_uri(name: &str) -> Option<jsonschema::Uri<String>> {
     } else {
         None
     }
+}
+/// Normalize an absolute hierarchical URI through the evaluator's URI library.
+/// Rootless paths require spelling-preserving resolution before normalization,
+/// so they return `None`. No library type crosses this crate's boundary.
+pub fn normalized_hierarchical_uri_text(name: &str) -> Option<String> {
+    normalized_hierarchical_uri(name).map(jsonschema::Uri::into_string)
 }
 pub(crate) fn resolve_identifier(parent: Option<&str>, reference: &str) -> Option<String> {
     let base = parent.or_else(|| uri::absolute(reference).then_some(reference))?;

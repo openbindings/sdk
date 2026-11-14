@@ -4,6 +4,7 @@ use crate::{ComparisonContext, ComparisonFailure as Failure, SchemaInput, budget
 use openbindings::{JsonKind, JsonRef, JsonValue};
 use openbindings_internal_json::backend;
 use openbindings_internal_schema::{
+    canonical_resolved_uri, normalized_hierarchical_uri_text,
     schema_index::{SCHEMA_SELECTORS, SchemaSelector, each_schema_child},
     uri,
 };
@@ -36,17 +37,17 @@ pub(crate) struct Resources {
     index: Arc<Mutex<Index>>,
     side: crate::ComparisonSide,
 }
-fn identity(text: &str, attempt: &mut Attempt<'_>) -> Result<String, Failure> {
+// Keep the resolved spelling for relative references and source coordinates;
+// only the lookup key uses the evaluator's URI equivalence.
+fn identity(text: &str, attempt: &mut Attempt<'_>) -> Result<(String, String), Failure> {
     attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
     attempt.allocate(text.len().saturating_mul(8).saturating_add(128))?;
     if !uri::absolute(text) || uri::fragment(text).is_some_and(|f| !f.is_empty()) {
         return Err(Failure::from(FailureKind::InvalidReference));
     }
-    let mut resolved = uri::resolve(text, text).ok_or(FailureKind::InvalidReference)?;
-    if resolved.ends_with('#') {
-        resolved.pop();
-    }
-    Ok(resolved)
+    let base = uri::compared_id(None, text).ok_or(FailureKind::InvalidReference)?;
+    let name = canonical_resolved_uri(&base).ok_or(FailureKind::InvalidReference)?;
+    Ok((base, name))
 }
 fn same(
     a: &ComparisonContext,
@@ -344,35 +345,43 @@ impl Index {
         let count = context.data.resources.len().saturating_add(1);
         attempt.retain(count.saturating_mul(std::mem::size_of::<Resource>()))?;
         let mut entries = Vec::with_capacity(count);
+        let initial = context
+            .data
+            .base
+            .as_deref()
+            .filter(|_| !is_obi(context.data.document.view()))
+            .map(|s| identity(s, attempt))
+            .transpose()?;
         entries.push(Resource {
-            base: context
-                .data
-                .base
-                .as_deref()
-                .filter(|_| !is_obi(context.data.document.view()))
-                .map(|s| identity(s, attempt))
-                .transpose()?,
+            base: initial.as_ref().map(|(base, _)| base.clone()),
             document: context.data.document.clone(),
             origin: 0,
         });
         let mut uris = BTreeMap::new();
-        if let Some(base) = &entries[0].base {
-            attempt.retain(base.len().saturating_add(2048))?;
-            uris.insert(base.clone(), Some(0));
+        // ExternalSchemas rejects repeated spelling-preserving retrieval IDs at
+        // registration. Canonical alias conflicts are refused only when reached.
+        let mut retrievals = std::collections::BTreeSet::new();
+        if let Some((base, name)) = initial {
+            attempt.retain(base.len().saturating_add(name.len()).saturating_add(2048))?;
+            uris.insert(name, Some(0));
+            retrievals.insert(base);
         }
-        for (base, document) in &context.data.resources {
-            let base = identity(base, attempt)?;
+        for (retrieval, document) in &context.data.resources {
+            let (base, name) = identity(retrieval, attempt)?;
             attempt.work(
                 base.len()
+                    .max(name.len())
                     .saturating_add(1)
                     .saturating_mul(uris.len().saturating_add(1).ilog2() as usize + 1)
                     .saturating_mul(12),
             )?;
-            if uris.contains_key(&base) {
+            attempt.retain(base.len().saturating_add(name.len()).saturating_add(2048))?;
+            if !retrievals.insert(base.clone()) {
                 return Err(Failure::from(FailureKind::InvalidReference));
             }
-            attempt.retain(base.len().saturating_add(2048))?;
-            uris.insert(base.clone(), Some(entries.len()));
+            uris.entry(name)
+                .and_modify(|entry| *entry = None)
+                .or_insert(Some(entries.len()));
             entries.push(Resource {
                 base: Some(base),
                 document: document.clone(),
@@ -478,16 +487,20 @@ impl Index {
                 )
                 .ok_or(FailureKind::InvalidReference)?
             };
-            let base = identity(&resolved, attempt)?;
-            self.uri_work(&base, attempt)?;
-            if let Some(Some(index)) = self.uris.get(&base)
-                && backend::occurrence(self.entries[*index].document.view()) == node
+            let (base, name) = identity(&resolved, attempt)?;
+            self.uri_work(&name, attempt)?;
+            let same_node =
+                self.uris.get(&name).copied().flatten().filter(|index| {
+                    backend::occurrence(self.entries[*index].document.view()) == node
+                });
+            if let Some(index) = same_node
+                && self.entries[index].base.as_deref() == Some(&base)
             {
-                return Ok(*index);
+                return Ok(index);
             }
             // An already ambiguous URI can include this occurrence. Re-entering
             // it must not publish another declaration after a failed lookup.
-            if self.uris.get(&base) == Some(&None) {
+            if self.uris.get(&name) == Some(&None) {
                 for (index, resource) in self.entries.iter().enumerate() {
                     attempt.work(base.len().saturating_add(1))?;
                     if resource.base.as_deref() == Some(&base)
@@ -499,13 +512,14 @@ impl Index {
             }
             attempt.retain(
                 base.len()
+                    .saturating_add(name.len())
                     .saturating_add(2048)
                     .saturating_add(2 * std::mem::size_of::<Resource>()),
             )?;
             scope = self.entries.len();
             self.uris
-                .entry(base.clone())
-                .and_modify(|value| *value = None)
+                .entry(name)
+                .and_modify(|value| *value = same_node.map(|_| scope))
                 .or_insert(Some(scope));
             self.entries.push(Resource {
                 base: Some(base),
@@ -785,13 +799,13 @@ impl Index {
         }
         let text = reference.as_str().ok_or(FailureKind::InvalidReference)?;
         attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
-        if !uri::valid(text) {
-            return Err(Failure::from(FailureKind::InvalidReference));
-        }
         if text.is_empty() {
             return self.target(scope, "", attempt);
         }
         if let Some(fragment) = text.strip_prefix('#') {
+            if !uri::valid(text) {
+                return Err(Failure::from(FailureKind::InvalidReference));
+            }
             return self.target(scope, fragment, attempt);
         }
         let current = &self.entries[scope];
@@ -800,18 +814,17 @@ impl Index {
             .saturating_add(current.base.as_ref().map_or(0, String::len));
         attempt.allocate(bytes.saturating_mul(8).saturating_add(128))?;
         attempt.work(bytes.saturating_mul(8).saturating_add(1))?;
-        let resolved = if uri::absolute(text) {
-            uri::resolve(text, text)
-        } else {
-            uri::resolve(
-                current
-                    .base
-                    .as_deref()
-                    .ok_or(FailureKind::InvalidReference)?,
-                text,
-            )
-        }
-        .ok_or(FailureKind::InvalidReference)?;
+        // Literal dot removal must precede decoding escaped dots. Exclude
+        // potential literal dot segments from the absolute normalization shortcut.
+        let absolute = (!text.contains("/."))
+            .then(|| normalized_hierarchical_uri_text(text))
+            .flatten();
+        let resolved = absolute
+            .or_else(|| {
+                let resolved = uri::compared_id(current.base.as_deref(), text)?;
+                canonical_resolved_uri(&resolved)
+            })
+            .ok_or(FailureKind::InvalidReference)?;
         let (resource, fragment) = resolved.split_once('#').unwrap_or((&resolved, ""));
         self.catalog(attempt)?;
         let own = self.lookup(resource, attempt)?;

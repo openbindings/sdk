@@ -71,6 +71,14 @@
   between evaluations, and verdicts and failing keywords are unchanged. Work for 1,024 values against 1,024 choices
   falls from 70,947,865 units to 2,790,629.
 
+- Comparison resolved a reference to an embedded or supplied resource only under the exact spelling of its URI,
+  where the evaluator also accepts the same URI with a different case of scheme or host, a percent-encoded
+  unreserved character, a different case of percent-encoding, or the default port. It answered `MissingReference`
+  for such a reference, so one SDK read one reference two ways. Comparison now uses the core's own URI
+  canonicalization for a resource's `$id`, a supplied resource's URI, a caller's base and a reference, and a test
+  asks both for every spelling in a table of 23 and requires them to agree. Supplied resources registered under
+  two spellings of one URI are refused as the evaluator refuses them.
+
 ## 2026-11-13 panel decisions (unreleased)
 
 ### Changed

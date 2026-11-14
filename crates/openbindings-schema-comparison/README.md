@@ -88,6 +88,14 @@ root. Relative references need a resource base; external content must be supplie
 with `with_resource`. Nothing is fetched. A `$ref` target is conjoined with its
 siblings using the profile's `allOf` rules. Missing content, cycles and malformed
 references fail normalization. Duplicate supplied URI identities are refused.
+Resource IDs, supplied names, initial bases and references share the evaluator's
+URI canonicalization, including scheme/host case, unreserved percent encodings,
+hexadecimal encoding case, dot segments and HTTPS's default port. An empty path
+remains distinct from `/`. Retrieval duplicates use `ExternalSchemas` registration
+identity; conflicts between distinct spellings of one canonical URI are refused
+when reached, while unused conflicts do not prevent unrelated comparisons.
+Resolved base spelling is preserved for subsequent relative references and source
+coordinates; only resource lookup keys use canonical equivalence.
 Targets under `const`, `enum`, annotations, unknown keywords, or other data
 positions fail with `MissingReference`, in directional, identity, and followed
 reference-rule comparisons. Schema positions follow the same normative selectors

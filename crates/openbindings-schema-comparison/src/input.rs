@@ -48,6 +48,8 @@ impl ComparisonContext {
     }
     /// Supply external content under an absolute URI with no nonempty fragment.
     /// Duplicate supplied identities fail comparison rather than being overwritten.
+    /// Registration identity and reached canonical aliases follow the evaluator's
+    /// `ExternalSchemas` policy; unused alias conflicts are allowed.
     #[must_use]
     pub fn with_resource(mut self, uri: impl Into<String>, document: JsonValue) -> Self {
         Arc::make_mut(&mut self.data)
