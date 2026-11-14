@@ -525,7 +525,7 @@ impl Layer {
                 && let Some(base) = self.resource(id).base.clone()
                 && self.resource(id).root.is_some()
             {
-                self.add_name(base, id, protected);
+                self.add_resolved_name(base, id, protected);
             }
         }
         self.sources.push(Source {
@@ -539,10 +539,38 @@ impl Layer {
         let Some(canonical) = crate::input_policy::canonical_uri(&name) else {
             return;
         };
+        self.add_aliases(name, canonical, resource, protected);
+    }
+    // Resource bases come from `uri::compared_id`: resolved but deliberately
+    // spelling-preserving. Their canonical aliases need normalization only.
+    fn add_resolved_name(&mut self, name: String, resource: usize, protected: &BTreeSet<String>) {
+        let Some(canonical) = crate::input_policy::canonical_resolved_uri(&name) else {
+            return;
+        };
+        self.add_aliases(name, canonical, resource, protected);
+    }
+    fn add_aliases(
+        &mut self,
+        name: String,
+        canonical: String,
+        resource: usize,
+        protected: &BTreeSet<String>,
+    ) {
         let contained = self.resource(resource).origin == ResourceOrigin::Contained;
         if contained && name != canonical {
             self.associate_name(name, resource, true, protected);
         }
+        self.add_canonical_name(canonical, resource, protected);
+    }
+    // InputPolicy registers canonical keys, and add_aliases normalizes its
+    // other inputs before taking this path. No caller-text cache is needed.
+    fn add_canonical_name(
+        &mut self,
+        canonical: String,
+        resource: usize,
+        protected: &BTreeSet<String>,
+    ) {
+        let contained = self.resource(resource).origin == ResourceOrigin::Contained;
         let exact = contained && self.resource(resource).base.as_deref() == Some(&canonical);
         self.associate_name(canonical, resource, exact, protected);
     }
@@ -625,7 +653,7 @@ impl Layer {
                 let association = if resource.origin == ResourceOrigin::Contained {
                     name.as_str()
                 } else {
-                    canonical = crate::input_policy::canonical_uri(name);
+                    canonical = crate::input_policy::canonical_resolved_uri(name);
                     canonical.as_deref().unwrap_or(name)
                 };
                 resource.eligible =
@@ -755,7 +783,7 @@ impl SchemaSpace {
             for &(source, node) in holders {
                 if let Some(&id) = local.sources[source + 1].positions.get(&node) {
                     let resource = local.nodes[id].resource;
-                    local.add_name(name.clone(), resource, protected);
+                    local.add_canonical_name(name.clone(), resource, protected);
                 }
             }
         }
@@ -2240,7 +2268,7 @@ mod projection_tests {
                 for &(source, node) in holders {
                     if let Some(&id) = local.sources[source + 1].positions.get(&node) {
                         let resource = local.nodes[id].resource;
-                        local.add_name(name.clone(), resource, protected);
+                        local.add_canonical_name(name.clone(), resource, protected);
                     }
                 }
             }

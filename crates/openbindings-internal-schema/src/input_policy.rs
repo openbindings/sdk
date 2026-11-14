@@ -36,31 +36,41 @@ pub trait IndexedDocument {
     /// The revision's value with its schema index.
     fn indexed(&self) -> crate::RawDocument;
 }
-struct NoRetrieval;
-impl jsonschema::Retrieve for NoRetrieval {
-    fn retrieve(
-        &self,
-        _: &jsonschema::Uri<String>,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-        Err("resource acquisition is disabled".into())
-    }
-}
 pub(crate) fn canonical_uri(name: &str) -> Option<String> {
     resolve_identifier(None, name.strip_suffix('#').unwrap_or(name))
 }
+/// Canonical alias of an absolute base from a spelling-preserving resolution.
+/// Keep normalization in the URI library. Its normalizer removes dot segments
+/// from absolute paths; rootless paths still need the ordinary resolver.
+pub(crate) fn canonical_resolved_uri(name: &str) -> Option<String> {
+    normalized_hierarchical_uri(name)
+        .map(jsonschema::Uri::into_string)
+        .or_else(|| canonical_uri(name))
+}
+// An absolute hierarchical reference replaces the base completely. The URI
+// library's normalizer also removes its dot segments, so no resolution is
+// needed. Rootless paths retain the library's full resolution semantics.
+// Required for the reference-fan-in allocation gate. Differential guard:
+// identifier_resolution_tests::direct_resolution_agrees_with_a_registry.
+fn normalized_hierarchical_uri(name: &str) -> Option<jsonschema::Uri<String>> {
+    let uri = jsonschema::Uri::parse(name).ok()?;
+    if uri.path().is_empty() || uri.path().as_str().starts_with('/') {
+        Some(uri.normalize())
+    } else {
+        None
+    }
+}
 pub(crate) fn resolve_identifier(parent: Option<&str>, reference: &str) -> Option<String> {
-    static EMPTY: OnceLock<jsonschema::Registry<'static>> = OnceLock::new();
-    let registry = EMPTY.get_or_init(|| {
-        jsonschema::Registry::new()
-            .retriever(NoRetrieval)
-            .prepare()
-            .expect("empty registry")
-    });
     let base = parent.or_else(|| uri::absolute(reference).then_some(reference))?;
-    registry
-        .resolve_uri(&jsonschema::Uri::parse(base).ok()?, reference)
-        .ok()
-        .map(|uri| uri.as_str().trim_end_matches('#').to_owned())
+    // The evaluator's own resolution, called directly. A registry caches every
+    // base and reference it resolves, so a process-wide one would keep each
+    // caller's identifiers for the life of the process.
+    let base = jsonschema::Uri::parse(base).ok()?;
+    let uri = normalized_hierarchical_uri(reference)
+        .or_else(|| jsonschema::uri::resolve_against(&base, reference).ok())?;
+    let mut resolved = uri.into_string();
+    resolved.truncate(resolved.trim_end_matches('#').len());
+    Some(resolved)
 }
 
 impl Supplied {
@@ -200,23 +210,20 @@ impl Supplied {
                 control,
                 resolve_profile,
             )?;
-            let mut add = |name: &str, node: usize| {
-                if let Some(name) = canonical_uri(name) {
-                    if crate::space::standard_identifier(&name) {
-                        policy.protected.insert(name.clone());
-                    }
-                    let holders = policy.names.entry(name).or_default();
-                    if !holders.contains(&(source, node)) {
-                        holders.push((source, node));
-                    }
-                }
-            };
-            if let Some(root) = index.nodes.first() {
-                add(&resource.uri, root.id as usize);
+            if let Some(root) = index.nodes.first()
+                && let Some(name) = canonical_uri(&resource.uri)
+            {
+                policy.add_canonical_name(name, source, root.id as usize);
             }
             for (node, base) in index.declared_bases() {
                 control.check()?;
-                add(base, index.nodes[*node as usize].id as usize);
+                if let Some(name) = canonical_resolved_uri(base) {
+                    policy.add_canonical_name(
+                        name,
+                        source,
+                        index.nodes[*node as usize].id as usize,
+                    );
+                }
             }
         }
         control.check()?;
@@ -225,6 +232,20 @@ impl Supplied {
             policy: Arc::new(policy),
             nodes: Arc::new(OnceLock::from(indexes.into_boxed_slice())),
         })
+    }
+}
+
+impl InputPolicy {
+    // Retrieval names pass through canonical_uri; resolved declared bases pass
+    // through canonical_resolved_uri. Neither path registers unchecked text.
+    fn add_canonical_name(&mut self, name: String, source: usize, node: usize) {
+        if crate::space::standard_identifier(&name) {
+            self.protected.insert(name.clone());
+        }
+        let holders = self.names.entry(name).or_default();
+        if !holders.contains(&(source, node)) {
+            holders.push((source, node));
+        }
     }
 }
 
@@ -334,5 +355,167 @@ mod profile_tests {
                 .names
                 .contains_key("https://profiles.test/child")
         );
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod identifier_resolution_tests {
+    use super::*;
+
+    pub(crate) fn uri_corpus() -> Vec<String> {
+        let mut corpus = Vec::new();
+        for prefix in [
+            "http://EXAMPLE.test:80",
+            "HTTPS://User:pass@Example.test:443",
+            "ftp://example.test:21",
+            "file://",
+            "x://[2001:0DB8:0:0::1]:90",
+            "https://[::ffff:192.0.2.1]",
+            "custom:",
+        ] {
+            for path in [
+                "",
+                "/",
+                "/a",
+                "/a/./b/../c",
+                "/../a",
+                "/a//b/",
+                "/%7e/%41/%2f",
+                "/a/%2e%2e/b",
+                "/.%2E/a",
+                "/%FF/%00",
+                "/.//a",
+                "/a/..",
+            ] {
+                for query in ["", "?", "?a=%7e&b=%2f", "?q=/../%2e"] {
+                    for fragment in ["", "#", "#anchor", "#/%7e/%2f", "#%23"] {
+                        corpus.push(format!("{prefix}{path}{query}{fragment}"));
+                    }
+                }
+            }
+        }
+        for path in [
+            "example:item",
+            "a/../b",
+            "a/%2e%2e/b",
+            "EXAMPLE:%7e:%2f",
+            "",
+        ] {
+            for fragment in ["", "#", "#frag", "#/%41"] {
+                corpus.push(format!("URN:{path}?q=%7e{fragment}"));
+            }
+        }
+        corpus.extend(
+            [
+                "",
+                "relative",
+                "#",
+                "#frag",
+                "not a URI",
+                "https://[::g]",
+                "https://x/%",
+            ]
+            .map(str::to_owned),
+        );
+        corpus
+    }
+
+    #[test]
+    fn canonical_uri_is_idempotent() {
+        for raw in uri_corpus() {
+            if let Some(canonical) = canonical_uri(&raw) {
+                assert_eq!(
+                    canonical_uri(&canonical).as_ref(),
+                    Some(&canonical),
+                    "{raw}"
+                );
+            } else {
+                assert!(
+                    !uri::absolute(&raw),
+                    "absolute corpus member must resolve: {raw}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn resolved_base_normalization_agrees_with_canonicalizing_first() {
+        for raw in uri_corpus() {
+            if let Some(resolved) = uri::compared_id(None, &raw) {
+                assert_eq!(
+                    canonical_resolved_uri(&resolved),
+                    canonical_uri(&resolved),
+                    "{raw} -> {resolved}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn indexed_canonical_names_preserve_canonicalizing_registration() {
+        let retrieval = "HTTPS://INDEX.test:443/%7e/retrieval#";
+        for raw in uri_corpus() {
+            let value = JsonValue::parse(serde_json::json!({"$id": raw}).to_string()).unwrap();
+            let index = schema_index::SchemaIndex::supplied(&value, retrieval);
+            let mut expected = BTreeMap::<String, Vec<(usize, usize)>>::new();
+            let mut add = |name: &str, node| {
+                if let Some(name) = canonical_uri(name) {
+                    let holders = expected.entry(name).or_default();
+                    if !holders.contains(&(0, node)) {
+                        holders.push((0, node));
+                    }
+                }
+            };
+            add(retrieval, index.nodes[0].id as usize);
+            for (node, base) in index.declared_bases() {
+                assert_eq!(canonical_resolved_uri(base), canonical_uri(base), "{raw}");
+                add(base, index.nodes[*node as usize].id as usize);
+            }
+            let supplied = Supplied::new([ProjectedResource {
+                uri: retrieval.into(),
+                document: value,
+            }])
+            .unwrap();
+            assert_eq!(supplied.policy.names, expected, "{raw}");
+        }
+    }
+    #[test]
+    fn direct_resolution_agrees_with_a_registry() {
+        let registry = jsonschema::Registry::new().prepare().unwrap();
+        for base in [
+            "https://EXAMPLE.test/a/b",
+            "HTTPS://EXAMPLE.test:443/%7e/base#",
+            "https://test.invalid/a/%7e/b?x#old",
+            "urn:example:item#frag",
+        ] {
+            let mut references = uri_corpus();
+            references.extend(
+                [
+                    "",
+                    "a/",
+                    "../c",
+                    "/a/./b/../c",
+                    "?q",
+                    "#frag",
+                    "#old",
+                    "#",
+                    "%2e%2e/x",
+                    "https://OTHER.test/%7e/a",
+                    "not a URI",
+                ]
+                .map(str::to_owned),
+            );
+            for reference in references {
+                let expected = registry
+                    .resolve_uri(&jsonschema::Uri::parse(base).unwrap(), &reference)
+                    .ok()
+                    .map(|uri| uri.as_str().trim_end_matches('#').to_owned());
+                assert_eq!(
+                    resolve_identifier(Some(base), &reference),
+                    expected,
+                    "{base} {reference}"
+                );
+            }
+        }
     }
 }

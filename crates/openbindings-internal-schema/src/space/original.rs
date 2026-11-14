@@ -1,5 +1,8 @@
 //! Queries against original sources, independent of evaluator projections.
 use super::*;
+#[cfg(test)]
+#[path = "identifier_tests.rs"]
+mod identifier_tests;
 
 /// Structural query results, without diagnostic-string classification.
 #[derive(Clone, PartialEq, Eq)]
@@ -204,10 +207,13 @@ impl SchemaSpace {
             return Err(QueryFailure::MalformedReference);
         }
         let name = absolute.split_once('#').map_or(absolute, |(name, _)| name);
-        let exact = self.name(name).filter(|name| name.exact_contained);
-        let normalized =
-            || crate::input_policy::canonical_uri(name).and_then(|name| self.name(&name));
-        let selected = exact.or_else(normalized);
+        // Registered keys are canonical aliases or exact contained spellings.
+        // An exact contained key already wins; any other hit is canonical and
+        // canonicalization is idempotent, so resolving it again cannot change
+        // selection (including a conflict).
+        let selected = self
+            .name(name)
+            .or_else(|| crate::input_policy::canonical_uri(name).and_then(|name| self.name(&name)));
         self.selected_resource(selected)?
             .ok_or_else(|| QueryFailure::ResourceUnavailable(name.into()))
     }
