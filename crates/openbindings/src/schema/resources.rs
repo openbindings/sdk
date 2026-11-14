@@ -1,7 +1,7 @@
 //! Explicit external schemas, with immutable identity and lifetime boundaries.
 use crate::{document::DocumentInner, schema::references::SchemaSpace, *};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     sync::{Arc, Mutex, OnceLock, PoisonError, Weak},
 };
@@ -244,8 +244,12 @@ impl ExternalSchemas {
             &crate::control::NeverCancelled,
         )
     }
-    /// Register under caller-selected inventory and identity budgets, with
-    /// cooperative cancellation. Failed attempts retain no set.
+    /// Register under caller-selected retained-storage, inventory and identity budgets, with
+    /// cooperative cancellation. Each distinct root arena is reserved once, before
+    /// retaining it; clones share that charge. The deterministic estimate includes
+    /// parsed buffers and possible lazy source-position storage. A yielded value
+    /// is already allocated by the caller, so this cannot prevent allocation of
+    /// the first rejected item. Failed attempts retain no set.
     ///
     /// # Errors
     /// Returns invalid/duplicate identity, duplicate members, limits, or cancellation.
@@ -269,6 +273,7 @@ impl ExternalSchemas {
     ) -> Result<Self, ExternalSchemaError> {
         let mut by_uri = BTreeMap::new();
         let mut retrieval_bytes = 0usize;
+        let mut owners = BTreeSet::new();
         for mut resource in resources {
             control
                 .charge_work(resource.uri.len().saturating_add(1))
@@ -310,14 +315,7 @@ impl ExternalSchemas {
             }
             resource.uri = crate::uri::compared_id(None, &resource.uri)
                 .ok_or_else(|| invalid("invalid retrieval URI"))?;
-            if openbindings_internal_json::backend::node_id(&resource.document) != 0 {
-                let bytes = resource.document.bytes().len();
-                control.charge_work(bytes).map_err(registration_failure)?;
-                control
-                    .charge_allocation(bytes.saturating_mul(128))
-                    .map_err(registration_failure)?;
-            }
-            resource.document = openbindings_internal_json::backend::standalone(resource.document);
+            resource.document = retained_resource(resource.document, &mut owners, control)?;
             let uri = resource.uri.clone();
             if by_uri.insert(uri.clone(), resource).is_some() {
                 return Err(ExternalSchemaError {
@@ -494,4 +492,37 @@ impl std::fmt::Debug for ExternalSchemaError {
             .field("reason", &reason)
             .finish_non_exhaustive()
     }
+}
+
+// The record reservation covers the ordered owner set as well as the resource
+// indexes. Root clones share an immutable arena; selected subtrees are rebased
+// so registration never pins an otherwise unrelated parent document.
+fn retained_resource(
+    value: JsonValue,
+    owners: &mut BTreeSet<usize>,
+    control: &dyn openbindings_internal_schema::Control,
+) -> Result<JsonValue, ExternalSchemaError> {
+    use openbindings_internal_json::backend;
+    let scratch = if backend::node_id(&value) == 0 {
+        0
+    } else {
+        control
+            .charge_work(value.bytes().len())
+            .map_err(registration_failure)?;
+        let bytes = value.bytes().len().saturating_mul(128).saturating_add(1024);
+        control
+            .charge_allocation(bytes)
+            .map_err(registration_failure)?;
+        bytes
+    };
+    let value = backend::standalone(value);
+    control.release_allocation(scratch);
+    let owner = backend::occurrence(value.view()).0;
+    if !owners.contains(&owner) {
+        control
+            .charge_allocation(backend::retained_reservation(&value))
+            .map_err(registration_failure)?;
+        owners.insert(owner);
+    }
+    Ok(value)
 }

@@ -9,3 +9,4 @@ publish = false
 
 [dependencies]
 openbindings = { path = "../../crates/openbindings" }
+openbindings-internal-json = { path = "../../crates/openbindings-internal-json" }

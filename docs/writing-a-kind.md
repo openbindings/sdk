@@ -657,11 +657,9 @@ flush a transport there. Synchronous `Drop` can release resources held by the
 future. Dropping invocation output also releases the driver and adapter future.
 Pull, description, check and preflight calls follow the same future-drop model.
 
-The token passed to a hook belongs to that attempt. Invocation, pull, description
-and source-check cancellation revoke it before releasing pending provider work.
-Preflight currently drops its pending provider future before its drop guard
-cancels the token, so its destructor must not rely on the token already being
-cancelled. None of these drops cancels the caller's token. The token
+The token passed to a hook belongs to that attempt. Invocation, preflight, pull,
+description and source-check cancellation revoke it before releasing pending
+provider work. None of these drops cancels the caller's token. The token
 is useful for independently polled or detached work and for synchronous loops
 that periodically test `is_cancelled()`. Those loops must still yield if the
 host needs other tasks to run. The token cannot interrupt arbitrary synchronous
@@ -799,7 +797,22 @@ To keep part of a pull:
 
 These steps are application code. `validate_for` returns the document holding
 every addition, where references resolve, and its `references` report follows
-`$id` and anchors:
+`$id` and anchors.
+
+The three recipes below form one module of the application, separate from the
+adapter above, and need these imports:
+
+<!-- guide:prelude -->
+```rust
+use openbindings::{ConformantDocument, Edit, JsonValue, ReferenceResolution, WorkControl};
+use openbindings_source_pull::{
+    Change, ExistingEntry, ExistingTarget, Proposal, PullLimits, PullRequest, PullResult,
+};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// What these application functions return on failure.
+pub type Error = Box<dyn std::error::Error>;
+```
 
 <!-- guide:partial -->
 ```rust
@@ -824,8 +837,8 @@ pub fn keep_part(
         .iter()
         .map(|key| format!("/bindings/{key}"))
         .collect();
-    if let Some(unknown) = wanted.iter().find(|pointer| !is_addition(pointer)) {
-        return Err(format!("{unknown} is not an added binding").into());
+    if wanted.iter().any(|pointer| !is_addition(pointer)) {
+        return Err("a selected binding is not an addition".into());
     }
 
     let mut seen = BTreeSet::new();

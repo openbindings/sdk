@@ -1373,6 +1373,11 @@ pub fn validate_text(text: String, limits: Option<Vec<u32>>) -> Result<String, J
 pub fn json_limits() -> Vec<u32> {
     limit_values(JsonLimits::default())
 }
+/// The default identity-byte allowance, which bounds the URI text the facade transfers.
+#[wasm_bindgen(js_name=identityByteLimit)]
+pub fn identity_byte_limit() -> u32 {
+    u32::try_from(PreparationLimits::default().max_identity_bytes).unwrap_or(u32::MAX)
+}
 #[wasm_bindgen(js_name=versionPolicy)]
 pub fn version_policy() -> String {
     encoded(

@@ -452,23 +452,68 @@ pub struct ResolutionFailure {
 }
 impl std::fmt::Debug for ResolutionFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ResolutionFailure").finish_non_exhaustive()
+        f.debug_struct("ResolutionFailure")
+            .field("kind", &self.kind)
+            .field("has_origin", &self.origin.is_some())
+            .finish_non_exhaustive()
     }
 }
 impl std::fmt::Display for ResolutionFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("schema reference resolution did not complete")
+        f.write_str(match &self.kind {
+            ResolutionFailureKind::Undefined(defect) => match defect {
+                ReferenceDefect::MalformedReference => "schema reference is malformed",
+                ReferenceDefect::MissingTarget => "schema reference target is missing",
+                ReferenceDefect::NonSchemaTarget => "schema reference target is not a schema",
+                ReferenceDefect::MissingAnchor => "schema reference anchor is missing",
+                ReferenceDefect::AmbiguousAnchor => "schema reference anchor is ambiguous",
+                ReferenceDefect::InvalidIdentifier => {
+                    "schema reference has no usable base identifier"
+                }
+            },
+            ResolutionFailureKind::ResourceUnavailable { .. } => {
+                "schema reference resource is unavailable; supply the external schema"
+            }
+            ResolutionFailureKind::UnsupportedDialect { .. } => {
+                "schema reference resolution requires an unsupported dialect"
+            }
+            ResolutionFailureKind::UnsupportedCapability { .. } => {
+                "schema reference resolution requires an unsupported capability"
+            }
+            ResolutionFailureKind::InvalidExternalSchema => {
+                "schema reference resource has invalid identity or dialect metadata"
+            }
+            ResolutionFailureKind::Limit { .. } => "schema reference resolution reached a limit",
+            ResolutionFailureKind::Cancelled => "schema reference resolution was cancelled",
+            ResolutionFailureKind::WrongEnvironment => {
+                "schema reference node belongs to a different environment"
+            }
+            ResolutionFailureKind::NotSchemaLocation => {
+                "schema reference position is outside the schema inventory"
+            }
+            ResolutionFailureKind::InvalidAnchorName => {
+                "schema reference dynamic-anchor name is invalid"
+            }
+        })
     }
 }
 impl std::error::Error for ResolutionFailure {}
 /// The static target and optional dynamic-anchor name. Dynamic scope selection
 /// remains an evaluator responsibility; a pointer never opts into that lookup.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ReferenceTarget {
     /// Original schema target.
     pub schema: SchemaNode,
     /// Plain dynamic-anchor name, when that declaration was selected by name.
     pub dynamic_anchor: Option<String>,
+}
+impl std::fmt::Debug for ReferenceTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReferenceTarget")
+            .field("schema", &self.schema)
+            .field("has_dynamic_anchor", &self.dynamic_anchor.is_some())
+            .finish_non_exhaustive()
+    }
 }
 impl SchemaEnvironment {
     /// Resolve a URI in a schema's original scope. The URI may name a

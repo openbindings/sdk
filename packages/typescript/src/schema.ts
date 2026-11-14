@@ -12,6 +12,7 @@ import { requireReady } from "./runtime.js";
 import {
   ExactJson,
   ORDINARY_LIMITS,
+  boundedText,
   encodeOrdinary,
   exact,
   inputErrorKind,
@@ -432,6 +433,15 @@ export function schemaLocationText(at: SchemaOrigin): string {
   return JSON.stringify({ source_uri: at?.sourceUri, pointer: at?.pointer });
 }
 
+// Rust's default identity-byte allowance, read once. Registration and lookup
+// refuse a longer URI before reading it, so one certainly past the allowance
+// crosses only as the prefix that establishes the same refusal.
+let identityBytes: number | undefined;
+function resourceUri(uri: string): string {
+  scalar(uri);
+  return boundedText(uri, (identityBytes ??= wasm.identityByteLimit()));
+}
+
 const resourceToken = Symbol("retained resource set");
 
 /** Immutable explicit resource set. URIs must be absolute without a nonempty fragment; normalized duplicate identities are refused even for equal bytes. Resources are retained, never fetched. Batch failure releases partial state and leaves supplied owners usable. Distinct contexts may associate the same URI with different snapshots. */
@@ -459,10 +469,10 @@ export class ExternalSchemas extends Managed {
       for (const [uri, document] of entries as Iterable<
         readonly [string, ExactJson]
       >) {
-        scalar(uri);
+        const bounded = resourceUri(uri);
         sdkCall(() =>
           (pending ??= new wasm.WasmResourceEntries()).push(
-            uri,
+            bounded,
             jsonRaw(document),
           ),
         );
@@ -481,10 +491,10 @@ export class ExternalSchemas extends Managed {
   }
   /** Return a NEW independently disposable resource-set owner with one added resource; the original and supplied document stay usable. Invalid/duplicate identity throws; no acquisition. */
   with(uri: string, document: ExactJson): ExternalSchemas {
-    scalar(uri);
+    const bounded = resourceUri(uri);
     return ExternalSchemas.fromRaw(
       sdkCall(() =>
-        handle<wasm.WasmResources>(this).add(uri, jsonRaw(document)),
+        handle<wasm.WasmResources>(this).add(bounded, jsonRaw(document)),
       ),
     );
   }
@@ -494,8 +504,10 @@ export class ExternalSchemas extends Managed {
   }
   /** Locate a schema location in one of these resources: the node its pointer names in the resource with its URI, with line and column in that resource's own text. A resource built from a subtree of a larger value is admitted as its own text, so its coordinates count from the subtree's start, where ExactJson.locate on that subtree counts in the whole text it was parsed from. null for a document location, a URI this set does not hold (such as a packaged meta-schema's), or a pointer that names no node. Positions are computed on this call. A malformed location throws SdkError with code invalid-schema-location. */
   locate(at: SchemaOrigin): SourceLocation | null {
-    const raw = handle<wasm.WasmResources>(this);
-    return decode(sdkCall(() => raw.locate(schemaLocationText(at))));
+    handle<wasm.WasmResources>(this);
+    // Reading the location can run caller code, so the handle is taken after it.
+    const location = schemaLocationText(at);
+    return decode(sdkCall(() => resourceRaw(this).locate(location)));
   }
   /** Prepare a resource in this set as its own JSON Schema root. uri is its retrieval identity for relative references and diagnostics; its own $id governs when present. Uses the same evaluator limits and signal options as Schema.prepare, with this set supplying the resources. An unavailable URI returns a refused preparation, never a value outcome. Ready owns an independent disposable PreparedSchema; failures and cancellation leave this set usable for retries. */
   prepare(
@@ -503,8 +515,8 @@ export class ExternalSchemas extends Managed {
     options: Omit<PrepareOptions, "resources"> = {},
   ): SchemaPreparation {
     requireReady();
-    scalar(uri);
-    const raw = resourceRaw(this);
+    const bounded = resourceUri(uri);
+    resourceRaw(this);
     if (!options || typeof options !== "object" || Array.isArray(options))
       throw new SdkError(
         "invalid-work-options",
@@ -514,7 +526,10 @@ export class ExternalSchemas extends Managed {
     const signal = workSignal(work);
     const encoded = limits === undefined ? undefined : encodedLimits(limits);
     return takePreparation(
-      sdkCall(() => raw.prepare(uri, encoded, isAborted(signal))),
+      // Options can run caller code, so the handle is taken after them.
+      sdkCall(() =>
+        resourceRaw(this).prepare(bounded, encoded, isAborted(signal)),
+      ),
     );
   }
 }
@@ -534,15 +549,20 @@ export class Schema extends Managed {
   /** Prepare with the built-in evaluator. Ready transfers a disposable PreparedSchema independent of this owner and preserves its original reference environment; it does not promise every value is decidable. Missing external content or a locally undefined predicate is not a blanket refusal: each evaluation accounts for applicator dependence and evaluated annotations. Unsupported reasoning, exhausted limits and cancellation remain explicit failures or no-verdict outcomes. Supplying a different resource snapshot requires a new preparation; existing prepared owners keep their original meaning. Cancelled/transient failures do not poison retries. Pre-aborted work returns a cancelled preparation failure. */
   prepare(options: PrepareOptions = {}): SchemaPreparation {
     requireReady();
-    const raw = schemaRaw(this);
+    schemaRaw(this);
+    // Options can run caller code, so the handle is taken after them.
     const { resources, limits, signal } = prepareOptions(options);
     // Omitted resources and limits cross the bridge as absent: the engine uses
     // its shared empty set and default budgets without building either.
     const encoded = limits === undefined ? undefined : encodedLimits(limits);
     const preparation = sdkCall(() =>
       resources === undefined
-        ? raw.prepare(encoded, isAborted(signal))
-        : raw.prepareWith(resourceRaw(resources), encoded, isAborted(signal)),
+        ? schemaRaw(this).prepare(encoded, isAborted(signal))
+        : schemaRaw(this).prepareWith(
+            resourceRaw(resources),
+            encoded,
+            isAborted(signal),
+          ),
     );
     return takePreparation(preparation);
   }
@@ -682,9 +702,11 @@ export class PreparedSchema extends Managed {
   /** Admit exact JSON text or UTF-8 bytes as parseJson does, under the default limits (32 MiB, 10,000 container levels and 1,000,000 nodes), then check it cheaply: evaluateJson("7") checks the number 7. Bytes past the byte limit, or text with more UTF-16 units than it, cross into Wasm only as the prefix that establishes the refusal. Every value outcome is returned, including undefined and no-verdict; input-error is admission failure only. Duplicate members yield no-verdict and numbers are never rounded. Wrong input types and literal unpaired UTF-16 text throw, as for parseJson; exact admission precedes cancellation observation. Parse once with parseJson to check one value repeatedly; cancellation cannot preempt synchronous Wasm. */
   evaluateJson(input: ExactInput, options: WorkOptions = {}): JsonCheck {
     requireReady();
-    const prepared = handle<wasm.WasmPrepared>(this);
+    handle<wasm.WasmPrepared>(this);
     const signal = workSignal(options);
     const data = exact(input);
+    // Options can run caller code, so the handle is taken after them.
+    const prepared = handle<wasm.WasmPrepared>(this);
     try {
       return decode(
         typeof data === "string"
@@ -723,16 +745,22 @@ function checkValue(
   explain: boolean,
 ): ValueCheck {
   requireReady();
-  const prepared = handle<wasm.WasmPrepared>(schema);
-  const exact = isExact(value) ? jsonRaw(value) : undefined;
+  handle<wasm.WasmPrepared>(schema);
+  const exact = isExact(value) ? value : undefined;
+  if (exact) jsonRaw(exact);
   const signal = workSignal(options);
   if (isAborted(signal)) return cancelledValue();
-  const run = (raw: wasm.WasmJson, cancelled: boolean): ValueOutcome =>
-    decode(
+  // Options and ordinary conversion can run caller code, so both handles are
+  // taken only where they are used.
+  const run = (owner: ExactJson, cancelled: boolean): ValueOutcome => {
+    const prepared = handle<wasm.WasmPrepared>(schema);
+    const raw = jsonRaw(owner);
+    return decode(
       explain
         ? prepared.explain(raw, cancelled)
         : prepared.evaluate(raw, cancelled),
     );
+  };
   if (exact) return run(exact, isAborted(signal));
   let temporary: ExactJson | undefined;
   try {
@@ -767,7 +795,7 @@ function checkValue(
       };
     }
     if (isAborted(signal)) return cancelledValue();
-    return run(jsonRaw(temporary), false);
+    return run(temporary, false);
   } finally {
     temporary?.dispose();
   }

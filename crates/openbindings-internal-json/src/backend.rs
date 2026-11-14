@@ -1619,6 +1619,23 @@ pub fn hash_bytes<K, V>(values: &std::collections::HashMap<K, V>) -> usize {
 pub fn retained_bytes(value: &crate::JsonValue) -> usize {
     value.owner.retained_bytes()
 }
+/// Deterministic retained-arena reservation, including the maximum lazy source
+/// position index. Shared views have the same owner identity (`occurrence().0`).
+/// Uses representation capacities, never allocator statistics. The extra source
+/// checkpoints also cover lookups performed after the owner is registered.
+pub fn retained_reservation(value: &crate::JsonValue) -> usize {
+    // Reserve fixed synchronization backing too: some targets lazily allocate
+    // the position mutex on its first use. This is a platform-independent bound.
+    retained_bytes(value).saturating_add(128).saturating_add(
+        value
+            .owner
+            .source()
+            .len()
+            .saturating_div(4096)
+            .saturating_mul(2 * size_of::<usize>()),
+    )
+}
+
 pub fn pointer_retained_bytes(pointer: &crate::Pointer) -> usize {
     pointer.retained_bytes()
 }

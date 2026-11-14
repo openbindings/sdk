@@ -897,7 +897,7 @@ fn resolution_and_cancellation_display_describe_the_failed_operation() {
         .unwrap_err();
     assert_eq!(
         failure.to_string(),
-        "schema reference resolution did not complete"
+        "schema reference resource is unavailable; supply the external schema"
     );
     assert_eq!(Cancelled.to_string(), "the caller cancelled this work");
 }

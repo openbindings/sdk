@@ -5,6 +5,7 @@
 //! The walk in [`keep_part`] sets no work limits of its own, which suits a source
 //! the application trusts. `validate_for` and the final validation still check
 //! the result and the edited document.
+// guide:prelude:start
 use openbindings::{ConformantDocument, Edit, JsonValue, ReferenceResolution, WorkControl};
 use openbindings_source_pull::{
     Change, ExistingEntry, ExistingTarget, Proposal, PullLimits, PullRequest, PullResult,
@@ -13,6 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// What these application functions return on failure.
 pub type Error = Box<dyn std::error::Error>;
+// guide:prelude:end
 
 // guide:proposals:start
 /// One proposal as document edits: what it carries, copied onto the existing
@@ -146,8 +148,8 @@ pub fn keep_part(
         .iter()
         .map(|key| format!("/bindings/{key}"))
         .collect();
-    if let Some(unknown) = wanted.iter().find(|pointer| !is_addition(pointer)) {
-        return Err(format!("{unknown} is not an added binding").into());
+    if wanted.iter().any(|pointer| !is_addition(pointer)) {
+        return Err("a selected binding is not an addition".into());
     }
 
     let mut seen = BTreeSet::new();
