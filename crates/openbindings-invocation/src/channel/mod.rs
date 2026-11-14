@@ -379,6 +379,28 @@ impl Shared {
 }
 
 /// A lazy invocation. The output half alone drives provider and validation work.
+/// Dropping an unused invocation runs neither.
+///
+/// ```compile_fail
+/// #![deny(unused_must_use)]
+/// use openbindings_invocation::{CancellationToken, Invocation, InvocationLimits};
+/// Invocation::new(InvocationLimits::default(), CancellationToken::new(), |_, _| async {
+///     Ok(())
+/// }).unwrap();
+/// ```
+///
+/// Explicitly dropping an invocation is allowed, for example when abandoning an
+/// attempt before it starts. Dropping its input half closes input normally.
+///
+/// ```
+/// #![deny(unused_must_use)]
+/// use openbindings_invocation::{CancellationToken, Invocation, InvocationLimits};
+/// let invocation = Invocation::new(
+///     InvocationLimits::default(), CancellationToken::new(), |_, _| async { Ok(()) },
+/// ).unwrap();
+/// drop(invocation);
+/// ```
+#[must_use = "invocations are lazy; provider and validation work does not run unless the output is polled"]
 pub struct Invocation<F: Future<Output = Outcome>> {
     input: InvocationInput,
     output: InvocationOutput<F>,

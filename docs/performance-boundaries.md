@@ -17,6 +17,27 @@ arm64, Rust 1.99.0 and wasm-bindgen 0.2.129, with later dates stated locally.
 Matched candidate performance and final hosted-platform qualification require
 separate runs. The performance workflow's timing remains advisory.
 
+## Per-owner retained storage (November 2026)
+
+Rust `ComparisonContext::retained_bytes()` estimates allocations kept alive by
+the context, including complete exact source arenas and completed reference
+indexes. Like `Document::retained_bytes()`, it uses existing capacities and
+estimated tree occupancy only when called. It adds no preparation or evaluation
+work. Shared storage is counted per owner, so summing separate owner estimates
+overcounts sharing. It is neither resident memory nor what dropping a handle
+frees, and excludes allocator overhead and Wasm memory growth. Later indexing
+and source-location lookups can grow the estimate. Concurrent calls can observe
+that growth; the estimate is not an atomic heap snapshot or a hard admission cap.
+
+The [retained-size qualification tool](../tools/retained-size-qualification/README.md)
+compares context estimates with requested live allocation bytes for cold and
+warmed contexts at 10, 100 and 500 operations. The factor-two test applies only
+to those shapes. Default prepared schemas and operations do not expose this
+method: their core generic wrapper and companion validator live in different
+crates, preventing a specialized inherent method on the schema wrapper.
+There is no estimate here for allocations hidden inside `jsonschema`, and no
+estimate promised for custom evaluators.
+
 ## Limits principle (November 2026)
 
 Comparison `max_work`, preparation `max_sdk_work_units` and pull

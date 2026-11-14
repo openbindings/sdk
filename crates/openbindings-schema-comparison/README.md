@@ -26,6 +26,15 @@ assert!(!identical(None, Some(&existing), &ComparisonLimits::default())?);
 need not be an OBI: a source puller can compare an offered schema before authoring
 it. `SchemaInput::from(&schema)` retains a canonical core schema's original context.
 Dropping the original document or view does not invalidate the input.
+`ComparisonContext::retained_bytes()` estimates allocations kept alive by one
+context: complete exact source arenas, configuration and completed indexes.
+It computes the figure only when asked, without initializing indexes. Clones
+share storage and return the same estimate. Summing separate owners' estimates
+overcounts shared sources and indexes. Later comparisons or source-location
+lookups can grow the figure. It excludes allocator overhead and Wasm memory
+growth, and is neither resident memory nor the bytes freed by dropping one
+handle. Tree node sizes are estimates, not a hard admission bound.
+
 For many comparisons, construct one `ComparisonContext::new(root)` per document
 and select inputs with `context.schema(exact_schema)`. Its `with_base` and
 `with_resource` configure resolution, just as the convenience input methods do.

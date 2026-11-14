@@ -391,6 +391,16 @@ version = "0.0.0"
 dependencies = [
  "openbindings",
  "openbindings-internal-json",
+ "openbindings-schema-comparison",
+]
+
+[[package]]
+name = "openbindings-schema-comparison"
+version = "0.2.0-alpha.1"
+dependencies = [
+ "openbindings",
+ "openbindings-internal-json",
+ "openbindings-internal-schema",
 ]
 
 [[package]]

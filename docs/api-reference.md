@@ -275,6 +275,10 @@ inventory and resolution through `SchemaEnvironment`; vendor projection is priva
 to the evaluator. Explicit `ExternalSchemas` supplies immutable resources without I/O.
 Changing resources requires a new preparation.
 
+Rust `ResourceIdentity` supports `Eq` and `Hash` using the retained environment
+allocation and resource index. Equal identities hash equally; matching URI text
+in two environments still gives distinct map or set keys.
+
 `references_with_resources` inspects document references and transitively reached
 supplied resources within its existing traversal limits. A complete report can
 contain unresolved entries. Missing or malformed `openbindings` declarations use
@@ -406,7 +410,9 @@ Parse failures expose `InputError::line()` and `byte_column()` in Rust and
 columns are one-based. They are computed once on failure; nothing changes on success.
 
 Invocation preflight returns `Option<ContextChallenge>`: `None` means no prediction,
-not guaranteed success. `InvocationError::binding_not_found()` constructs the
+not guaranteed success. `Invocation` is `#[must_use]` because an unused lazy owner
+runs no provider or validation work. Explicit `drop(invocation)` abandons it
+intentionally. `InvocationError::binding_not_found()` constructs the
 binding interface's missing-binding error. Invocation carriers decode through
 `from_json(&JsonValue)`; retain a borrowed frame with `to_owned()` first, a
 reference-count clone. Exact object carriers expose `value()` for borrowing;
@@ -432,6 +438,11 @@ references must reach schema positions; pointers into instance or carrier data
 fail with `MissingReference` in every comparison mode.
 `context()` exposes its retained context. Indexing is lazy, shared within each
 call and reusable across calls. Failed and cancelled work leaves contexts usable.
+Rust `ComparisonContext::retained_bytes(&self) -> usize` estimates current source
+arenas, configuration and completed indexes on demand. Clones share the estimate;
+summing owners overcounts shared allocations. Later lookups can grow it. This
+excludes allocator overhead and Wasm memory growth and is neither resident memory
+nor the bytes dropping one handle frees.
 `check_interface` and `check_interface_with_control` take required/provided
 conformant documents, their respective `&ComparisonContext`s, and a callback
 `&dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>` receiving the

@@ -62,6 +62,8 @@ preparation limits and no cancellation. Use `prepare_with_control` for explicit
 limits or cancellation. Core does
 not depend on the evaluator companion. Original schema inventory and resolution
 are available through `SchemaEnvironment`; evaluator projections remain private.
+`ResourceIdentity` implements `Eq` and `Hash` by environment allocation and
+resource index. It can key a hash map or set; URI spelling alone is not identity.
 
 Retain a prepared schema and handle satisfies, fails, undefined and no-verdict for
 each value. Preparation failure judges no value. Parse exact JSON text or bytes

@@ -28,6 +28,8 @@ pub struct SchemaNode {
 }
 /// Opaque identity of one resource in one environment. URI spelling alone is
 /// insufficient: two environments may supply different schemas at that URI.
+/// Equality and hashing use the retained environment allocation and the resource
+/// within it, so identities can key a hash map or set independently of URI text.
 #[derive(Clone)]
 pub struct ResourceIdentity {
     pub(crate) environment: SchemaEnvironment,
@@ -39,6 +41,14 @@ impl PartialEq for ResourceIdentity {
     }
 }
 impl Eq for ResourceIdentity {}
+impl std::hash::Hash for ResourceIdentity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Equality uses the same live environment allocation and resource index.
+        // Keeping the environment alive keeps its address stable for this key.
+        std::ptr::hash(Arc::as_ptr(&self.environment.inner), state);
+        std::hash::Hash::hash(&self.id, state);
+    }
+}
 /// The reference-resolution base of a resource, distinct from its source URI.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ResourceBase<'a> {

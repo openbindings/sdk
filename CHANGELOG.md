@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-11-14 panel shapes (unreleased)
+
+### Changed
+
+- `Invocation` is `#[must_use]`: discarding this lazy owner warns that provider and validation work did not run. A
+  caller abandoning an attempt on purpose drops it explicitly. No other handle gained the annotation.
+
+### Added
+
+- `ResourceIdentity` implements `Hash`, consistent with its equality: the same environment allocation and the same
+  resource within it. Equal URI text in two environments gives two keys.
+- `ComparisonContext::retained_bytes()` estimates, when asked, the source arenas, configuration and completed indexes
+  the context keeps alive. It is per owner: sums across owners that share storage overcount. It is neither resident
+  memory nor what dropping one handle frees.
+
 ## 2026-11-14 review repairs (unreleased)
 
 ### Changed
