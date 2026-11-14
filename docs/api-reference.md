@@ -354,6 +354,13 @@ clone it explicitly when ownership is needed. Carrier `to_json` means bounded
 encoding: `InvocationError`, `BindingRequest` and `OperationRequest` retain those
 encoders. Schema comparison's `identical` returns `Result<bool,
 ComparisonFailure>`; a failure is separate from a negative comparison.
+`ComparisonFailure` is a struct with `kind() -> ComparisonFailureKind` (Copy),
+`origin() -> Option<&SchemaOrigin>` and `side() -> Option<ComparisonSide>`.
+Locations preserve original source frames and are redacted in formatting.
+Identity sides are `Left`/`Right`, directional sides `Target`/`Candidate`, and
+interface sides `Required`/`Provided` regardless of role. Global limits and
+cancellation have neither origin nor side. Use `kind()` for classification;
+whole-error equality includes provenance.
 `compare` and `compare_with_control` take `Direction`, a present target and a
 present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `finding()` accessors. `ComparisonContext::new(root)` retains a reusable document;
@@ -362,17 +369,20 @@ present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `context()` exposes its retained context. Indexing is lazy, shared within each
 call and reusable across calls. Failed and cancelled work leaves contexts usable.
 `check_interface` and `check_interface_with_control` take required/provided
-conformant documents and a callback
+conformant documents, their respective `&ComparisonContext`s, and a callback
 `&dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>` receiving the
 required operation and each distinct provided match, or `None` when missing.
-It selects realized, consumed, both, or excluded for that match. Every distinct
+Each context must retain the exact root of its paired proof; an equal but
+separately parsed root fails with `ContextMismatch` before callbacks. Initial
+cancellation takes precedence. Bases and external resources come from the caller.
+The callback selects realized, consumed, both, or excluded for that match. Every distinct
 provided match is retained, independent of alias order, with output then input
 results including failures. `operations()`, `issues()` and each issue's
 `correspondence()` expose keys, role and slot results. `role()` returns
 `Some(Realized)` or `Some(Consumed)` for present matches, never `Both`; an included
 missing operation has one correspondence with `None` role. Consumption reverses
 input and output flow. Allowance exhaustion remains in slots after setup;
-observed cancellation returns `Err(Cancelled)`. Summary failure policy is
+observed cancellation returns an error of kind `Cancelled`. Summary failure policy is
 the caller's; only `Verdict::collapse` supplies profile dominance over verdicts.
 `identical_with_references` and `identical_with_references_and_control` take a
 caller accounting predicate. `ReferenceContext::target()` exposes the initial

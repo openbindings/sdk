@@ -15,7 +15,7 @@ mod value;
 
 pub use budget::ComparisonLimits;
 pub use directional::{Comparison, Direction, Verdict, compare, compare_with_control};
-pub use error::ComparisonFailure;
+pub use error::{ComparisonFailure, ComparisonFailureKind, ComparisonSide};
 pub use input::{ComparisonContext, SchemaInput};
 pub use interface::{
     InterfaceComparison, InterfaceIssue, InterfaceIssueKind, OperationComparison, OperationRole,
@@ -51,10 +51,10 @@ pub fn identical_with_control(
     let mut attempt = budget::Attempt::new(*limits, control);
     attempt.check()?;
     let left = left
-        .map(|input| normalize::normalize(input, &mut attempt))
+        .map(|input| normalize::normalize(input, ComparisonSide::Left, &mut attempt))
         .transpose()?;
     let right = right
-        .map(|input| normalize::normalize(input, &mut attempt))
+        .map(|input| normalize::normalize(input, ComparisonSide::Right, &mut attempt))
         .transpose()?;
     let equal = match (&left, &right) {
         (None, None) => true,

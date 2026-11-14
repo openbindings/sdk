@@ -1,4 +1,5 @@
 use crate::ComparisonFailure;
+use crate::ComparisonFailureKind as FailureKind;
 use openbindings::WorkControl;
 
 /// Local memory policy and optional work budget, including failed work.
@@ -36,7 +37,7 @@ pub(crate) struct Attempt<'a> {
     work: usize,
     allocation: usize,
     retained: usize,
-    failure: Option<ComparisonFailure>,
+    failure: Option<FailureKind>,
     control: &'a dyn WorkControl,
 }
 impl<'a> Attempt<'a> {
@@ -55,17 +56,17 @@ impl<'a> Attempt<'a> {
     }
     pub(crate) fn check(&self) -> Result<(), ComparisonFailure> {
         if self.control.is_cancelled() {
-            Err(ComparisonFailure::Cancelled)
+            Err(ComparisonFailure::from(FailureKind::Cancelled))
         } else if let Some(failure) = self.failure {
-            Err(failure)
+            Err(failure.into())
         } else {
             Ok(())
         }
     }
     fn exhausted(&mut self, resource: &'static str) -> ComparisonFailure {
-        let failure = ComparisonFailure::LimitExceeded(resource);
+        let failure = FailureKind::LimitExceeded(resource);
         self.failure = Some(failure);
-        failure
+        failure.into()
     }
     pub(crate) fn work(&mut self, amount: usize) -> Result<(), ComparisonFailure> {
         self.check()?;
@@ -170,12 +171,12 @@ mod tests {
                 }
             }
             .unwrap_err();
-            assert_eq!(attempt.check(), Err(refusal));
-            assert_eq!(attempt.work(0), Err(refusal));
-            assert_eq!(attempt.allocate(0), Err(refusal));
-            assert_eq!(attempt.depth(0), Err(refusal));
-            assert_eq!(attempt.vector::<u8>(0), Err(refusal));
-            assert_eq!(attempt.vector::<u64>(usize::MAX), Err(refusal));
+            assert_eq!(attempt.check(), Err(refusal.clone()));
+            assert_eq!(attempt.work(0), Err(refusal.clone()));
+            assert_eq!(attempt.allocate(0), Err(refusal.clone()));
+            assert_eq!(attempt.depth(0), Err(refusal.clone()));
+            assert_eq!(attempt.vector::<u8>(0), Err(refusal.clone()));
+            assert_eq!(attempt.vector::<u64>(usize::MAX), Err(refusal.clone()));
         }
     }
 }

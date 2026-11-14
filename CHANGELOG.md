@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-11-13 panel decisions (unreleased)
+
+### Changed
+
+- Breaking: `check_interface` and `check_interface_with_control` now take the two
+  conformance proofs followed by their two caller-configured comparison contexts.
+  Contexts must retain their paired proof's exact root; `ContextMismatch` identifies
+  a mismatch. One shared attempt still covers the entire fold.
+- Breaking: `ComparisonFailure` is a Clone struct with a Copy
+  `ComparisonFailureKind` returned by `kind()`, optional original schema location
+  from `origin()`, and established operand from `side()`. Match the kind instead
+  of error variants; whole-error equality includes provenance. Automatic
+  formatting remains redacted and retained locations stay within the allowance.
+
 ## 2026-11-13 experiment repairs (unreleased)
 
 ### Changed

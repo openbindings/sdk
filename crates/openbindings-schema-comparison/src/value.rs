@@ -1,5 +1,6 @@
 //! Private exact values. Only normalization creates Union at a schema keyword;
 //! opaque instance arrays remain ordered even when their member is named anyOf.
+use crate::ComparisonFailureKind as FailureKind;
 use crate::{ComparisonFailure as Failure, budget::Attempt};
 use openbindings::{JsonKind, JsonRef, JsonValue};
 use openbindings_internal_json::decimal::Decimal;
@@ -84,7 +85,7 @@ pub(crate) fn copy(
 }
 
 pub(crate) fn name(value: JsonRef<'_>, attempt: &mut Attempt<'_>) -> Result<Name, Failure> {
-    let string = value.as_string().ok_or(Failure::InvalidSchema)?;
+    let string = value.as_string().ok_or(FailureKind::InvalidSchema)?;
     let bound = value.text().len();
     attempt.work(bound.saturating_mul(4).saturating_add(1))?;
     let mut units = attempt.vector::<u16>(bound)?;
@@ -116,7 +117,7 @@ pub(crate) fn insert<T>(
     )?;
     attempt.allocate(2 * (12 * std::mem::size_of::<(Name, T)>() + 256))?;
     if object.insert(key, value).is_some() {
-        Err(Failure::DuplicateMember)
+        Err(Failure::from(FailureKind::DuplicateMember))
     } else {
         Ok(())
     }
@@ -158,8 +159,14 @@ pub(crate) fn numbers(
     right: &JsonValue,
     attempt: &mut Attempt<'_>,
 ) -> Result<Ordering, Failure> {
-    let left = left.view().number_text().ok_or(Failure::InvalidSchema)?;
-    let right = right.view().number_text().ok_or(Failure::InvalidSchema)?;
+    let left = left
+        .view()
+        .number_text()
+        .ok_or(FailureKind::InvalidSchema)?;
+    let right = right
+        .view()
+        .number_text()
+        .ok_or(FailureKind::InvalidSchema)?;
     let bytes = left.len().saturating_add(right.len());
     // Parsing and comparison retain significant digits and compact decimal
     // powers. Neither expands an exponent into the represented number's zeros.
@@ -287,7 +294,7 @@ mod tests {
         }
         assert_eq!(
             compare(r#"{"a":1,"\u0061":1}"#, "{}"),
-            Err(Failure::DuplicateMember)
+            Err(Failure::from(FailureKind::DuplicateMember))
         );
     }
     #[test]
@@ -344,7 +351,7 @@ mod tests {
         ] {
             assert!(matches!(
                 import(value.view(), 0, &mut Attempt::new(limits, &control)),
-                Err(Failure::LimitExceeded(_))
+                Err(failure) if matches!(failure.kind(), FailureKind::LimitExceeded(_))
             ));
         }
         struct Control {
@@ -377,7 +384,7 @@ mod tests {
                     0,
                     &mut Attempt::new(ComparisonLimits::default(), &control)
                 ),
-                Err(Failure::Cancelled)
+                Err(failure) if failure.kind() == FailureKind::Cancelled
             ));
         }
     }

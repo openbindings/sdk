@@ -38,17 +38,17 @@ fn independently_authored_design_controls_keep_their_expected_classifications() 
         let left = input(&case["left"]);
         let right = input(&case["right"]);
         let actual = identical(left.as_ref(), right.as_ref(), &ComparisonLimits::default());
-        let category = match actual {
+        let category = match actual.map_err(|failure| failure.kind()) {
             Ok(true) => "Equal",
             Ok(false) => "Different",
-            Err(ComparisonFailure::InvalidSchema) => "Failure(InputShape)",
+            Err(ComparisonFailureKind::InvalidSchema) => "Failure(InputShape)",
             Err(
-                ComparisonFailure::InvalidReference
-                | ComparisonFailure::MissingReference
-                | ComparisonFailure::ReferenceCycle
-                | ComparisonFailure::UnsupportedReference,
+                ComparisonFailureKind::InvalidReference
+                | ComparisonFailureKind::MissingReference
+                | ComparisonFailureKind::ReferenceCycle
+                | ComparisonFailureKind::UnsupportedReference,
             ) => "Failure(Reference)",
-            Err(ComparisonFailure::UnsatisfiableMerge) => "Failure(SchemaMerge)",
+            Err(ComparisonFailureKind::UnsatisfiableMerge) => "Failure(SchemaMerge)",
             other => panic!("unexpected {}: {other:?}", case["id"]),
         };
         assert_eq!(
@@ -102,13 +102,14 @@ fn every_observed_public_checkpoint_cancels_and_a_fresh_attempt_is_unchanged() {
             limit,
         };
         assert_eq!(
-            identical_with_control(
+            (identical_with_control(
                 Some(&left),
                 Some(&right),
                 &ComparisonLimits::default(),
                 &control
-            ),
-            Err(ComparisonFailure::Cancelled),
+            ))
+            .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::Cancelled),
             "checkpoint {limit}/{checkpoints}"
         );
     }
@@ -203,12 +204,13 @@ fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_value
         SchemaInput::new(schema.clone(), schema)
     };
     assert_eq!(
-        identical(
+        (identical(
             Some(&intersection),
             Some(&single),
             &ComparisonLimits::default()
-        ),
-        Err(ComparisonFailure::UnsupportedNormalization)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::UnsupportedNormalization)
     );
 }
 

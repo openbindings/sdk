@@ -1,3 +1,4 @@
+use crate::ComparisonFailureKind as FailureKind;
 use crate::{
     ComparisonFailure as Failure,
     budget::Attempt,
@@ -18,7 +19,7 @@ pub(crate) fn all_of(
     let mut properties_count = usize::from(has_properties(&siblings));
     for branch in &branches {
         let Value::Object(object) = branch.view() else {
-            return Err(Failure::InvalidSchema);
+            return Err(Failure::from(FailureKind::InvalidSchema));
         };
         if retain {
             break;
@@ -124,7 +125,7 @@ fn pair(
     let (Value::Object(left), Value::Object(right)) =
         (left.owned(depth, attempt)?, right.owned(depth, attempt)?)
     else {
-        return Err(Failure::InvalidSchema);
+        return Err(Failure::from(FailureKind::InvalidSchema));
     };
     if outside(&left, depth, attempt)?
         || outside(&right, depth, attempt)?
@@ -191,7 +192,7 @@ fn keyword(
         let (Value::Object(left), Value::Object(right)) =
             (left.owned(depth, attempt)?, right.owned(depth, attempt)?)
         else {
-            return Err(Failure::InvalidSchema);
+            return Err(Failure::from(FailureKind::InvalidSchema));
         };
         return merge_maps(left, right, depth, attempt, true).map(Value::Object);
     }
@@ -209,7 +210,7 @@ fn keyword(
         return if value::equal(&left, &right, depth, attempt)? {
             Ok(left)
         } else {
-            Err(Failure::UnsatisfiableMerge)
+            Err(Failure::from(FailureKind::UnsatisfiableMerge))
         };
     }
     if is(key, "type") || is(key, "required") {
@@ -217,14 +218,14 @@ fn keyword(
     }
     if is(key, "enum") {
         let (Value::Array(left), Value::Array(right)) = (left, right) else {
-            return Err(Failure::InvalidSchema);
+            return Err(Failure::from(FailureKind::InvalidSchema));
         };
         // The profile specifies first-branch order, but no canonical treatment
         // of repeated equal first-branch values in an intersection.
         for (index, value) in left.iter().enumerate() {
             for previous in &left[..index] {
                 if value::equal(value, previous, depth + 1, attempt)? {
-                    return Err(Failure::UnsupportedNormalization);
+                    return Err(Failure::from(FailureKind::UnsupportedNormalization));
                 }
             }
         }
@@ -242,7 +243,7 @@ fn keyword(
             }
         }
         return if result.is_empty() {
-            Err(Failure::UnsatisfiableMerge)
+            Err(Failure::from(FailureKind::UnsatisfiableMerge))
         } else {
             Ok(Value::Array(result))
         };
@@ -255,7 +256,7 @@ fn keyword(
         .any(|name| is(key, name));
     if higher || lower {
         let (Value::Number(a), Value::Number(b)) = (&left, &right) else {
-            return Err(Failure::InvalidSchema);
+            return Err(Failure::from(FailureKind::InvalidSchema));
         };
         let order = value::numbers(a, b, attempt)?;
         return Ok(
@@ -266,7 +267,7 @@ fn keyword(
             },
         );
     }
-    Err(Failure::UnsupportedNormalization)
+    Err(Failure::from(FailureKind::UnsupportedNormalization))
 }
 fn strings(
     left: Value,
@@ -275,17 +276,17 @@ fn strings(
     attempt: &mut Attempt<'_>,
 ) -> Result<Value, Failure> {
     let (Value::Array(left), Value::Array(right)) = (left, right) else {
-        return Err(Failure::InvalidSchema);
+        return Err(Failure::from(FailureKind::InvalidSchema));
     };
     let mut names = BTreeMap::<Name, ()>::new();
     if intersection {
         for a in left {
             let Value::String(a) = a else {
-                return Err(Failure::InvalidSchema);
+                return Err(Failure::from(FailureKind::InvalidSchema));
             };
             for b in &right {
                 let Value::String(b) = b else {
-                    return Err(Failure::InvalidSchema);
+                    return Err(Failure::from(FailureKind::InvalidSchema));
                 };
                 attempt.work(a.len().min(b.len()).saturating_add(1))?;
                 let name = if a == *b {
@@ -305,7 +306,7 @@ fn strings(
             }
         }
         if names.is_empty() {
-            return Err(Failure::UnsatisfiableMerge);
+            return Err(Failure::from(FailureKind::UnsatisfiableMerge));
         }
         // An intersection containing number already includes its integer
         // subtype. The pinned typeIntersection fixture requires this reduction
@@ -317,7 +318,7 @@ fn strings(
     } else {
         for name in left.into_iter().chain(right) {
             let Value::String(name) = name else {
-                return Err(Failure::InvalidSchema);
+                return Err(Failure::from(FailureKind::InvalidSchema));
             };
             put_string(&mut names, name, attempt)?;
         }

@@ -1,3 +1,4 @@
+use crate::ComparisonFailureKind as FailureKind;
 use crate::{
     ComparisonFailure as Failure, ComparisonLimits, SchemaInput,
     budget::Attempt,
@@ -135,7 +136,16 @@ pub fn compare_with_control(
     control: &dyn openbindings::WorkControl,
 ) -> Result<Comparison, Failure> {
     let mut attempt = Attempt::new(*limits, control);
-    let result = inputs(direction, target, candidate, &mut attempt)?;
+    let result = inputs(
+        direction,
+        target,
+        candidate,
+        (
+            crate::ComparisonSide::Target,
+            crate::ComparisonSide::Candidate,
+        ),
+        &mut attempt,
+    )?;
     attempt.check()?;
     Ok(result)
 }
@@ -143,10 +153,11 @@ pub(crate) fn inputs(
     direction: Direction,
     target: &SchemaInput,
     candidate: &SchemaInput,
+    sides: (crate::ComparisonSide, crate::ComparisonSide),
     attempt: &mut Attempt<'_>,
 ) -> Result<Comparison, Failure> {
-    let target = crate::normalize::normalize(target, attempt)?;
-    let candidate = crate::normalize::normalize(candidate, attempt)?;
+    let target = crate::normalize::normalize(target, sides.0, attempt)?;
+    let candidate = crate::normalize::normalize(candidate, sides.1, attempt)?;
     walk(direction, &target, &candidate, 0, attempt)
 }
 fn answer(
@@ -182,7 +193,7 @@ fn object(value: &Value) -> Result<&Object, Failure> {
     if let Value::Object(object) = value.view() {
         Ok(object)
     } else {
-        Err(Failure::InvalidSchema)
+        Err(Failure::from(FailureKind::InvalidSchema))
     }
 }
 fn array<'a>(map: &'a Object, key: &str) -> &'a [Value] {
@@ -279,7 +290,7 @@ fn walk(
     };
     for ty in types {
         let Value::String(name) = ty else {
-            return Err(Failure::InvalidSchema);
+            return Err(Failure::from(FailureKind::InvalidSchema));
         };
         if !covers(accepts, name, attempt)? {
             let ty = render(ty, depth, attempt)?;
@@ -489,7 +500,7 @@ fn values(
             value::equal(v, constraint, depth + 1, attempt)?
         } else {
             let Value::Array(choices) = constraint else {
-                return Err(Failure::InvalidSchema);
+                return Err(Failure::from(FailureKind::InvalidSchema));
             };
             let mut found = false;
             for choice in choices {
