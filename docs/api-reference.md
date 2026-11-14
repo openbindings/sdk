@@ -57,6 +57,23 @@ are non-exhaustive. Handle unknown failures by refusal or propagation.
 
 ## Exact documents and conformance
 
+Rust `JsonValue::parse_prefix(input)` and
+`parse_prefix_with_limits(input, limits)` return `(JsonValue, end)` for the first
+exact value. `end` is its exclusive byte offset, including leading whitespace
+and excluding trailing whitespace. `JsonPrefixError::Incomplete` means its end
+is unknown; `Invalid(InputError)` keeps the usual admission diagnostics.
+A number ending at the buffer end is always incomplete. At known EOF, pass an
+incomplete remainder to `JsonValue::parse_with_limits` to accept the final number
+or obtain the ordinary refusal. Complete strings, containers and literals need
+no lookahead. Only the value and constant lookahead are inspected; following
+bytes, including invalid UTF-8, remain with the host. The byte allowance covers
+the prefix through `end`; depth and node limits are unchanged.
+After `Incomplete`, append at least the current buffer length before retrying,
+unless EOF or a limit is reached first, so repeated parsing stays linear in the
+value's size. The host owns separators, buffering and I/O. See the tested
+[whitespace-separated host example](../crates/openbindings/examples/json_sequence.rs).
+The TypeScript facade does not yet expose this primitive.
+
 Rust `JsonValue::semantic_eq(&other)` compares exact JSON values without
 floating-point conversion. It returns `Some(true)` for `1e400` and `10e399`,
 `Some(false)` for unequal values, and `None` if either value contains duplicate

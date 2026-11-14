@@ -26,6 +26,14 @@ values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.
 
 Default parsing admits 32 MiB, 10,000 container levels and 1,000,000 nodes.
+Rust `JsonValue::parse_prefix` also admits one exact value from a byte buffer,
+returning its exclusive end offset or a distinct `JsonPrefixError::Incomplete`.
+At EOF the host uses whole-text admission on an incomplete remainder. The host
+owns separators and I/O and doubles retained input before retrying Incomplete,
+unless EOF or a limit is reached first. Prefix calls inspect only the first
+value and constant lookahead. The `_with_limits` form applies
+the same allowances to the prefix through the value end, excluding trailing
+whitespace and subsequent input. The TypeScript facade does not expose it.
 `validate_document` uses the same defaults, including 10,000 container levels. These
 admission limits are a setting at `validate_document_with_limits`,
 `Document::parse_with_limits` and `JsonValue::parse_with_limits` (`JsonLimits`),

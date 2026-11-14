@@ -28,6 +28,13 @@
 - Consuming `map_error` methods on `CheckFailure`, `KindError`, `PullFailure` and
   `PullError` convert their generic error parameter while preserving every other
   variant and payload, without adding bounds on the error or allocating.
+- `JsonValue::parse_prefix` and `parse_prefix_with_limits` return the first exact
+  value in a byte buffer and its exclusive token-end offset, with a distinct
+  `JsonPrefixError::Incomplete`. Calls inspect only the value and constant
+  lookahead. Hosts own separators and I/O, grow incomplete buffers geometrically
+  before retrying, and use `parse_with_limits` on incomplete input at final EOF.
+  Admission limits apply through the value end. Invalid UTF-8 in later buffered
+  bytes is deferred.
 
 ## 2026-11-13 experiment repairs (unreleased)
 

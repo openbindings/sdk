@@ -48,7 +48,10 @@ fn key_prefix(bytes: &[u8]) -> u64 {
 // This preserves byte order and avoids a byte-at-a-time prefix scan on Wasm.
 #[inline]
 fn scalar_cmp(a: &str, b: &str) -> Ordering {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
+    bytes_cmp(a.as_bytes(), b.as_bytes())
+}
+#[inline]
+fn bytes_cmp(a: &[u8], b: &[u8]) -> Ordering {
     if a.len() >= 8 && b.len() >= 8 {
         let x = u64::from_be_bytes(a[..8].try_into().expect("eight bytes"));
         let y = u64::from_be_bytes(b[..8].try_into().expect("eight bytes"));
@@ -58,8 +61,7 @@ fn scalar_cmp(a: &str, b: &str) -> Ordering {
     }
 }
 #[inline]
-fn scalar_eq(a: &str, b: &str) -> bool {
-    let (a, b) = (a.as_bytes(), b.as_bytes());
+fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -130,6 +132,11 @@ impl Node {
 pub struct Problem {
     pub code: &'static str,
     pub offset: usize,
+}
+impl Problem {
+    pub fn is_incomplete(&self) -> bool {
+        self.code == "incomplete"
+    }
 }
 fn bom() -> Problem {
     Problem {
@@ -264,7 +271,7 @@ impl Arena {
                     .as_ref(),
             )
     }
-    /// Parse into a shared owner, written where it will stay.
+    /// Parse into a shared immutable owner.
     pub fn parse(bytes: &[u8], limits: Limits) -> Result<Arc<Self>, Problem> {
         if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
             return Err(bom());
@@ -285,9 +292,8 @@ impl Arena {
         Self::parse_source(text.into_boxed_str(), limits)
             .map_err(|(problem, source)| (problem, source.into_string().into_bytes()))
     }
-    // Parse `source` into a new owner; a refusal hands the source back.
-    fn parse_source(source: Box<str>, limits: Limits) -> Result<Arc<Self>, (Problem, Box<str>)> {
-        let mut owner = Arc::new(Self {
+    fn new(source: Box<str>) -> Self {
+        Self {
             _lifetime: Lifetime::new(),
             source,
             positions: Mutex::default(),
@@ -309,9 +315,14 @@ impl Arena {
             decoded_ends: Vec::new(),
             duplicates: Vec::new(),
             unpaired: Vec::new(),
-        });
+        }
+    }
+    // Parse `source` into a new owner; a refusal hands the source back.
+    fn parse_source(source: Box<str>, limits: Limits) -> Result<Arc<Self>, (Problem, Box<str>)> {
+        let mut owner = Self::new(Box::default());
         let parsed = Parser {
-            out: Arc::get_mut(&mut owner).expect("a new owner"),
+            out: &mut owner,
+            source: Source::trusted(&source),
             pos: 0,
             open: NO_PARENT,
             state: 0,
@@ -321,31 +332,64 @@ impl Arena {
         }
         .document();
         match parsed {
-            Ok(()) => Ok(owner),
-            Err(problem) => {
-                let arena = Arc::into_inner(owner).expect("a new owner");
-                Err((problem, arena.source))
+            Ok(()) => {
+                owner.source = source;
+                Ok(Arc::new(owner))
             }
+            Err(problem) => Err((problem, source)),
         }
     }
-    fn compare_keys(&self, left: Id, right: Id) -> Ordering {
+    /// Parse once over borrowed input, copying only the completed source.
+    pub fn parse_prefix(source: &[u8], limits: Limits) -> Result<(Arc<Self>, usize), Problem> {
+        if source.starts_with(&[0xef, 0xbb, 0xbf]) {
+            return Err(bom());
+        }
+        let mut owner = Self::new(Box::default());
+        let mut parser = Parser {
+            out: &mut owner,
+            source: Source::prefix(source),
+            pos: 0,
+            open: NO_PARENT,
+            state: 0,
+            depth: 0,
+            pending: Vec::new(),
+            limits,
+        };
+        parser.value_end()?;
+        if parser.pos == source.len() && matches!(parser.out.nodes[0].kind, Kind::Number) {
+            return Err(parser.error("number"));
+        }
+        let end = parser.pos;
+        parser.finish();
+        parser.out.source = Box::from(prefix_utf8(&source[..end]).expect("validated JSON source"));
+        Ok((Arc::new(owner), end))
+    }
+    fn compare_keys_in(&self, source: &Source<'_>, left: Id, right: Id) -> Ordering {
         #[cfg(test)]
         self.key_comparisons
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        match (self.string(left), self.string(right)) {
-            (Some(a), Some(b)) => scalar_cmp(a, b),
-            (None, None) => self.utf16(left).cmp(self.utf16(right)),
+        match (
+            self.string_bytes_in(source, left),
+            self.string_bytes_in(source, right),
+        ) {
+            (Some(a), Some(b)) => bytes_cmp(a, b),
+            (None, None) => self
+                .utf16_in(source, left)
+                .cmp(self.utf16_in(source, right)),
             (Some(_), None) => Ordering::Less,
             (None, Some(_)) => Ordering::Greater,
         }
     }
-    fn equal_keys(&self, left: Id, right: Id) -> bool {
+    fn equal_keys_in(&self, source: &Source<'_>, left: Id, right: Id) -> bool {
         #[cfg(test)]
         self.key_comparisons
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        match (self.string(left), self.string(right)) {
-            (Some(a), Some(b)) => scalar_eq(a, b),
-            (None, None) => self.utf16(left).eq(self.utf16(right)),
+        match (
+            self.string_bytes_in(source, left),
+            self.string_bytes_in(source, right),
+        ) {
+            (Some(a), Some(b)) => bytes_eq(a, b),
+            (None, None) => self.utf16_in(source, left).eq(self.utf16_in(source, right)),
             _ => false,
         }
     }
@@ -417,21 +461,18 @@ impl Arena {
             .is_some_and(|&(_, key)| self.nodes[key as usize].span.start < node.span.end)
     }
     // Append source text to the decoded buffer.
-    fn decode(&mut self, range: Range<usize>) {
-        self.reserve_decoded(range.len());
-        let Self {
-            decoded, source, ..
-        } = self;
-        decoded.push_str(&source[range]);
+    #[inline]
+    fn decode(&mut self, source: &Source<'_>, range: Range<usize>) {
+        source.decode(self, range);
     }
     // Grow the decoded buffer geometrically, but never past the source's
     // length, which bounds all decoded text.
-    fn reserve_decoded(&mut self, additional: usize) {
+    fn reserve_decoded(&mut self, source_len: usize, additional: usize) {
         let (len, capacity) = (self.decoded.len(), self.decoded.capacity());
         if capacity - len >= additional {
             return;
         }
-        let target = (len + additional).max(capacity.saturating_mul(2).min(self.source.len()));
+        let target = (len + additional).max(capacity.saturating_mul(2).min(source_len));
         self.decoded.reserve_exact(target - len);
     }
     fn decoded_text(&self, index: u32) -> &str {
@@ -447,12 +488,32 @@ impl Arena {
     /// unpaired unit.
     #[inline]
     pub fn string(&self, id: Id) -> Option<&str> {
+        self.string_in(&Source::trusted(&self.source), id)
+    }
+    #[inline]
+    fn string_in<'a>(&'a self, source: &Source<'a>, id: Id) -> Option<&'a str> {
         let node = &self.nodes[id];
         match node.kind {
             Kind::String { text, .. } => match text.decoded() {
                 Some(index) => Some(self.decoded_text(index)),
                 None if text == Text::SOURCE => {
-                    Some(&self.source[node.span.start + 1..node.span.end - 1])
+                    Some(source.text(node.span.start + 1..node.span.end - 1))
+                }
+                None => None,
+            },
+            _ => None,
+        }
+    }
+    // Parsed scalar names compare as UTF-8 bytes. Avoid rebuilding a string
+    // view (and its validation route) for each internal key comparison.
+    #[inline]
+    fn string_bytes_in<'a>(&'a self, source: &Source<'a>, id: Id) -> Option<&'a [u8]> {
+        let node = &self.nodes[id];
+        match node.kind {
+            Kind::String { text, .. } => match text.decoded() {
+                Some(index) => Some(self.decoded_text(index).as_bytes()),
+                None if text == Text::SOURCE => {
+                    Some(&source.bytes[node.span.start + 1..node.span.end - 1])
                 }
                 None => None,
             },
@@ -471,9 +532,12 @@ impl Arena {
     }
     /// A string token's UTF-16 units, decoded from its source.
     fn utf16(&self, id: Id) -> Utf16<'_> {
+        self.utf16_in(&Source::trusted(&self.source), id)
+    }
+    fn utf16_in<'a>(&'a self, source: &Source<'a>, id: Id) -> Utf16<'a> {
         let span = &self.nodes[id].span;
         Utf16 {
-            body: &self.source[span.start + 1..span.end - 1],
+            body: source.text(span.start + 1..span.end - 1),
             at: 0,
             low: None,
         }
@@ -931,8 +995,99 @@ impl Arena {
         at
     }
 }
+// Both modes use the same direct byte slice and the same lexical loop. The
+// optional text is proof of the whole-text entry point's single UTF-8 check.
+struct Source<'a> {
+    bytes: &'a [u8],
+    text: Option<&'a str>,
+}
+impl<'a> Source<'a> {
+    fn trusted(text: &'a str) -> Self {
+        Self {
+            bytes: text.as_bytes(),
+            text: Some(text),
+        }
+    }
+    fn prefix(bytes: &'a [u8]) -> Self {
+        Self { bytes, text: None }
+    }
+    #[inline(always)]
+    fn bytes(&self) -> &'a [u8] {
+        self.bytes
+    }
+    #[inline]
+    fn text(&self, range: Range<usize>) -> &'a str {
+        match self.text {
+            Some(text) => &text[range],
+            None => prefix_utf8(&self.bytes[range]).expect("validated JSON source"),
+        }
+    }
+    #[inline(always)]
+    fn validate_plain(&self, range: Range<usize>) -> Result<(), Problem> {
+        if self.text.is_some() {
+            return Ok(());
+        }
+        prefix_utf8(&self.bytes[range.clone()])
+            .map(|_| ())
+            .map_err(|error| Problem {
+                code: if error.error_len().is_none() && range.end == self.bytes.len() {
+                    "incomplete"
+                } else {
+                    "utf8"
+                },
+                offset: range.start + error.valid_up_to(),
+            })
+    }
+    #[inline]
+    fn decode(&self, out: &mut Arena, range: Range<usize>) {
+        out.reserve_decoded(self.bytes.len(), range.len());
+        out.decoded.push_str(self.text(range));
+    }
+    fn incomplete_code(&self, code: &'static str) -> &'static str {
+        if self.text.is_some() {
+            code
+        } else {
+            "incomplete"
+        }
+    }
+    // Non-ASCII bytes outside plain strings cannot extend JSON grammar.
+    #[inline]
+    fn unexpected(&self, at: usize) -> Option<Problem> {
+        if self.text.is_some() {
+            return None;
+        }
+        let first = *self.bytes.get(at)?;
+        if first.is_ascii() {
+            return None;
+        }
+        let width = match first {
+            0xc2..=0xdf => 2,
+            0xe0..=0xef => 3,
+            0xf0..=0xf4 => 4,
+            _ => 1,
+        };
+        self.validate_plain(at..self.bytes.len().min(at.saturating_add(width)))
+            .err()
+            .map(|mut problem| {
+                if problem.is_incomplete() {
+                    problem.code = "utf8";
+                }
+                problem
+            })
+    }
+}
+#[cfg(test)]
+thread_local! {
+    static PREFIX_UTF8_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+fn prefix_utf8(bytes: &[u8]) -> Result<&str, std::str::Utf8Error> {
+    #[cfg(test)]
+    PREFIX_UTF8_BYTES.with(|count| count.set(count.get() + bytes.len()));
+    std::str::from_utf8(bytes)
+}
 struct Parser<'a> {
     out: &'a mut Arena,
+    source: Source<'a>,
     pos: usize,
     /// The innermost unclosed container, or `NO_PARENT`.
     open: u32,
@@ -946,19 +1101,29 @@ struct Parser<'a> {
 impl Parser<'_> {
     /// Parse the whole source: one value, then only whitespace.
     fn document(&mut self) -> Result<(), Problem> {
-        self.value(NO_PARENT, false)?;
+        self.value_end()?;
+        if self.space().is_some() {
+            return Err(self.error("trailing-token"));
+        }
+        self.finish();
+        Ok(())
+    }
+    /// Stop immediately after the first value, leaving all following bytes alone.
+    #[inline(never)]
+    fn value_end(&mut self) -> Result<(), Problem> {
+        let first = self.space();
+        self.value(NO_PARENT, false, first)?;
         // `open` is the innermost unclosed container; its state is 0 just
         // after it opens, 1 after an item and 2 after a separating comma.
         while self.open != NO_PARENT {
             let id = self.open as usize;
             let state = self.state;
             let object = matches!(self.out.nodes[id].kind, Kind::Object { .. });
-            self.space();
-            let next = self.peek();
+            let next = self.space();
             let close = if object { b'}' } else { b']' };
             if next == Some(close) && state != 2 {
                 self.pos += 1;
-                self.close(id);
+                self.close(id, object);
                 continue;
             }
             if state == 1 {
@@ -975,41 +1140,55 @@ impl Parser<'_> {
                 }
                 let key = self.string(id as u32, true)?;
                 self.pending.push(key);
-                self.space();
-                if self.peek() != Some(b':') {
+                if self.space() != Some(b':') {
                     return Err(self.error("colon"));
                 }
                 self.pos += 1;
                 self.state = 1;
-                self.value(id as u32, false)?;
+                let first = self.space();
+                self.value(id as u32, false, first)?;
             } else {
                 self.state = 1;
-                self.value(id as u32, true)?;
+                self.value(id as u32, true, next)?;
             }
         }
-        self.space();
-        if self.pos != self.out.source.len() {
-            return Err(self.error("trailing-token"));
-        }
+        Ok(())
+    }
+    #[inline]
+    fn finish(&mut self) {
         self.index_members();
         // Token ids follow source order, including duplicates in nested objects.
         self.out.duplicates.sort_unstable_by_key(|&(_, key)| key);
-        Ok(())
     }
+    #[cold]
     fn error(&self, code: &'static str) -> Problem {
+        if !matches!(code, "depth-limit" | "node-limit" | "escape")
+            && let Some(problem) = self.source.unexpected(self.pos)
+        {
+            return problem;
+        }
+        let code = if self.pos == self.source.bytes().len()
+            && !matches!(code, "depth-limit" | "node-limit")
+        {
+            self.source.incomplete_code(code)
+        } else {
+            code
+        };
         Problem {
             code,
             offset: self.pos,
         }
     }
+    #[inline(always)]
     fn peek(&self) -> Option<u8> {
-        self.out.source.as_bytes().get(self.pos).copied()
+        self.source.bytes().get(self.pos).copied()
     }
-    fn space(&mut self) {
-        while self
-            .peek()
-            .is_some_and(|c| matches!(c, b' ' | b'\n' | b'\r' | b'\t'))
-        {
+    fn space(&mut self) -> Option<u8> {
+        loop {
+            let next = self.peek();
+            if !next.is_some_and(|c| matches!(c, b' ' | b'\n' | b'\r' | b'\t')) {
+                return next;
+            }
             self.pos += 1;
         }
     }
@@ -1028,11 +1207,11 @@ impl Parser<'_> {
     /// Close the open container whose final byte was just consumed: move its
     /// items to their final place, record repeated member names and index a
     /// large object.
-    fn close(&mut self, id: Id) {
+    #[inline(always)]
+    fn close(&mut self, id: Id, object: bool) {
         let node = &mut self.out.nodes[id];
         node.span.end = self.pos;
         let parent = node.parent;
-        let object = matches!(node.kind, Kind::Object { .. });
         let (Kind::Array { first, len } | Kind::Object { first, len }) = &mut node.kind else {
             unreachable!("an open node is a container")
         };
@@ -1061,15 +1240,17 @@ impl Parser<'_> {
             let mut duplicates = [0; INDEX_MIN_MEMBERS];
             let mut repeats = 0;
             for (at, &name) in names.iter().enumerate() {
-                scalar[at] = out.string(name as usize);
+                scalar[at] = out.string_bytes_in(&self.source, name as usize);
                 let repeated = (0..at).any(|prior| match (scalar[prior], scalar[at]) {
                     (Some(a), Some(b)) => {
                         #[cfg(test)]
                         out.key_comparisons
                             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        scalar_eq(a, b)
+                        bytes_eq(a, b)
                     }
-                    (None, None) => out.equal_keys(names[prior] as usize, name as usize),
+                    (None, None) => {
+                        out.equal_keys_in(&self.source, names[prior] as usize, name as usize)
+                    }
                     _ => {
                         #[cfg(test)]
                         out.key_comparisons
@@ -1103,13 +1284,15 @@ impl Parser<'_> {
             let names = &out.items[range.clone()];
             // Removing a shared scalar prefix preserves byte order. Unpaired
             // keys have their own class, after every valid UTF-8 prefix.
-            let mut scalar = names.iter().filter_map(|&id| out.string(id as usize));
-            let first_key = scalar.next().unwrap_or("").as_bytes();
+            let mut scalar = names
+                .iter()
+                .filter_map(|&id| out.string_bytes_in(&self.source, id as usize));
+            let first_key = scalar.next().unwrap_or(b"");
             *common = first_key.len();
             for key in scalar {
                 *common = first_key[..*common]
                     .iter()
-                    .zip(key.as_bytes())
+                    .zip(key)
                     .take_while(|(a, b)| a == b)
                     .count();
                 if *common == 0 {
@@ -1119,8 +1302,8 @@ impl Parser<'_> {
             let first = slots.len();
             for &name in names {
                 let prefix = out
-                    .string(name as usize)
-                    .map_or(u64::MAX, |key| key_prefix(&key.as_bytes()[*common..]));
+                    .string_bytes_in(&self.source, name as usize)
+                    .map_or(u64::MAX, |key| key_prefix(&key[*common..]));
                 slots.push((prefix, name));
             }
             slots[first..].sort_unstable_by(|a, b| {
@@ -1136,7 +1319,7 @@ impl Parser<'_> {
                     end += 1;
                 }
                 slots[begin..end].sort_unstable_by(|&(_, a), &(_, b)| {
-                    out.compare_keys(a as usize, b as usize)
+                    out.compare_keys_in(&self.source, a as usize, b as usize)
                         .then_with(|| a.cmp(&b))
                 });
                 begin = end;
@@ -1145,7 +1328,9 @@ impl Parser<'_> {
             for at in first + 1..slots.len() {
                 let (prefix, name) = slots[at];
                 let (prior_prefix, prior) = slots[end - 1];
-                if prefix == prior_prefix && out.equal_keys(prior as usize, name as usize) {
+                if prefix == prior_prefix
+                    && out.equal_keys_in(&self.source, prior as usize, name as usize)
+                {
                     out.duplicates.push((*object, name));
                 } else {
                     slots[end] = slots[at];
@@ -1159,12 +1344,13 @@ impl Parser<'_> {
         out.member_slots = slots;
         out.member_indexes = indexes;
     }
-    /// Parse one value; an `element` is listed as an item of its array parent.
+    /// Parse one value after whitespace, reusing its already-read first byte;
+    /// an `element` is listed as an item of its array parent.
     /// A container is left open, its items to follow.
-    fn value(&mut self, parent: u32, element: bool) -> Result<(), Problem> {
-        self.space();
+    #[inline(always)]
+    fn value(&mut self, parent: u32, element: bool, next: Option<u8>) -> Result<(), Problem> {
         let start = self.pos;
-        let id = match self.peek() {
+        let id = match next {
             Some(open @ (b'{' | b'[')) => {
                 if self.depth >= self.limits.max_depth {
                     return Err(self.error("depth-limit"));
@@ -1192,11 +1378,14 @@ impl Parser<'_> {
             Some(b'n') => self.literal("null", Kind::Null, parent)?,
             Some(b't') => self.literal("true", Kind::Bool(true), parent)?,
             Some(b'f') => self.literal("false", Kind::Bool(false), parent)?,
-            Some(b'-' | b'0'..=b'9') => {
-                if self.peek() == Some(b'-') {
+            Some(first @ (b'-' | b'0'..=b'9')) => {
+                let leading = if first == b'-' {
                     self.pos += 1;
-                }
-                match self.peek() {
+                    self.peek()
+                } else {
+                    Some(first)
+                };
+                match leading {
                     Some(b'0') => self.pos += 1,
                     Some(b'1'..=b'9') => self.digits(),
                     _ => return Err(self.error("number")),
@@ -1228,21 +1417,39 @@ impl Parser<'_> {
         Ok(())
     }
     fn digits(&mut self) {
-        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
-            self.pos += 1;
+        let bytes = self.source.bytes();
+        // Every caller has already checked the first digit.
+        let mut end = self.pos + 1;
+        while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+            end += 1;
         }
+        self.pos = end;
     }
     fn literal(&mut self, text: &str, kind: Kind, parent: u32) -> Result<u32, Problem> {
         let start = self.pos;
-        if !self.out.source[self.pos..].starts_with(text) {
-            return Err(self.error("literal"));
+        let rest = &self.source.bytes()[self.pos..];
+        if !rest.starts_with(text.as_bytes()) {
+            let matched = rest
+                .iter()
+                .zip(text.as_bytes())
+                .take_while(|(a, b)| a == b)
+                .count();
+            if let Some(problem) = self.source.unexpected(self.pos + matched) {
+                return Err(problem);
+            }
+            let mut problem = self.error("literal");
+            if text.as_bytes().starts_with(rest) {
+                problem.code = self.source.incomplete_code("literal");
+            }
+            return Err(problem);
         }
         self.pos += text.len();
         self.push(kind, start, parent)
     }
     // Advance to the next quote, backslash or control byte, or the end.
     fn plain(&mut self) {
-        let rest = &self.out.source.as_bytes()[self.pos..];
+        let start = self.pos;
+        let rest = &self.source.bytes()[start..];
         self.pos += rest
             .iter()
             .position(|&b| b == b'"' || b == b'\\' || b < 0x20)
@@ -1267,7 +1474,7 @@ impl Parser<'_> {
     }
     // A `\u` escape of a low surrogate starting at `at`, without consuming it.
     fn low_surrogate_at(&self, at: usize) -> Option<u16> {
-        let escape = self.out.source.as_bytes().get(at..at + 6)?;
+        let escape = self.source.bytes().get(at..at + 6)?;
         if escape[0] != b'\\' || escape[1] != b'u' {
             return None;
         }
@@ -1281,6 +1488,7 @@ impl Parser<'_> {
         let start = self.pos;
         self.pos += 1;
         self.plain();
+        self.source.validate_plain(start + 1..self.pos)?;
         match self.peek() {
             None => return Err(self.error("unterminated-string")),
             Some(b'"') => {
@@ -1311,12 +1519,15 @@ impl Parser<'_> {
                 Some(b'"') => break,
                 Some(b'\\') => {
                     if !unpaired {
-                        self.out.decode(segment..self.pos);
+                        self.out.decode(&self.source, segment..self.pos);
                     }
                     self.pos += 1;
                     let Some(escape) = self.peek() else {
                         return Err(self.error("escape"));
                     };
+                    if let Some(problem) = self.source.unexpected(self.pos) {
+                        return Err(problem);
+                    }
                     self.pos += 1;
                     let c = match escape {
                         b'"' => '"',
@@ -1353,12 +1564,17 @@ impl Parser<'_> {
                         _ => return Err(self.error("escape")),
                     };
                     if !unpaired {
-                        self.out.reserve_decoded(c.len_utf8());
+                        self.out
+                            .reserve_decoded(self.source.bytes().len(), c.len_utf8());
                         self.out.decoded.push(c);
                     }
                     segment = self.pos;
                 }
-                Some(_) => self.plain(),
+                Some(_) => {
+                    let start = self.pos;
+                    self.plain();
+                    self.source.validate_plain(start..self.pos)?;
+                }
             }
         }
         let end = self.pos;
@@ -1367,7 +1583,7 @@ impl Parser<'_> {
             self.out.decoded.truncate(decoded_start);
             Text::UNPAIRED
         } else {
-            self.out.decode(segment..end);
+            self.out.decode(&self.source, segment..end);
             self.out.decoded_ends.push(self.out.decoded.len());
             Text(
                 u32::try_from(self.out.decoded_ends.len() - 1)
@@ -1432,6 +1648,29 @@ pub(crate) fn escaped_len(name: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prefix_utf8_work_depends_on_the_value_not_the_remainder() {
+        for prefix in [
+            "123456789 ",
+            " [\"é\",true] ",
+            r#"{"key":"\ud800","k":"café"} "#,
+        ] {
+            let mut work = Vec::new();
+            for suffix_len in [0, 1024 * 1024, 2 * 1024 * 1024] {
+                let mut input = prefix.as_bytes().to_vec();
+                input.resize(input.len() + suffix_len, b' ');
+                input.push(0xff);
+                PREFIX_UTF8_BYTES.with(|count| count.set(0));
+                let (value, end) = crate::JsonValue::parse_prefix(&input).unwrap();
+                work.push(PREFIX_UTF8_BYTES.with(std::cell::Cell::get));
+                assert_eq!(end, prefix.trim_end().len());
+                assert_eq!(value.text(), prefix.trim());
+            }
+            assert!(work.iter().all(|&bytes| bytes == work[0]));
+            assert!(work[0] <= prefix.len() * 4);
+        }
+    }
     use std::{fmt::Write, sync::atomic::Ordering};
 
     fn comparisons(arena: &Arena) -> usize {
