@@ -29,6 +29,9 @@ Dropping the original document or view does not invalidate the input.
 For many comparisons, construct one `ComparisonContext::new(root)` per document
 and select inputs with `context.schema(exact_schema)`. Its `with_base` and
 `with_resource` configure resolution, just as the convenience input methods do.
+For offered `#/schemas/...` references, the compiled
+[schema-report example](https://github.com/openbindings/sdk/blob/main/examples/source-pull-consumer/tests/schema_report.rs)
+supplies an OBI-shaped exact root directly, without a temporary validated document.
 `with_base` sets the initial base only for a standalone schema root. It is ignored
 for an OBI root: the document resource has its own unnameable base, so a caller URI
 cannot make its schemas addressable from another resource. Supplied resources

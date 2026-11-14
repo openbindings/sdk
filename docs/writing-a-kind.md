@@ -125,6 +125,11 @@ impl fmt::Display for AdapterError {
 }
 impl std::error::Error for AdapterError {}
 
+#[cfg(not(target_arch = "wasm32"))]
+type InvokeFuture<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
+#[cfg(target_arch = "wasm32")]
+type InvokeFuture<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
+
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).expect("valid example JSON")
 }
@@ -164,7 +169,7 @@ fn admit(request: &BindingRequest) -> Result<(), InvocationError> {
     Ok(())
 }
 impl BindingInvoker for Memory {
-    type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
+    type Invoke<'a> = InvokeFuture<'a>;
     type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
 
     fn handle_invoke<'a>(
@@ -201,6 +206,9 @@ unsuccessfully. Do not send an extra terminal as an output value. This preflight
 checks the addressed data and returns `None` (no prediction). Preflight must not consume
 input, emit output, dispatch the requested operation or spend its approval.
 A future invocation still resolves its own needs and can fail or ask for context.
+
+Cache parsed protocol artifacts and lookup plans across invocations using
+[retained source-data handles](#caching-kind-data).
 
 ## Stage 2: describe the kind
 
@@ -386,6 +394,16 @@ for each existing binding of the selected source. A recognized binding with
 added Boolean operation schemas is stale
 and gets a removal proposal. Unrecognized binding data is unmatched.
 
+In the [Report contract](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/source-puller/README.md#report),
+omitted `item` labels are `operations/<key>` or `schemas/<key>` using offered
+keys; `existing` uses document primary keys in those forms, or
+`operations/<key>/input` or `operations/<key>/output` for identifier declarations. A conflict
+carries `offered`, the operation shape or schema at `existing`; when they read
+the same but differ behind references, `through` names `schemas/<key>` or
+`operations/<key>/input` or `operations/<key>/output`. The compiled
+[schema report](../examples/source-pull-consumer/tests/schema_report.rs) shows
+current and stale schemas, a source entry, and such a conflict through a checked pull.
+
 <!-- guide:pull -->
 ```rust
 use openbindings_source_pull::{PullFailure, PullRequest, PullResult, SourcePuller};
@@ -569,8 +587,8 @@ separate limits. Avoid converting exact values through `serde_json::Value` or
 `serde_json::json!`, which can lose wide-number precision. When working with
 already encoded JSON, parse those bytes directly.
 
-Anything derived from kind data is the adapter's to cache: parsed protocol
-artifacts, descriptor pools, operation lookup tables and projection plans.
+### Caching kind data
+
 `Source::data()` clones a `JsonValue` handle, not its text. Retain that handle
 and use `data.text()` as a cache key without a `String` copy. Shared snapshots
 can first compare retained byte slices with `std::ptr::eq`; separately parsed
@@ -675,6 +693,10 @@ Use `ContextChallenge::try_from` on an exact `{message, schema}` object and
 `InvocationError::challenge` for missing runtime context. The schema is an
 object-form schema for the next attempt's context; mark secret properties
 `writeOnly`. The challenge is a request, not permission to release credentials.
+Use titled `oneOf` branches for alternatives and the optional `oauth2` annotation
+on an access-token property, as the pinned context interface defines in
+[the challenge](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/context/README.md#the-challenge)
+and [the annotation](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/context/README.md#the-oauth2-annotation).
 The application acquires values, decides whether to disclose them and starts a
 new attempt. The SDK never acquires context or retries for you.
 
@@ -713,7 +735,9 @@ before printing native errors or chains; native formatting is provider-owned.
 `ProviderIo::send(value).await` emits one output; `next().await` receives one
 input. Echo uses both repeatedly. A protocol can emit many outputs for one
 input, consume many inputs, or close its input while continuing output. Use
-`close_input()` to decline more input. `ProviderIo::split` gives independent
+`close_input()` to decline more input. Consumers can then receive
+`OutputEvent::InputClosed` while output continues; see
+[invocation](invocation.md#driving-closure-and-cancellation). `ProviderIo::split` gives independent
 `ProviderInput` and `ProviderOutput` handles when the directions need separate
 polling; the input handle also implements `futures_core::Stream`.
 
@@ -783,7 +807,8 @@ drain; cancellation does not turn into `Complete`.
 ## Send and Wasm hosts
 
 The interface traits impose no `Send` or `Sync` requirement on adapters, errors
-or associated futures. This example chooses a boxed `+ Send` invocation future.
+or associated futures. This example chooses a boxed `+ Send` invocation future
+on native targets and a local box on `wasm32`.
 Concrete checked calls preserve `Send` when their captured adapter, future and
 other state allow it. A thread executor may additionally require `Send` and
 `'static`; satisfy those through ownership and composition, not a new SDK bound.
@@ -817,15 +842,18 @@ executor's lifetime requirements. For a Worker with local host handles, use the
 same lifetime-generic seam with a local transport future, or a local box when
 conditional Send is unnecessary. A target-specific alias that adds `Send` on
 native targets and omits it on `wasm32` is another explicit policy; neither the
-SDK nor the Wasm target chooses that policy for you.
+SDK nor the Wasm target chooses that policy for you. See `InvokeFuture` in the
+[compiled adapter](../examples/kind-adapter/src/lib.rs).
 
 `wasm32-unknown-unknown` does not itself require a `!Send` adapter. The plain
-in-memory example keeps its `+ Send` future there. A browser or Workers transport
+in-memory example could keep its `+ Send` future there. A browser or Workers transport
 can use local futures for its host handles. Supply that transport through adapter
 configuration, for example a generic transport type or host callback that
 returns a local future. The adapter translates protocol requests and values;
 the host performs permitted I/O. Assume no threads, native sockets or file
 system. The SDK chooses no host transport or task-spawning mechanism.
+An adapter generic over a transport documents which peer-response bounds its
+transports must enforce, since only the transport can bound what it receives.
 
 A Wasm build alone does not establish that an artifact will instantiate in a
 particular host. Dependencies can introduce wasm-bindgen imports. A browser
@@ -880,8 +908,15 @@ under the schema-comparison profile. Check all offered identifiers against keys
 and aliases; more than one existing operation is a conflict. Do not rename an
 offered operation or reshape its schemas to evade a collision.
 
-For nontrivial reuse, use the optional
-[comparison companion](../crates/openbindings-schema-comparison/README.md).
+Whenever a pull offers schemas, use the
+[comparison companion](../crates/openbindings-schema-comparison/README.md):
+exact JSON equality would falsely report an author's added description as drift.
+The [compiled schema report](../examples/source-pull-consumer/tests/schema_report.rs)
+uses `ComparisonContext::new(offered_root).schema(offered_schema)` with an
+OBI-shaped root containing the offered `operations` and `schemas`, so its own
+`#/schemas/...` references resolve against the offering, not the destination.
+An exact `JsonValue` root suffices; no temporary validated `Document` is needed.
+An arbitrary non-OBI object's `schemas` member is data, not a schema position.
 Comparison inability is neither equality nor difference. Report an omitted
 new offering as `implementation-unsupported` and a corresponding existing entry
 as `unassessed` when you cannot judge it. Do not add a duplicate binding for a
@@ -1311,7 +1346,7 @@ builds the Wasm library. It uses offline resolution and the example's own
 lockfile. Native tests cover exact values, repeat pull, alias reuse, conflicts,
 removal proposals, errors, preflight, cancellation and limits. They also stream
 1,000 values past queue capacity and exercise a local future containing `Rc`:
-cancellation drops its guard without resuming async cleanup. Compile checks
+cancellation drops its guard without resuming async cleanup. Native compile checks
 retain `Send` for the plain adapter's invocation and pull futures.
 
 There is no public adapter conformance kit today. The evaluator test-support
@@ -1334,6 +1369,8 @@ Run both native and Wasm builds and exercise any actual host transport separatel
 
 - Do not wait for cancellation and then await cleanup in the dropped future.
 - Do not compose exact values through ordinary floating-point JSON values.
+- Never use input-chosen content or its hashes as hash-table keys: wasm32 has
+  no secret seed; use `BTreeMap`, `BTreeSet` or sorted sequences.
 - Use operation primary keys in reports, and `is_valid_name` for generated names.
 - Keep `can_invoke`, support lists and descriptions consistent.
 - Treat comparison inability as a gap, and a dropped schema as a removal proposal.

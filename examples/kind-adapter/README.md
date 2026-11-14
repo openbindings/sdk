@@ -18,6 +18,10 @@ error when its generated binding key is occupied. This bounded demonstration
 uses assertions for construction of its own JSON; an adapter accepting arbitrary
 external content should return admission failures through its native error type.
 
+The private `InvokeFuture` alias in [lib.rs](src/lib.rs) chooses a `Send` box on
+native targets and a local box on wasm32 for the same adapter implementation.
+The native Send assertion and Wasm build check both choices.
+
 From the SDK root, run:
 
 ```sh

@@ -36,6 +36,13 @@
 - The TypeScript memory test now asserts the two Wasm memory ceilings the
   performance notes say it guards (224 MiB and 228 MiB).
 
+
+- The kind guide now states the pull report's label forms and links the interface's Report section, says that a
+  pull offering schemas needs the comparison companion and which root its references resolve in, links the challenge
+  conventions, and adds the rule against hash tables keyed by input content to its checklist. Compiled examples cover
+  a report with current and stale schema entries and a conflict taken through the checked pull, and one adapter whose
+  invocation future is `Send` on native targets and local on wasm32.
+
 ### Fixed
 
 - Directional enum, const and required membership uses an ordered lookup in place
