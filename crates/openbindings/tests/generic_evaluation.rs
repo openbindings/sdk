@@ -348,7 +348,7 @@ fn local_reference_defect_is_a_preparation_cause_not_an_instance_verdict() {
         }
     );
     assert_eq!(
-        error.origin.unwrap().source_uri.as_deref(),
+        error.origin.unwrap().retrieval_uri.as_deref(),
         Some("https://example.test/external")
     );
 }

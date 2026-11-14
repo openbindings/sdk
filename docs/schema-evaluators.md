@@ -160,7 +160,7 @@ also when it is part of a larger text); `JsonValue::at_pointer` checks one and
 and exact pointer from that source's root. Use the original `Schema` and
 `SchemaEnvironment` locations while preparing or evaluating; retain owned source
 facts needed later. The borrowed request itself does not survive preparation.
-`SchemaOrigin::new(source_uri, pointer)` takes an exact `Pointer`. If a keyword
+`SchemaOrigin::new(retrieval_uri, pointer)` takes an exact `Pointer`. If a keyword
 cannot be mapped to an original source, use an established selected-schema origin
 or omit the optional origin; never invent one for unavailable content. Callers
 find line and column on demand with `JsonValue::locate`, `ConformantDocument::locate`

@@ -135,7 +135,7 @@ Failed `anyOf` and `oneOf` report at the applicator, without branch facts, match
 value explanations. The pinned document schema uses `anyOf`, not `oneOf`.
 `pattern` and `uniqueItems` also have no detail variant. Numeric and size bounds
 use exact schema token strings; enum facts contain the complete choices.
-The pinned 0.2 schema's largest serialized keyword/schema/details tuple is 199
+The pinned 0.2 schema's largest serialized keyword/schema/details tuple is 202
 bytes. An exhaustive schema test guards this property; no runtime fact-size cap
 is needed. Finding-count and source-pointer truncation leave rule evidence intact. Use codes and evidence
 for program logic. Messages are advisory; locations refer to the assessed revision's UTF-8 bytes.

@@ -301,7 +301,7 @@ impl std::fmt::Debug for Reference {
 /// By default retains at most 8 MiB of generated and source text in reference entries,
 /// adjustable with [`ReferenceLimits`]:
 /// all location, resource-root, target and refusal pointers, every origin's
-/// source URI, keywords, spellings, refusal codes/messages and unavailable-resource
+/// retrieval URI, keywords, spellings, refusal codes/messages and unavailable-resource
 /// URIs. Text is counted in UTF-8 bytes; pointers through an unpaired name use
 /// two bytes per UTF-16 unit. This is a text allowance, not total heap usage.
 /// The whole entry is charged before its text is materialized or cloned. The

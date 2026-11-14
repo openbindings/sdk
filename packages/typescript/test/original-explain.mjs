@@ -102,8 +102,9 @@ export function originalExplainCases(sdk, controls, testing) {
                 "schema pointer",
               );
             check(
-              problem.schema.sourceUri === (row.schema_source_uri ?? root),
-              "source URI",
+              problem.schema.retrievalUri ===
+                (row.schema_retrieval_uri ?? root),
+              "retrieval URI",
             );
             check(
               value.locate(problem.instance) !== undefined,

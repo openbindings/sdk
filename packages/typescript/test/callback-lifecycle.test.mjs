@@ -96,7 +96,7 @@ test("callback disposal is checked after options and ordinary conversion", () =>
       ),
     (f) =>
       f.resources.locate({
-        sourceUri: null,
+        retrievalUri: null,
         get pointer() {
           f.resources.dispose();
           return "";
@@ -104,7 +104,7 @@ test("callback disposal is checked after options and ordinary conversion", () =>
       }),
     (f) =>
       f.proof.locate({
-        sourceUri: null,
+        retrievalUri: null,
         get pointer() {
           f.proof.dispose();
           return "";

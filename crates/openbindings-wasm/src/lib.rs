@@ -35,26 +35,27 @@ macro_rules! object {
     }};
 }
 mod exact;
+mod limits;
 
 // A schema location as exact JSON text, so its pointer keeps unpaired units.
 fn schema_location(text: &str) -> Result<SchemaOrigin, JsValue> {
     let invalid = || {
         error(
             "invalid-schema-location",
-            "expected a resource URI or null and an RFC 6901 pointer",
+            "expected a retrieval URI or null and an RFC 6901 pointer",
         )
     };
     let value = JsonValue::parse(text).map_err(|_| invalid())?;
-    let resource = match value.get("source_uri") {
-        Some(resource) if resource.kind() == JsonKind::Null => None,
-        Some(resource) => Some(resource.as_str().ok_or_else(invalid)?.to_owned()),
+    let retrieval = match value.get("retrieval_uri") {
+        Some(uri) if uri.kind() == JsonKind::Null => None,
+        Some(uri) => Some(uri.as_str().ok_or_else(invalid)?.to_owned()),
         None => return Err(invalid()),
     };
     let pointer = value
         .get("pointer")
         .and_then(openbindings_internal_json::backend::string_pointer)
         .ok_or_else(invalid)?;
-    Ok(SchemaOrigin::new(resource, pointer))
+    Ok(SchemaOrigin::new(retrieval, pointer))
 }
 fn error(code: &str, message: impl ToString) -> JsValue {
     JsValue::from_str(&encoded(json!({"code":code,"message":message.to_string()})))
@@ -1149,11 +1150,21 @@ impl WasmResources {
             resources: ExternalSchemas::default(),
         }
     }
-    pub fn add(&self, uri: &str, value: &WasmJson) -> Result<WasmResources, JsValue> {
-        ExternalSchemas::new(self.resources.iter().cloned().chain([ExternalSchema {
-            uri: uri.into(),
-            document: value.value.clone(),
-        }]))
+    pub fn add(
+        &self,
+        uri: &str,
+        value: &WasmJson,
+        settings: Option<String>,
+        cancelled: bool,
+    ) -> Result<WasmResources, JsValue> {
+        ExternalSchemas::new_with_limits(
+            self.resources.iter().cloned().chain([ExternalSchema {
+                uri: uri.into(),
+                document: value.value.clone(),
+            }]),
+            &limits::preparation(settings)?,
+            &control(cancelled),
+        )
         .map(|resources| Self { resources })
         .map_err(|e| error("resource", e))
     }
@@ -1174,6 +1185,7 @@ impl WasmResources {
         &self,
         uri: &str,
         limits: Option<String>,
+        preparation: Option<String>,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
         let evaluator = evaluator(limits)?;
@@ -1181,7 +1193,7 @@ impl WasmResources {
             preparation: Some(self.resources.prepare_with_control(
                 uri,
                 &evaluator,
-                &openbindings::PreparationLimits::default(),
+                &limits::preparation(preparation)?,
                 &control(cancelled),
             )),
         })
@@ -1200,6 +1212,7 @@ pub struct WasmResourceEntries {
     resources: Vec<ExternalSchema>,
     identity_bytes: usize,
     refusal: Option<ExternalSchemaError>,
+    limits: PreparationLimits,
 }
 impl std::fmt::Debug for WasmResourceEntries {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1210,26 +1223,34 @@ impl std::fmt::Debug for WasmResourceEntries {
 #[wasm_bindgen]
 impl WasmResourceEntries {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> WasmResourceEntries {
-        Self::default()
+    pub fn new(settings: Option<String>) -> Result<WasmResourceEntries, JsValue> {
+        Ok(Self {
+            limits: limits::preparation(settings)?,
+            ..Self::default()
+        })
     }
     pub fn push(&mut self, uri: &str, value: &WasmJson) -> Result<(), JsValue> {
         if let Some(refusal) = &self.refusal {
             return Err(error("resource", refusal));
         }
-        let limits = PreparationLimits::default();
+        let limits = self.limits;
         let bytes = self.identity_bytes.checked_add(uri.len());
         if self.resources.len() >= limits.max_schema_nodes
             || bytes.is_none_or(|bytes| bytes > limits.max_identity_bytes)
         {
             // Only the refusal path runs registration here, preserving its exact
             // error precedence for the staged entries followed by this entry.
-            let refusal = ExternalSchemas::new(self.resources.iter().cloned().chain(
-                std::iter::once(ExternalSchema {
-                    uri: uri.into(),
-                    document: value.value.clone(),
-                }),
-            ))
+            let refusal = ExternalSchemas::new_with_limits(
+                self.resources
+                    .iter()
+                    .cloned()
+                    .chain(std::iter::once(ExternalSchema {
+                        uri: uri.into(),
+                        document: value.value.clone(),
+                    })),
+                &self.limits,
+                &control(false),
+            )
             .expect_err("staged resources exceed registration limits");
             let result = Err(error("resource", &refusal));
             self.refusal = Some(refusal);
@@ -1243,10 +1264,14 @@ impl WasmResourceEntries {
         Ok(())
     }
     /// Admit every collected entry as one set; the entries are taken.
-    pub fn build(&mut self) -> Result<WasmResources, JsValue> {
-        ExternalSchemas::new(std::mem::take(&mut self.resources))
-            .map(|resources| WasmResources { resources })
-            .map_err(|e| error("resource", e))
+    pub fn build(&mut self, cancelled: bool) -> Result<WasmResources, JsValue> {
+        ExternalSchemas::new_with_limits(
+            std::mem::take(&mut self.resources),
+            &self.limits,
+            &control(cancelled),
+        )
+        .map(|resources| WasmResources { resources })
+        .map_err(|e| error("resource", e))
     }
 }
 /// One original contextual schema, retaining its proved document revision.
@@ -1264,6 +1289,7 @@ impl WasmSchema {
         &self,
         resources: &ExternalSchemas,
         limits: Option<String>,
+        preparation: Option<String>,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
         let evaluator = evaluator(limits)?;
@@ -1271,7 +1297,7 @@ impl WasmSchema {
             preparation: Some(self.schema.prepare_with_control(
                 &evaluator,
                 resources,
-                &openbindings::PreparationLimits::default(),
+                &limits::preparation(preparation)?,
                 &control(cancelled),
             )),
         })
@@ -1288,12 +1314,14 @@ impl WasmSchema {
     pub fn prepare(
         &self,
         limits: Option<String>,
+        preparation: Option<String>,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
         static EMPTY: std::sync::OnceLock<ExternalSchemas> = std::sync::OnceLock::new();
         self.prepare_in(
             EMPTY.get_or_init(ExternalSchemas::default),
             limits,
+            preparation,
             cancelled,
         )
     }
@@ -1302,9 +1330,10 @@ impl WasmSchema {
         &self,
         resources: &WasmResources,
         limits: Option<String>,
+        preparation: Option<String>,
         cancelled: bool,
     ) -> Result<WasmPreparation, JsValue> {
-        self.prepare_in(&resources.resources, limits, cancelled)
+        self.prepare_in(&resources.resources, limits, preparation, cancelled)
     }
     #[must_use]
     pub fn retain(&self) -> WasmSchema {
@@ -1644,11 +1673,13 @@ mod location_transfer_tests {
                 uri,
                 &WasmJson::parse_text(r#"{"$defs":{"\ud800":{"type":"string"}}}"#.into(), None)
                     .unwrap(),
+                None,
+                false,
             )
             .unwrap();
         let located = resources
             .locate(&format!(
-                r#"{{"source_uri":"{uri}","pointer":"/$defs/\ud800/type"}}"#
+                r#"{{"retrieval_uri":"{uri}","pointer":"/$defs/\ud800/type"}}"#
             ))
             .unwrap();
         assert_eq!(
@@ -1657,7 +1688,7 @@ mod location_transfer_tests {
         );
         assert_eq!(
             resources
-                .locate(r#"{"source_uri":null,"pointer":"/$defs"}"#)
+                .locate(r#"{"retrieval_uri":null,"pointer":"/$defs"}"#)
                 .unwrap(),
             "null"
         );
@@ -1669,7 +1700,7 @@ mod location_transfer_tests {
             WasmConformantDocument::from_proof(document.validate().unwrap().conformant().unwrap());
         assert_eq!(
             proof
-                .locate(r#"{"source_uri":null,"pointer":"/operations/op/input/type"}"#)
+                .locate(r#"{"retrieval_uri":null,"pointer":"/operations/op/input/type"}"#)
                 .unwrap(),
             r#"{"pointer":"/operations/op/input/type","byte_offset":61,"line":2,"byte_column":37}"#
         );

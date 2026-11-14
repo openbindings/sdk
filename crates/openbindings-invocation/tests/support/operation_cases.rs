@@ -952,7 +952,7 @@ impl SchemaEvaluator for SemanticEvaluator {
         let pointer = format!("{}/$ref", root.pointer()).parse().unwrap();
         Ok(SemanticValidator(
             self.0,
-            openbindings::SchemaOrigin::new(root.origin().source_uri.clone(), pointer),
+            openbindings::SchemaOrigin::new(root.origin().retrieval_uri.clone(), pointer),
         ))
     }
 }

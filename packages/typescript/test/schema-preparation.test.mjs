@@ -66,7 +66,7 @@ test("unavailable annotation content remains a per-value inability without inven
     assert.equal(result.status, "no-verdict");
     assert.equal(result.detail.reason, "resource-unavailable");
     assert.deepEqual(result.detail.location, {
-      sourceUri: null,
+      retrievalUri: null,
       pointer: "/operations/run/input/$ref",
     });
   } finally {

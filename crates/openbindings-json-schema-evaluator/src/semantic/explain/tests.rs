@@ -492,13 +492,13 @@ fn independent_original_explanation_controls_preserve_proof_and_exact_locations(
                         "{id}: schema pointer"
                     );
                 }
-                let source_uri = case
-                    .get("schema_source_uri")
+                let retrieval_uri = case
+                    .get("schema_retrieval_uri")
                     .map(|v| v.as_str().unwrap())
                     .unwrap_or(ROOT);
                 assert_eq!(
-                    problem.schema.source_uri.as_deref(),
-                    Some(source_uri),
+                    problem.schema.retrieval_uri.as_deref(),
+                    Some(retrieval_uri),
                     "{id}"
                 );
                 assert!(

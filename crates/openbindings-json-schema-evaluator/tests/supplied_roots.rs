@@ -28,8 +28,8 @@ fn supplied_resources_keep_their_own_reference_context_and_origins() {
                     ValueOutcome::Fails { problems, .. } => {
                         for problem in problems {
                             assert_eq!(
-                                problem.schema.source_uri.as_deref(),
-                                Some(row["source_uri"].as_str().unwrap_or(uri))
+                                problem.schema.retrieval_uri.as_deref(),
+                                Some(row["retrieval_uri"].as_str().unwrap_or(uri))
                             );
                             assert_eq!(problem.schema.pointer.as_str(), row["pointer"].as_str());
                             assert!(resources.locate(&problem.schema).is_some());
@@ -83,5 +83,5 @@ fn supplied_root_refusals_are_preparation_failures_with_safe_diagnostics() {
     }
     let error = resources.prepare(uri, &evaluator).unwrap_err();
     assert_eq!(error.kind, PreparationFailureKind::InvalidExternalSchema);
-    assert_eq!(error.origin.unwrap().source_uri.as_deref(), Some(uri));
+    assert_eq!(error.origin.unwrap().retrieval_uri.as_deref(), Some(uri));
 }

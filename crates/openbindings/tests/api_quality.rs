@@ -684,7 +684,7 @@ fn evaluator_records_build_with_constructors_and_optional_fields() {
     });
     assert_eq!(
         serde_json::to_string(&problem).unwrap(),
-        r#"{"instance":"/0","schema":{"source_uri":"https://example.invalid/s","pointer":"/type"},"code":"type","message":"wrong type","details":{"kind":"type","expected":["integer"]}}"#
+        r#"{"instance":"/0","schema":{"retrieval_uri":"https://example.invalid/s","pointer":"/type"},"code":"type","message":"wrong type","details":{"kind":"type","expected":["integer"]}}"#
     );
 }
 #[test]

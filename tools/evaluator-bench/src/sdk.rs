@@ -260,7 +260,7 @@ impl Outcome {
                 value["detail"] = serde_json::to_value(detail).unwrap();
                 // The instrument's location protocol is fixed across SDK revisions.
                 if let Some(location) = value["detail"]["location"].as_object_mut()
-                    && let Some(uri) = location.remove("source_uri")
+                    && let Some(uri) = location.remove("retrieval_uri")
                 {
                     location.insert("resource".into(), uri);
                 }
@@ -270,7 +270,7 @@ impl Outcome {
                 value["detail"] = serde_json::to_value(detail).unwrap();
                 // The instrument's location protocol is fixed across SDK revisions.
                 if let Some(location) = value["detail"]["location"].as_object_mut()
-                    && let Some(uri) = location.remove("source_uri")
+                    && let Some(uri) = location.remove("retrieval_uri")
                 {
                     location.insert("resource".into(), uri);
                 }
@@ -288,7 +288,7 @@ impl Outcome {
                         let mut observed = json!({
                             "instance_pointer": problem.instance.to_string(),
                             "schema_location": {
-                                "resource": problem.schema.source_uri,
+                                "resource": problem.schema.retrieval_uri,
                                 "pointer": problem.schema.pointer.to_string(),
                             },
                             "code": problem.code,

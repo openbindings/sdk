@@ -294,7 +294,7 @@ fixed schema, and optional `ValueProblemDetails`: a missing required member,
 expected types or exact bounds. Disallowed members use the source pointer alone.
 Failed unions stay at `anyOf`/`oneOf` without speculative branch details.
 Facts never copy rejected document values. The pinned 0.2 schema's largest
-serialized `[keyword, schema, details]` tuple is 199 bytes, guarded by an exhaustive
+serialized `[keyword, schema, details]` tuple is 202 bytes, guarded by an exhaustive
 schema test with no runtime fact-size cap. Reports retain at most 4096 findings
 and 8 MiB of source pointers. Finding truncation leaves rule evidence intact. Use codes and evidence
 for program logic and messages for explanation. The API reference lists every
@@ -325,6 +325,11 @@ contract should forward only `instance` and `code`.
 Serialized problem and schema-origin pointers replace unpaired UTF-16 units with
 U+FFFD so they can be ordinary JSON strings. Keep the original `Pointer` for exact
 lookup or editing; the serialized spelling cannot identify such names exactly.
+For exact transport use `pointer.to_exact_json()`, which returns a complete JSON
+string token with unpaired units escaped. Read it with `JsonValue::parse`, obtain
+the string's `utf16_units()` and use `Pointer::from_utf16`; JavaScript uses
+`JSON.parse(text)` and `JSON.stringify(pointer)`. Ordinary Rust JSON values
+cannot represent those units, so keep the exact token as JSON text.
 See the [API reference](api-reference.md),
 [evaluator guide](../crates/openbindings-json-schema-evaluator/README.md) and
 [host support](support.md).

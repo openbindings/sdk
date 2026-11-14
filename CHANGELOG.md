@@ -4,11 +4,27 @@
 
 ### Changed
 
+- Breaking: `SchemaOrigin::source_uri` is now `retrieval_uri`, with its constructor parameter and serialized
+  property; TypeScript uses `retrievalUri`. The field names the address a supplied schema document was retrieved
+  under. "Source" is the specification's word for something else. `ReferenceRefusal::resource_uri` is a different
+  field and keeps its name. The largest fixed-schema diagnostic grows by the three bytes of the longer name.
+- TypeScript `ExactJson.metadata.kind` is typed as the exported six-member `JsonKind` union, where it was `string`.
 - `Invocation` is `#[must_use]`: discarding this lazy owner warns that provider and validation work did not run. A
   caller abandoning an attempt on purpose drops it explicitly. No other handle gained the annotation.
 
 ### Added
 
+- TypeScript can set preparation's allowances: `preparationLimits` on `PrepareOptions`, registration options on
+  `ExternalSchemas` construction and `with`, and `preparationLimits()` for the defaults, which are unchanged. A
+  limit set here refuses with the same code as the same limit set in Rust. This is how a host with a small
+  memory ceiling, such as a Worker, turns a schema too large for it into a refusal with a code: at the default
+  allowance of 512 MiB a module that runs out of memory traps instead.
+- Ordinary JavaScript encoding failures keep their `TypeError` or `RangeError` class and message and gain a stable
+  `code`. Ordinary admission limits report `input-limit`; exact-text admission keeps `byte-limit`, `node-limit`
+  and `depth-limit`.
+- `Pointer::to_exact_json()` exports a complete JSON string token that keeps every UTF-16 unit, so a pointer into
+  a draft whose member name holds an unpaired unit selects the same member after transport. Ordinary Serde output
+  is unchanged and still replaces such a unit with U+FFFD.
 - `ResourceIdentity` implements `Hash`, consistent with its equality: the same environment allocation and the same
   resource within it. Equal URI text in two environments gives two keys.
 - `ComparisonContext::retained_bytes()` estimates, when asked, the source arenas, configuration and completed indexes

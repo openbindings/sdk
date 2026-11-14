@@ -49,7 +49,7 @@ impl std::hash::Hash for ResourceIdentity {
         std::hash::Hash::hash(&self.id, state);
     }
 }
-/// The reference-resolution base of a resource, distinct from its source URI.
+/// The reference-resolution base of a resource, distinct from its retrieval URI.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ResourceBase<'a> {
     /// The OpenBindings document resource has no publicly named base.

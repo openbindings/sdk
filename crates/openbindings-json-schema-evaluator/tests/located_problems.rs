@@ -65,7 +65,7 @@ fn explained_problems_locate_the_failing_node_and_the_documents_keyword() {
     );
     // The schema side names the keyword; the document finds its line and column.
     let keyword = "/operations/op/input/properties/items/items/type";
-    assert_eq!(problem.schema.source_uri, None);
+    assert_eq!(problem.schema.retrieval_uri, None);
     assert_eq!(problem.schema.pointer, keyword);
     let located = document.locate(&problem.schema).unwrap();
     let source = std::str::from_utf8(document.as_bytes()).unwrap();
@@ -236,7 +236,7 @@ fn supplied_resources_locate_their_own_keywords() {
     let contract = contract(&document, &resources);
     let problems = problems(contract.explain(&JsonValue::parse("3").unwrap()));
     let schema = &problems[0].schema;
-    assert_eq!(schema.source_uri.as_deref(), Some(uri));
+    assert_eq!(schema.retrieval_uri.as_deref(), Some(uri));
     assert_eq!(schema.pointer, "/minimum");
     let located = resources.locate(schema).unwrap();
     let offset = resource_text.find("10").unwrap();
@@ -290,7 +290,7 @@ fn requests_locate_the_schema_nodes_an_evaluator_was_given() {
     let environment = capture.0.lock().unwrap().take().unwrap();
     let root = environment.root();
     assert_eq!(root.pointer().as_str(), Some("/operations/op/input"));
-    assert_eq!(root.origin().source_uri, None);
+    assert_eq!(root.origin().retrieval_uri, None);
     let nested = root.subschema(&["properties", "a"]).unwrap();
     assert_eq!(
         nested.pointer().as_str(),
@@ -304,7 +304,7 @@ fn requests_locate_the_schema_nodes_an_evaluator_was_given() {
     let pointer = Pointer::from_utf16(&[47, 36, 100, 101, 102, 115, 47, 0xd800]).unwrap();
     let node = supplied.subschema_at(&pointer).unwrap();
     let at = node.origin();
-    assert_eq!(at.source_uri.as_deref(), Some(uri));
+    assert_eq!(at.retrieval_uri.as_deref(), Some(uri));
     assert_eq!(at.pointer.as_str(), None);
     assert_eq!(at.pointer.to_string(), "/$defs/\\ud800");
     assert_eq!(resources.locate(at), Some(node.value().view().location()));
@@ -412,7 +412,7 @@ fn draft_references_beneath_unpaired_names_are_exact() {
     };
     // The refusal names an exact node of the draft, never an invented root.
     let location = detail.location.as_ref().unwrap();
-    assert_eq!(location.source_uri, None);
+    assert_eq!(location.retrieval_uri, None);
     assert!(location.pointer.as_str().is_none());
     assert!(draft.value().at_pointer(&location.pointer).is_some());
 }

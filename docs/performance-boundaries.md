@@ -1018,7 +1018,7 @@ the input it allocates:
   bytes per alias; and by default at most 4,096 findings
   and 8 MiB of their pointers. `ValidationLimits` selects other report-retention
   allowances without changing rule evidence. The pinned 0.2 schema's largest serialized OBI-02
-  keyword/schema/details tuple is 199 bytes (198 in TypeScript), guarded by an
+  keyword/schema/details tuple is 202 bytes (201 in TypeScript), guarded by an
   exhaustive schema test with no runtime fact-size cap. A table of 4 bytes per node (8 when an
   unpaired surrogate occurs) is built once one finding's pointer has not fitted. The
   fixed checks read every string in place: they would escape U+E000 only beside
@@ -1188,8 +1188,8 @@ cap. These are bounds
 for the recorded fixtures, not all inputs. Document findings separately retain at
 most 4,096 entries and 8 MiB of source pointers by default, adjustable with
 `ValidationLimits` through `Document::validate_with_limits`. OBI-02 keyword/schema/details
-tuples have a measured maximum of 199 serialized JSON bytes in the pinned 0.2
-schema (198 in TypeScript). An exhaustive schema test guards this property;
+tuples have a measured maximum of 202 serialized JSON bytes in the pinned 0.2
+schema (201 in TypeScript). An exhaustive schema test guards this property;
 there is no runtime fact-size cap. Value explanations use Original and share its evaluation storage and work
 allowances; exhausted diagnostics preserve an established failure with
 incomplete problems. See

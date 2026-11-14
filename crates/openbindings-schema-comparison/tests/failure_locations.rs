@@ -68,7 +68,7 @@ fn supplied_subtrees_keep_the_retrieval_frame_through_nested_ids_and_references(
         "/$defs/T/properties/a~1b~0c/$ref",
     );
     assert_eq!(
-        error.origin().unwrap().source_uri.as_deref(),
+        error.origin().unwrap().retrieval_uri.as_deref(),
         Some("https://fetch.test/resource")
     );
     for formatted in [error.to_string(), format!("{error:?}")] {
@@ -94,7 +94,7 @@ fn schema_selection_and_retained_applicators_keep_original_document_pointers() {
         ComparisonSide::Left,
         "/carrier/not/properties/broken/$ref",
     );
-    assert!(error.origin().unwrap().source_uri.is_none());
+    assert!(error.origin().unwrap().retrieval_uri.is_none());
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn invalid_referenced_schema_declarations_keep_the_target_location() {
     assert_eq!(error.kind(), ComparisonFailureKind::InvalidReference);
     location(&error, ComparisonSide::Left, "/$defs/bad");
     assert_eq!(
-        error.origin().unwrap().source_uri.as_deref(),
+        error.origin().unwrap().retrieval_uri.as_deref(),
         Some("https://fetch.test/schema")
     );
 }

@@ -1,0 +1,11 @@
+{
+  "document": "{\"openbindings\":\"0.2.0\",\"operations\":{\"run\":{\"input\":{\"type\":\"integer\"}}}}",
+  "schema": "{\"type\":\"integer\"}",
+  "uri": "urn:input",
+  "cases": [
+    {"field": "maxSchemaNodes", "value": 0, "code": "schema-nodes"},
+    {"field": "maxIdentityBytes", "value": 0, "code": "schema-identity-bytes"},
+    {"field": "maxSdkWorkUnits", "value": 0, "code": "preparation-sdk-work-units"},
+    {"field": "maxSdkReservationBytes", "value": 0, "code": "preparation-sdk-reservation-bytes"}
+  ]
+}

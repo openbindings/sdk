@@ -95,7 +95,7 @@ def current_expectation(case, actual):
         raise AssertionError("unrecognized current obligation: " + required)
     sources = {None: case.get("document", {"openbindings": "0.2.0", "operations": {"op": {"input": case.get("schema")}}})}
     sources.update({resource["uri"]: resource["schema"] for resource in case.get("resources", [])})
-    for location, coordinate in [(detail.get("location"), "resource"), (actual.get("failure", {}).get("origin"), "source_uri")]:
+    for location, coordinate in [(detail.get("location"), "resource"), (actual.get("failure", {}).get("origin"), "retrieval_uri")]:
         if location is not None:
             assert coordinate in location
             assert location[coordinate] in sources

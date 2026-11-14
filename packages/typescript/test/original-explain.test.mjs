@@ -53,7 +53,7 @@ test("explain returns every located failure with truthful completeness", () => {
     assert.deepEqual(
       explained.problems.map(({ instance, schema, code, details }) => [
         instance,
-        schema.sourceUri,
+        schema.retrievalUri,
         schema.pointer,
         code,
         details,

@@ -239,13 +239,13 @@ fn original_sources_bases_and_resource_roots_are_separate() {
     let root = env.root();
     assert_eq!(root.resource_base(), ResourceBase::AnonymousDocument);
     assert!(root.resource_root().is_none());
-    assert_eq!(root.origin().source_uri, None);
+    assert_eq!(root.origin().retrieval_uri, None);
     assert_eq!(root.pointer().as_str(), Some("/schemas/entry"));
     let local = env
         .resolve(&root, "https://id.test/local#/$defs/number")
         .unwrap()
         .schema;
-    assert_eq!(local.origin().source_uri, None);
+    assert_eq!(local.origin().retrieval_uri, None);
     assert_eq!(
         local.pointer().as_str(),
         Some("/schemas/local/$defs/number")
@@ -263,7 +263,7 @@ fn original_sources_bases_and_resource_roots_are_separate() {
         .unwrap()
         .schema;
     assert_eq!(
-        nested.origin().source_uri.as_deref(),
+        nested.origin().retrieval_uri.as_deref(),
         Some("https://fetch.test/bundle")
     );
     assert_eq!(nested.pointer().as_str(), Some("/$defs/N/$defs/flag"));
@@ -378,7 +378,7 @@ fn checked_subschemas_never_promote_maps_literals_or_opaque_objects() {
     let child = external.subschema_at(&pointer).unwrap();
     assert_eq!(child.pointer(), &pointer);
     assert_eq!(
-        child.origin().source_uri.as_deref(),
+        child.origin().retrieval_uri.as_deref(),
         Some("https://example.test/unpaired")
     );
 }

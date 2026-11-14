@@ -24,7 +24,7 @@
     "resources": {"https://schemas.example/path/leaf.json": {"type": "integer"}},
     "values": [
       {"value": 1, "status": "satisfies"},
-      {"value": "no", "status": "fails", "pointer": "/type", "source_uri": "https://schemas.example/path/leaf.json"}
+      {"value": "no", "status": "fails", "pointer": "/type", "retrieval_uri": "https://schemas.example/path/leaf.json"}
     ]
   },
   {
@@ -35,7 +35,7 @@
     "values": [
       {"value": "yes", "status": "satisfies"},
       {"value": 1, "status": "fails", "pointer": "/type"},
-      {"value": "x", "status": "fails", "pointer": "/minLength", "source_uri": "https://canonical.example/path/leaf.json"}
+      {"value": "x", "status": "fails", "pointer": "/minLength", "retrieval_uri": "https://canonical.example/path/leaf.json"}
     ]
   },
   {

@@ -3,6 +3,11 @@
 Stores exact JSON values and source evidence shared by the SDK. Applications
 use the types re-exported by `openbindings`, including `JsonValue` and `JsonRef`.
 
+`Pointer::to_exact_json()` exports an exact JSON string token, escaping unpaired
+UTF-16 units. Parse that text as exact JSON and use the string's `utf16_units()`
+with `Pointer::from_utf16` to preserve its target. Ordinary Serde continues to
+replace unpaired units with U+FFFD; use the exact export for draft locators.
+
 `JsonValue::parse_prefix` and `parse_prefix_with_limits` admit the first exact
 value from a byte buffer and return its exclusive end offset.
 `JsonPrefixError::Incomplete` distinguishes an open buffer needing more bytes

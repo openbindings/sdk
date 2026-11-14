@@ -105,7 +105,7 @@ test("static reference matrix and concrete completions through Wasm", async () =
           ...result.failure,
           origin: result.failure.origin
             ? {
-                source_uri: result.failure.origin.sourceUri,
+                retrieval_uri: result.failure.origin.retrievalUri,
                 pointer: result.failure.origin.pointer,
               }
             : null,
@@ -117,7 +117,7 @@ test("static reference matrix and concrete completions through Wasm", async () =
           code: result.detail.code,
           location: result.detail.location
             ? {
-                resource: result.detail.location.sourceUri ?? null,
+                resource: result.detail.location.retrievalUri ?? null,
                 pointer: result.detail.location.pointer,
               }
             : null,

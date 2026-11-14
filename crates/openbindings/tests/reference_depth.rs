@@ -43,7 +43,7 @@ fn deep_references_agree_with_validation_on_a_small_stack() {
                                 assert!(present);
                                 assert!(!dynamic_lookup);
                                 assert_eq!(target.pointer, "/schemas/entry/$defs/target");
-                                assert!(target.source_uri.is_none());
+                                assert!(target.retrieval_uri.is_none());
                             }
                             ReferenceResolution::Unresolved { detail } => {
                                 assert!(!present);

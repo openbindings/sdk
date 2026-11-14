@@ -168,6 +168,15 @@ export function isExact(value: unknown): value is ExactJson {
 /** @internal */
 export const jsonRaw = (owner: ExactJson) => handle<wasm.WasmJson>(owner);
 
+/** The closed six-way JSON value kind partition, matching Rust JsonKind. */
+export type JsonKind =
+  | "null"
+  | "boolean"
+  | "number"
+  | "string"
+  | "array"
+  | "object";
+
 /** Ordinary JSON scalar types; runtime admission additionally requires finite numbers. JavaScript number precision already lost before admission cannot be reconstructed. */
 export type JsonPrimitive = null | boolean | number | string;
 
@@ -274,7 +283,7 @@ export class ExactJson extends Managed {
     super(raw);
     exactOwners.add(this);
   }
-  /** Admit checked ordinary JSON into a new disposable exact owner. Nested ExactJson inputs are borrowed. Ordinary encoding failures throw TypeError/RangeError; exact parser admission failures also throw. Use parseJson for structured exact-input failures. Handle misuse throws SdkError; precision already lost in JavaScript numbers cannot be recovered. */
+  /** Admit checked ordinary JSON into a new disposable exact owner. Nested ExactJson inputs are borrowed. Ordinary encoding failures throw TypeError/RangeError with stable code properties and fixed messages. Shape codes match ValueAdmissionFailure; all ordinary limits use input-limit, while parseJson uses byte-limit, node-limit or depth-limit. Use parseJson for structured exact-input failures. Handle misuse throws SdkError; precision already lost in JavaScript numbers cannot be recovered. */
   static from(value: JsonInput): ExactJson {
     requireReady();
     const text = encodeOrdinary(value);
@@ -283,7 +292,7 @@ export class ExactJson extends Managed {
     } catch (error) {
       // The checked encoder leaves only a JSON admission limit to refuse it.
       if (inputErrorKind(error) !== "Limit") throw error;
-      throw new RangeError(ORDINARY_LIMITS);
+      throw ordinaryError(new RangeError(ORDINARY_LIMITS), "input-limit");
     }
   }
   /** Return a new independently disposable owner sharing this exact snapshot; no reparse. */
@@ -301,7 +310,7 @@ export class ExactJson extends Managed {
   /** Allocate plain metadata for this value: kind, original byte coordinates and subtree duplicate-name presence. No disposable owner is returned. */
   get metadata(): {
     /** Stable category describing the observed value or failure. */
-    kind: string;
+    kind: JsonKind;
     /** Original-source coordinates for this exact value. */
     location: SourceLocation;
     /** Whether this subtree contains repeated decoded object member names. */
@@ -509,6 +518,14 @@ function utf8Length(text: string): number {
   return bytes;
 }
 
+function ordinaryError<T extends TypeError | RangeError>(
+  error: T,
+  code: string,
+): T {
+  Object.defineProperty(error, "code", { value: code, enumerable: true });
+  return error;
+}
+
 /** Iterative, checked serialization. No getters, toJSON hooks, omission, or implicit coercion. */
 /** @internal */
 export function encodeOrdinary(
@@ -531,8 +548,8 @@ export function encodeOrdinary(
     limit = false,
   ): never {
     if (context) throw new JsonEncodingError(code, pointer, message);
-    if (limit) throw new RangeError(message);
-    throw new TypeError(message);
+    if (limit) throw ordinaryError(new RangeError(message), "input-limit");
+    throw ordinaryError(new TypeError(message), code);
   }
   // A limit the encoded value already exceeds. A document's edit refuses as
   // Rust's edit would; another value names parsing it with limits instead.
@@ -798,7 +815,8 @@ export function ownEntries(
     at: string,
     message: string,
   ): never {
-    if (pointer === undefined) throw new TypeError(message);
+    if (pointer === undefined)
+      throw ordinaryError(new TypeError(message), code);
     throw new JsonEncodingError(code, at, message);
   }
   if (

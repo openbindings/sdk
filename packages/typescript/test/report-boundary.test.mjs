@@ -6,15 +6,15 @@ await sdk.initialize();
 
 test("report decoding preserves ordered fields, nulls and mutable own properties", () => {
   const decoded = decode(
-    '{"source_uri":null,"byte_offset":7,"nested":[{"dynamic_lookup":false,"resource_uri":null}],"constructor":"data","has_own_property":true,"a_b":1,"aB":2}',
+    '{"retrieval_uri":null,"byte_offset":7,"nested":[{"dynamic_lookup":false,"resource_uri":null}],"constructor":"data","has_own_property":true,"a_b":1,"aB":2}',
   );
   assert.equal(
     JSON.stringify(decoded),
-    '{"sourceUri":null,"byteOffset":7,"nested":[{"dynamicLookup":false,"resourceUri":null}],"constructor":"data","hasOwnProperty":true,"aB":2}',
+    '{"retrievalUri":null,"byteOffset":7,"nested":[{"dynamicLookup":false,"resourceUri":null}],"constructor":"data","hasOwnProperty":true,"aB":2}',
   );
   assert.equal(Object.getPrototypeOf(decoded), Object.prototype);
   assert.equal(Object.hasOwn(decoded, "absent"), false);
-  assert.deepEqual(Object.getOwnPropertyDescriptor(decoded, "sourceUri"), {
+  assert.deepEqual(Object.getOwnPropertyDescriptor(decoded, "retrievalUri"), {
     value: null,
     writable: true,
     enumerable: true,
@@ -58,23 +58,23 @@ test("repeated reference origins stay detached and independently mutable", () =>
       "resolution",
     ]);
     assert.deepEqual(reference.location, {
-      sourceUri: null,
+      retrievalUri: null,
       pointer: `${pointer}/allOf/${i}/$ref`,
     });
-    assert.deepEqual(reference.resourceRoot, { sourceUri: null, pointer });
+    assert.deepEqual(reference.resourceRoot, { retrievalUri: null, pointer });
     assert.deepEqual(reference.resolution, {
       status: "located",
-      target: { sourceUri: null, pointer },
+      target: { retrievalUri: null, pointer },
       dynamicLookup: false,
     });
   }
   report.references[0].resourceRoot.pointer = "edited";
   assert.equal(report.references[0].resolution.target.pointer, pointer);
-  report.references[0].location.sourceUri = "edited";
+  report.references[0].location.retrievalUri = "edited";
   report.references[0].resolution.target.pointer = "target edited";
   assert.equal(report.references[0].resourceRoot.pointer, "edited");
   assert.equal(report.references[1].resourceRoot.pointer, pointer);
-  assert.equal(report.references[1].location.sourceUri, null);
+  assert.equal(report.references[1].location.retrievalUri, null);
   assert.equal(report.references[1].resolution.target.pointer, pointer);
   assert.equal(again.references[0].resourceRoot.pointer, pointer);
   assert.equal(again.references[0].resolution.target.pointer, pointer);

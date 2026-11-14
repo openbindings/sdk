@@ -163,7 +163,7 @@ or caller values. If keyword guidance is unavailable, the generic finding remain
 `ValidationReport` retains at most 4096 findings and 8 MiB of source-pointer bytes
 by default, adjustable through `ValidationLimits`.
 The pinned 0.2 schema's largest complete serialized `[keyword, schema, details]`
-tuple is 199 bytes in Rust JSON (198 in TypeScript JSON). An exhaustive schema
+tuple is 202 bytes in Rust JSON (201 in TypeScript JSON). An exhaustive schema
 test guards this fixed property; there is no runtime fact-size cap. Count and
 source-pointer omissions set `findings_truncated` (`findingsTruncated`), leaving
 rule evidence intact.
@@ -296,7 +296,7 @@ This is a location, not the resolved base; conformant Rust callers can use
 Inspection has no separate schema nesting bound beyond document admission. The
 caller-selected allowance, 8 MiB by default, covers all generated and source text retained in reference
 entries: location, resource-root, target and refusal pointers, every origin's
-source URI, keywords, spellings, refusal codes/messages and unavailable-resource
+retrieval URI, keywords, spellings, refusal codes/messages and unavailable-resource
 URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per
 UTF-16 unit. This bounds text, not total heap usage. Each whole entry is charged
 before its text is materialized or cloned. The first entry that does not fit
@@ -324,7 +324,19 @@ explicit access to retained values.
 TypeScript ordinary JSON admission rejects nonfinite numbers, undefined, cycles,
 accessors, sparse arrays and unsupported object forms without running getters or
 `toJSON`; use exact parsing for original number tokens and raised admission limits.
-The definitions describe each separate encoding and evaluation budget.
+`ExactJson.from` keeps standard `TypeError` and `RangeError` classes and fixed
+messages, with stable `.code` properties. Shape failures use the existing
+ordinary admission vocabulary. All ordinary admission limits use `input-limit`;
+exact-text admission retains `byte-limit`, `node-limit` and `depth-limit`.
+Caller exceptions remain unchanged. The definitions describe each separate
+encoding and evaluation budget.
+
+```ts
+export type JsonKind = "null" | "boolean" | "number" | "string" | "array" | "object";
+```
+
+`ExactJson.metadata.kind` is `JsonKind`. Schema type assertions can also name
+`integer`; their type names are a different vocabulary.
 
 `EditError::code()` / `EditError.code` identifies a failed transaction, including
 invalid paths, missing parents, duplicate members, overlaps and admission limits.
@@ -339,10 +351,17 @@ Rust serialization replaces each unpaired pointer unit with U+FFFD, so diagnosti
 records work with `serde_json::to_value`, `json!`, `to_string` and `to_writer`.
 Stored pointers keep their exact units for locating and editing. TypeScript's
 bridge preserves exact UTF-16 pointers in JavaScript strings.
+`Pointer::to_exact_json(&self) -> String` returns a complete JSON string token
+with unpaired units escaped as `\uXXXX`. This exact export preserves the target
+and does not alter ordinary Serde. Recover the token through `JsonValue::parse`,
+read its string's `utf16_units()`, and call `Pointer::from_utf16`. Use sufficient
+admission limits for large tokens. In TypeScript use `JSON.stringify(pointer)`
+and `JSON.parse(text)`. Keep the token as JSON text: an ordinary Rust JSON string
+value cannot carry an unpaired unit.
 
 Value problems have an instance pointer relative to the evaluated value and a
-`SchemaOrigin` with `source_uri` (TypeScript `sourceUri`) plus an original schema
-pointer. Null source URI means the document. `JsonValue::locate`,
+`SchemaOrigin` with `retrieval_uri` (TypeScript `retrievalUri`) plus an original schema
+pointer. Null retrieval URI means the document. `JsonValue::locate`,
 `ConformantDocument::locate` and `ExternalSchemas::locate` compute source positions
 when requested; TypeScript offers corresponding `locate()` methods. No synthetic
 schema coordinate is substituted for an unavailable origin.
@@ -358,7 +377,7 @@ messages.
 The default evaluator explains only after establishing failure. It uses the
 remaining evaluation work and storage allowance to retain up to 100 distinct
 assertions (`MAX_EXPLANATION_PROBLEMS` internally). Problems sort lexically by
-exact UTF-16 instance pointer, then schema source URI and exact schema pointer.
+exact UTF-16 instance pointer, then schema retrieval URI and exact schema pointer.
 Repeated applications of the same assertion to the same occurrence are one
 problem. Each missing required member is a separate problem at the existing
 parent instance. Problems tied on instance and schema location retain the
@@ -497,3 +516,40 @@ document is silent on duplicates. This follows the parser-differential reason
 in [OBI-01](https://github.com/openbindings/spec/blob/c1419c9fc3ae5a00c2b83da710c11bf67dab7934/openbindings.md#10-conformance):
 the same bytes can yield different values across parsers. The SDK refuses
 ambiguity without interpreting members, using the exact JSON's existing index.
+
+## TypeScript preparation and registration limits
+
+```ts
+export interface PreparationLimits {
+  maxSchemaNodes: number;
+  maxIdentityBytes: number;
+  maxSdkWorkUnits: number | null;
+  maxSdkReservationBytes: number;
+}
+export interface ResourceRegistrationOptions extends WorkOptions {
+  limits?: Partial<PreparationLimits>;
+}
+export declare function preparationLimits(): Readonly<PreparationLimits>;
+export interface PrepareOptions extends WorkOptions {
+  resources?: ExternalSchemas;
+  limits?: Partial<EvaluatorLimits>;
+  preparationLimits?: Partial<PreparationLimits>;
+}
+```
+
+The emitted `ExternalSchemas` class includes these signatures:
+
+```ts
+constructor(entries?: Iterable<readonly [uri: string, document: ExactJson]>, options?: ResourceRegistrationOptions);
+with(uri: string, document: ExactJson, options?: ResourceRegistrationOptions): ExternalSchemas;
+```
+
+Defaults remain 100,000 schema positions, 8,388,608 identity bytes, `null` work
+and 536,870,912 reservation bytes. Partial overrides keep the remaining defaults;
+only work accepts `null`, and numbers must be nonnegative 32-bit integers.
+`Schema.prepare` and `ExternalSchemas.prepare` take `preparationLimits`
+separately from evaluator `limits`. Registration options apply only to that
+construction or `with` call, not to later preparation. Limits and cancellation
+produce the same Rust refusals: preparation returns `refused`, while registration
+throws `SdkError` with code `resource`. A refused attempt leaves existing owners
+usable. SDK reservation estimates are not a Wasm linear-memory ceiling.

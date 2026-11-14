@@ -41,10 +41,10 @@ fn observe(case: &Value) -> Value {
         ValueOutcome::Fails { .. } => json!({"stage":stage,"outcome":"F"}),
         ValueOutcome::Undefined { detail } => {
             json!({"stage":stage,"outcome":"undefined", "detail":{
-            "code":detail.code,"location":detail.location.map(|at| json!({"resource":at.source_uri,"pointer":at.pointer}))}})
+            "code":detail.code,"location":detail.location.map(|at| json!({"resource":at.retrieval_uri,"pointer":at.pointer}))}})
         }
         ValueOutcome::NoVerdict { detail } => json!({"stage":stage,"outcome":"N", "detail":{
-            "reason":detail.reason,"code":detail.code,"location":detail.location.map(|at| json!({"resource":at.source_uri,"pointer":at.pointer}))}}),
+            "reason":detail.reason,"code":detail.code,"location":detail.location.map(|at| json!({"resource":at.retrieval_uri,"pointer":at.pointer}))}}),
     }
 }
 #[test]

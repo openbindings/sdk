@@ -1,6 +1,7 @@
 // Compile the reference's ownership and proof boundaries through public entrypoints.
 import {
   initialize,
+  ExternalSchemas,
   Document,
   parseJson,
   type JsonInput,
@@ -100,3 +101,55 @@ function inputCoordinates(
 }
 void snapshotBytes;
 void inputCoordinates;
+import type {
+  JsonKind,
+  PreparationLimits,
+  ResourceRegistrationOptions,
+  PrepareOptions,
+} from "../dist/index.js";
+import { preparationLimits } from "../dist/index.js";
+
+export function exhaustiveJsonKind(
+  value: import("../dist/index.js").ExactJson,
+): JsonKind {
+  const kind = value.metadata.kind;
+  switch (kind) {
+    case "null":
+    case "boolean":
+    case "number":
+    case "string":
+    case "array":
+    case "object":
+      return kind;
+    default: {
+      const impossible: never = kind;
+      return impossible;
+    }
+  }
+}
+// @ts-expect-error JSON has exactly six value kinds.
+const nonJsonKind: JsonKind = "integer";
+
+export function preparationControlTypes(
+  schema: import("../dist/index.js").Schema,
+  value: import("../dist/index.js").ExactJson,
+) {
+  const defaults: Readonly<PreparationLimits> = preparationLimits();
+  const limits: Partial<PreparationLimits> = {
+    maxSdkWorkUnits: null,
+    maxSdkReservationBytes: 8 * 1024 * 1024,
+  };
+  const options: PrepareOptions = { preparationLimits: limits };
+  const registration: ResourceRegistrationOptions = { limits };
+  using resources = new ExternalSchemas([["urn:input", value]], registration);
+  using extended = resources.with("urn:extra", value, registration);
+  for (const result of [
+    schema.prepare(options),
+    extended.prepare("urn:input", options),
+  ]) {
+    if (result.status === "ready") result.schema.dispose();
+  }
+  // @ts-expect-error only the work budget permits null.
+  const invalid: PreparationLimits = { ...defaults, maxSchemaNodes: null };
+  return invalid;
+}

@@ -68,9 +68,9 @@ export interface Finding {
   message: string;
   /** Failed OBI-02 keyword from the published fixed schema; failed unions name the applicator. */
   keyword?: string;
-  /** Keyword location in the published fixed schema, identified by sourceUri. */
+  /** Keyword location in the published fixed schema, identified by retrievalUri. */
   schema?: SchemaOrigin;
-  /** Complete published-schema facts; never rejected document values. One required fact per missing member. Disallowed members use location alone; anyOf/oneOf, pattern and uniqueItems have no details. The pinned 0.2 schema's largest keyword/schema/details tuple is 198 serialized JSON bytes (199 in Rust JSON), guarded by an exhaustive schema test without a runtime fact-size cap. */
+  /** Complete published-schema facts; never rejected document values. One required fact per missing member. Disallowed members use location alone; anyOf/oneOf, pattern and uniqueItems have no details. The pinned 0.2 schema's largest keyword/schema/details tuple is 201 serialized JSON bytes (202 in Rust JSON), guarded by an exhaustive schema test without a runtime fact-size cap. */
   details?: ValueProblemDetails;
 }
 
@@ -128,7 +128,7 @@ export function validationLimits(): Readonly<ValidationLimits> {
   });
 }
 
-/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. By default presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate); the pinned 0.2 schema's largest keyword/schema/details tuple is 198 serialized JSON bytes (199 in Rust JSON), guarded by an exhaustive schema test without a runtime fact-size cap. Document.validate({ limits }) selects different retention allowances. findingsTruncated records omissions without changing the conclusion. */
+/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. By default presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate); the pinned 0.2 schema's largest keyword/schema/details tuple is 201 serialized JSON bytes (202 in Rust JSON), guarded by an exhaustive schema test without a runtime fact-size cap. Document.validate({ limits }) selects different retention allowances. findingsTruncated records omissions without changing the conclusion. */
 export interface ValidationReport {
   /** Applied specification release. */
   release: string;
