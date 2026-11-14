@@ -85,10 +85,9 @@ impl Potential {
             .ok_or_else(crate::identity_budget::exceeded)?;
         Ok(())
     }
-    fn name(
+    fn reserve_name(
         &mut self,
         name: &str,
-        carrier: Original,
         maximum: usize,
         control: &dyn Control,
     ) -> Result<(), Failure> {
@@ -100,8 +99,34 @@ impl Potential {
             name.len().saturating_mul(3).saturating_add(512),
             maximum,
             control,
-        )?;
+        )
+    }
+    fn name(
+        &mut self,
+        name: &str,
+        carrier: Original,
+        maximum: usize,
+        control: &dyn Control,
+    ) -> Result<(), Failure> {
+        self.reserve_name(name, maximum, control)?;
         if let Some(name) = crate::input_policy::canonical_uri(name) {
+            self.names.entry(name).or_default().insert(carrier);
+        } else {
+            self.unknown_namespace = true;
+        }
+        Ok(())
+    }
+    // Keep the same admission charges as name(), normalizing the resolved
+    // base through the library without another hierarchical resolution.
+    fn resolved_name(
+        &mut self,
+        name: &str,
+        carrier: Original,
+        maximum: usize,
+        control: &dyn Control,
+    ) -> Result<(), Failure> {
+        self.reserve_name(name, maximum, control)?;
+        if let Some(name) = crate::input_policy::canonical_resolved_uri(name) {
             self.names.entry(name).or_default().insert(carrier);
         } else {
             self.unknown_namespace = true;
@@ -337,7 +362,7 @@ impl Potential {
                             out.unknown_namespace = true;
                             continue;
                         };
-                        out.name(&base, original, maximum_bytes, control)?;
+                        out.resolved_name(&base, original, maximum_bytes, control)?;
                         scope.base = Arc::from(base);
                         scope.carrier = original;
                     }
@@ -477,6 +502,35 @@ impl Potential {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolved_name_preserves_associations_and_admission() {
+        for raw in crate::input_policy::identifier_resolution_tests::uri_corpus() {
+            let Some(name) = crate::input_policy::resolve_identifier(
+                Some("HTTPS://EXAMPLE.test:443/%7e/base#"),
+                &raw,
+            ) else {
+                continue;
+            };
+            for maximum in [0, usize::MAX] {
+                let mut before = Potential::default();
+                let mut after = Potential::default();
+                for node in [0, 0, 1] {
+                    let carrier = Original { source: 1, node };
+                    let old = before.name(&name, carrier, maximum, &|| false);
+                    let new = after.resolved_name(&name, carrier, maximum, &|| false);
+                    assert_eq!(
+                        old.err().map(|f| (f.reason, f.code)),
+                        new.err().map(|f| (f.reason, f.code)),
+                        "{raw}"
+                    );
+                    assert_eq!(before.names, after.names, "{raw}");
+                    assert_eq!(before.unknown_namespace, after.unknown_namespace, "{raw}");
+                    assert_eq!(before.bytes, after.bytes, "{raw}");
+                }
+            }
+        }
+    }
     const META: &str = "https://example.test/meta";
     fn resources(rows: &[(&str, &str)]) -> Supplied {
         Supplied::new(rows.iter().map(|(uri, text)| ProjectedResource {

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-11-13 experiment repairs (unreleased)
+
+### Changed
+
+- Under default limits, a resource set that retains more than 512 MiB of parsed
+  external schema roots is refused at registration. `ExternalSchemas` now charges
+  each distinct root it retains, once; clones share the charge.
+
+### Fixed
+
+- Resolving a schema identifier no longer leaves it in a process-wide cache.
+  A long-lived host that prepared and dropped many resource sets kept every
+  identifier it had ever resolved.
+- TypeScript: a non-string argument throws `TypeError` instead of trapping in
+  Wasm, an oversized resource URI crosses the boundary only as its refusing
+  prefix, and raw handles are taken after caller code has run.
+- `ResolutionFailure` prints its category, and `ReferenceTarget`'s `Debug` no
+  longer prints an anchor name.
+- Preparation folds single-use shallow leaf definitions into the compiled
+  bundle, which lowers peak memory on definition-heavy schemas. No result
+  changes.
+
 ## Limits principle (unreleased)
 
 ### Changed
