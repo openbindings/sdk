@@ -63,6 +63,14 @@
 - The recorded Wasm asset size and the development loop's opening paragraph are
   current.
 
+- The evaluator's own lane checked a value against an enum by walking every choice, and kept walking after a match,
+  so an array of n values against n choices cost n squared comparisons. Within one evaluation, after `ilog2(m)`
+  lookups against the same enum of m choices (more than eight), it now sorts the choices once under an order whose
+  equal class is the evaluator's literal equality and answers the rest by binary search; every walk stops at its
+  first match. Preparation does no new work, a single value and a small enum cost what they did, nothing is kept
+  between evaluations, and verdicts and failing keywords are unchanged. Work for 1,024 values against 1,024 choices
+  falls from 70,947,865 units to 2,790,629.
+
 ## 2026-11-13 panel decisions (unreleased)
 
 ### Changed

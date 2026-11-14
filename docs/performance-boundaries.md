@@ -108,6 +108,35 @@ document and `ExternalSchemas` also saves work, but still prepares a fresh contr
 each `prepare` call. The SDK does not transparently cache arbitrary custom
 evaluator results.
 
+The Original evaluator builds an enum index only after repeated queries within
+one evaluation. For more than eight choices, the first `ilog2(m)` membership
+queries against the same schema position use the first-match linear walk. The
+next query uses fallible in-place heapsort over four-byte choice positions;
+subsequent queries use binary search. Across `q` queries, this takes order
+`(m + q) log m` choice comparisons, with exact comparison also depending on each
+JSON value's size. Enums of eight choices or fewer always use the linear walk.
+The common single-query counter is inline, so a single query allocates nothing
+new and adds no work debit. Other nodes use accounted entries keyed by schema
+position. No index, enum state or enum charge is added during preparation.
+
+Indexes and sorting use the evaluation's own cumulative reservation ledger and
+existing `semantic-analysis-memory-limit` refusal. A sorted index of 20,000
+choices costs 80,000 bytes, plus any counter-entry storage and comparison scratch.
+Every evaluation starts fresh: retaining a prepared schema never warms an enum
+index or changes a later call's work limit boundary. No fingerprint or secret
+seed is involved. Exact ordering uses mathematical decimals, decoded UTF-16
+strings and member-order independent objects, with heap frames for nesting.
+
+The unchanged public work-growth gate uses numeric choices under `items` and a
+reversed integer array. Minimum completing work at 64 / 256 / 1,024 choices is
+70,842 / 485,429 / 2,790,629, down from 207,193 / 4,072,729 / 70,947,865 at
+`0b1d273a`. Every fourfold increase must stay within eight times the previous work.
+Sorting now belongs to that evaluation work total. These witnesses guard this
+shape, rather than proving a bound for every JSON value. Work counts match
+wasm32 and 64-bit hosts; small enums and single queries never exceed their former
+complete walk's debit. The unmodified library and admission's literal counts
+remain unchanged.
+
 The compiled lane reserves a conservative scratch estimate before exact
 arithmetic and composite equality. Its default ceiling remains 48 MiB.
 For acyclic schemas, string, boolean and null literals add no scratch charge.

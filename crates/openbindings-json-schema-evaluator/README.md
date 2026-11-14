@@ -70,6 +70,23 @@ times value nodes of at most 40,000,000. A value outside that profile uses Origi
 selection alone is not a refusal. Failure during compiled construction can still
 refuse preparation.
 
+Original keeps enum query counts inside each evaluation, keyed by schema
+position. Enums of eight choices or fewer always scan to the first match and
+allocate no index. For a larger enum with `m` choices, the first `ilog2(m)`
+queries also scan; the next query builds a fallible heapsort index, then uses
+binary search for the rest of that evaluation. A single query allocates nothing
+new and never costs more SDK work than the former complete scan. Preparation
+builds no enum membership index or counter storage. Neither enters the prepared
+plan or survives a value call, so cold and warm calls spend the same work.
+
+The evaluation ledger reserves four bytes per indexed choice, plus accounted
+entries for additional enum nodes. An index of 20,000 choices uses 80,000 bytes.
+Sort comparisons and their scratch retain the evaluation's cumulative reservation
+policy and `semantic-analysis-memory-limit` refusal. Equality remains exact for
+mathematical numbers, decoded strings and objects in any member order. Work is
+deterministic on wasm32 and 64-bit hosts. The compiled library lane and admission
+policy are unchanged.
+
 Original uses heap frames, cooperative work checks and cumulative SDK storage
 reservations. Compiled evaluation recurses in the library, with static admission
 and a conservative peak scratch estimate within the default 48 MiB allowance.
