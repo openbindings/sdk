@@ -741,6 +741,33 @@
       "direction": "input",
       "verdict": "compatible",
       "findings": []
+    },
+    {
+      "path": "subsumption/union-uncovered-variant-input-incompatible.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-uncovered-variant-output-incompatible.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "incompatible",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-undecided-variant-input-indeterminate.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
     }
   ]
 }
