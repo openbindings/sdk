@@ -1,4 +1,4 @@
-//! Ordered enum membership over borrowed exact JSON, without fingerprints.
+//! Ordered membership and collision verification over borrowed exact JSON.
 use super::{Graph, NoVerdict, storage, value_predicates};
 use openbindings::{JsonKind, JsonRef};
 use openbindings_internal_json::{backend, decimal::Decimal};
@@ -219,32 +219,43 @@ pub(super) fn prepare<L: Ledger>(
         // Arena positions and hence array lengths are u32-bounded on all hosts.
         sorted.push(u32::try_from(at).expect("arena array position"));
     }
-    // Fallible in-place heapsort keeps worst-case n log n construction and
-    // cooperative work/refusal checks outside any infallible Ord callback.
-    for root in (0..sorted.len() / 2).rev() {
-        sift(&mut sorted, choices, root, ledger)?;
-    }
-    for end in (1..sorted.len()).rev() {
-        sorted.swap(0, end);
-        sift(&mut sorted[..end], choices, 0, ledger)?;
-    }
+    sort(&mut sorted, |a, b| {
+        order(
+            choices.element(*a as usize).expect("choice"),
+            choices.element(*b as usize).expect("choice"),
+            ledger,
+        )
+    })?;
     Ok(sorted)
 }
-fn sift<L: Ledger>(
-    values: &mut [u32],
-    choices: JsonRef<'_>,
+// Fallible in-place heapsort keeps worst-case n log n construction and
+// cooperative work/refusal checks outside any infallible Ord callback.
+pub(super) fn sort<T, E>(
+    values: &mut [T],
+    mut compare: impl FnMut(&T, &T) -> Result<Ordering, E>,
+) -> Result<(), E> {
+    for root in (0..values.len() / 2).rev() {
+        sift(values, root, &mut compare)?;
+    }
+    for end in (1..values.len()).rev() {
+        values.swap(0, end);
+        sift(&mut values[..end], 0, &mut compare)?;
+    }
+    Ok(())
+}
+fn sift<T, E>(
+    values: &mut [T],
     mut root: usize,
-    ledger: &mut L,
-) -> Result<(), L::Error> {
+    compare: &mut impl FnMut(&T, &T) -> Result<Ordering, E>,
+) -> Result<(), E> {
     while root < values.len() / 2 {
         let mut child = 2 * root + 1;
-        let choice = |at: usize| choices.element(values[at] as usize).expect("choice");
         if child + 1 < values.len()
-            && order(choice(child), choice(child + 1), ledger)? == Ordering::Less
+            && compare(&values[child], &values[child + 1])? == Ordering::Less
         {
             child += 1;
         }
-        if order(choice(root), choice(child), ledger)? != Ordering::Less {
+        if compare(&values[root], &values[child])? != Ordering::Less {
             break;
         }
         values.swap(root, child);

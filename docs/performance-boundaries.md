@@ -127,6 +127,20 @@ index or changes a later call's work limit boundary. No fingerprint or secret
 seed is involved. Exact ordering uses mathematical decimals, decoded UTF-16
 strings and member-order independent objects, with heap frames for nesting.
 
+`uniqueItems` still fingerprints each item and sorts the fixed-width candidates.
+A same-fingerprint group of at most eight retains pairwise exact verification;
+larger groups use that same charged heapsort and exact order over four-byte
+positions, then compare neighbours. The first eight candidates may already
+have undergone bounded pairwise checks. A group of `g` distinct colliding items
+now needs order `g log g` exact comparisons, independent of host seed entropy.
+The forced-collision seam's minimum completing evaluation work at 64 / 256 /
+1,024 distinct integers fell from 67,600 / 1,473,136 / 26,533,552 to
+19,356 / 139,427 / 831,106. Each fourfold increase stays within eight times the
+previous work, and the gate fails against the former implementation. Values
+without collisions keep their work debits; small groups keep pairwise verification.
+Only large groups allocate the position scratch, charged to the evaluation's
+cumulative reservation ledger. The fingerprint buffer remains read-only.
+
 The unchanged public work-growth gate uses numeric choices under `items` and a
 reversed integer array. Minimum completing work at 64 / 256 / 1,024 choices is
 70,842 / 485,429 / 2,790,629, down from 207,193 / 4,072,729 / 70,947,865 at

@@ -79,6 +79,11 @@
   asks both for every spelling in a table of 23 and requires them to agree. Supplied resources registered under
   two spellings of one URI are refused as the evaluator refuses them.
 
+- `uniqueItems` compared every pair of items that shared a fingerprint, so a group of g distinct colliding items
+  cost g squared comparisons, and on wasm32, where the fingerprint seed is not secret, a sender who knows the build
+  can make items collide. A group of more than eight is now sorted under the evaluator's exact order and checked
+  neighbour to neighbour. Arrays without collisions cost what they did; verdicts are unchanged.
+
 ## 2026-11-13 panel decisions (unreleased)
 
 ### Changed

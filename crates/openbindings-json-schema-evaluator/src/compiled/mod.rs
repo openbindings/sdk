@@ -281,10 +281,10 @@ impl Lane {
             }
         }
         if features.unique {
-            // Composite collision verification can allocate once per compared
-            // pair. This initial lane admits only a root array of scalar values
-            // whose exact numeric representation is inline; Plan covers the
-            // larger domain without a quadratic scratch under-estimate.
+            // Composite collision ordering can allocate scratch per exact
+            // comparison. This initial lane admits only a root array of scalar
+            // values whose exact numeric representation is inline; Plan covers
+            // the larger domain with cumulative scratch accounting.
             let mut elements = value.view().elements()?;
             let mut cancelled = false;
             if !elements.all(|item| {

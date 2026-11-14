@@ -87,6 +87,17 @@ mathematical numbers, decoded strings and objects in any member order. Work is
 deterministic on wasm32 and 64-bit hosts. The compiled library lane and admission
 policy are unchanged.
 
+Original `uniqueItems` keeps sorted fingerprints for candidate selection. Groups
+of at most eight candidates retain pairwise exact verification. Larger groups
+use the same fallible heapsort and exact JSON order as enum membership, then
+check adjacent values. Verification is worst-case `g log g` comparisons for a
+colliding group of `g` items, without relying on a secret seed on wasm32.
+Large groups reserve four bytes per item for sorted positions, keeping the
+ordinary fingerprint buffer read-only. Positions, comparisons and heap frames
+charge the evaluation ledger. Values without collisions retain their previous
+work debits. Exact numbers, decoded UTF-16 strings, arrays and unordered member
+maps have the same equality relation as `literal_equal`.
+
 Original uses heap frames, cooperative work checks and cumulative SDK storage
 reservations. Compiled evaluation recurses in the library, with static admission
 and a conservative peak scratch estimate within the default 48 MiB allowance.

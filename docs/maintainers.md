@@ -66,7 +66,8 @@ Hash tables must never use input-chosen content as keys, including content hashe
 and tuples containing text or bytes. Use ordered maps, ordered sets or sorted
 sequences so worst-case work needs no secret seed or host entropy; SDK-assigned
 positions and content-free identities may still use hash tables. Fingerprints
-may select sorted candidates only when exact comparisons are charged.
+may select sorted candidates only when exact comparisons are charged and large
+collision groups use bounded verification rather than all-pairs comparison.
 
 ## Resolver implementation
 

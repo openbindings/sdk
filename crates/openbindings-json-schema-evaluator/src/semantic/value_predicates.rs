@@ -4,12 +4,13 @@
     clippy::disallowed_types,
     reason = "Fingerprints select sorted candidates and every exact comparison is charged"
 )]
-use super::{Graph, NoVerdict, decision, storage};
+use super::{Graph, NoVerdict, decision, membership, storage};
 use openbindings::{JsonKind, JsonRef};
 use openbindings_internal_json::{backend, decimal::Decimal};
 use std::{
     collections::hash_map::RandomState,
     hash::{BuildHasher, DefaultHasher, Hash, Hasher},
+    ops::ControlFlow,
 };
 
 pub(super) fn number(value: JsonRef<'_>, graph: &mut Graph<'_>) -> Result<Decimal, NoVerdict> {
@@ -273,14 +274,45 @@ fn fingerprint<'a>(
 
 fn verify_candidates(
     value: JsonRef<'_>,
-    candidates: &[(u64, usize)],
+    mut candidates: &[(u64, usize)],
     graph: &mut Graph<'_>,
 ) -> Result<bool, NoVerdict> {
+    loop {
+        let start = match verify_small_candidates(value, candidates, graph)? {
+            ControlFlow::Break(unique) => return Ok(unique),
+            ControlFlow::Continue(start) => start,
+        };
+        // The first LINEAR candidates kept the ordinary verification path;
+        // the ninth candidate's tick was charged before yielding this group.
+        let mut end = start + membership::LINEAR + 1;
+        while end < candidates.len() && candidates[end].0 == candidates[start].0 {
+            graph.tick()?;
+            end += 1;
+        }
+        if !ordered_unique(value, &candidates[start..end], graph)? {
+            return Ok(false);
+        }
+        candidates = &candidates[end..];
+    }
+}
+
+// Keep the ordinary borrowed scan separate from the rare indexed sort. A large
+// group resumes in the caller without recursive frames.
+#[inline(never)]
+fn verify_small_candidates(
+    value: JsonRef<'_>,
+    candidates: &[(u64, usize)],
+    graph: &mut Graph<'_>,
+) -> Result<ControlFlow<bool, usize>, NoVerdict> {
     let mut start = 0;
     for at in 0..candidates.len() {
         graph.tick()?;
         if candidates[at].0 != candidates[start].0 {
             start = at;
+            continue;
+        }
+        if at - start == membership::LINEAR {
+            return Ok(ControlFlow::Continue(start));
         }
         for prior in start..at {
             graph.tick()?;
@@ -289,8 +321,33 @@ fn verify_candidates(
                 value.element(candidates[prior].1).expect("element"),
                 graph,
             )? {
-                return Ok(false);
+                return Ok(ControlFlow::Break(false));
             }
+        }
+    }
+    Ok(ControlFlow::Break(true))
+}
+
+#[cold]
+fn ordered_unique(
+    value: JsonRef<'_>,
+    candidates: &[(u64, usize)],
+    graph: &mut Graph<'_>,
+) -> Result<bool, NoVerdict> {
+    let mut sorted = Vec::new();
+    storage::reserve(&mut sorted, candidates.len(), graph)?;
+    for &(_, at) in candidates {
+        graph.tick()?;
+        sorted.push(u32::try_from(at).expect("arena array position"));
+    }
+    let item = |at: u32| value.element(at as usize).expect("element");
+    membership::sort(&mut sorted, |a, b| {
+        membership::order(item(*a), item(*b), graph)
+    })?;
+    for pair in sorted.windows(2) {
+        graph.tick()?;
+        if membership::order(item(pair[0]), item(pair[1]), graph)?.is_eq() {
+            return Ok(false);
         }
     }
     Ok(true)
@@ -456,6 +513,150 @@ mod tests {
             );
             assert_eq!(
                 unique(value.view(), &RandomState::new(), &mut graph).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn forced_collision_work_grows_no_faster_than_n_log_n() {
+        let control = AtomicBool::new(false);
+        let mut measurements = Vec::new();
+        for n in [64, 256, 1_024] {
+            let value = JsonValue::parse(format!(
+                "[{}]",
+                (0..n)
+                    .rev()
+                    .map(|i| i.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ))
+            .unwrap();
+            let candidates: Vec<_> = (0..n).map(|at| (0, at)).collect();
+            // Graph owns the evaluation_sdk_work_units allowance. Use the same
+            // forced-fingerprint seam as the exact-collision witness above.
+            let completes = |work| {
+                let mut graph = Graph::new(1 << 28, Some(work), 0, &control);
+                match verify_candidates(value.view(), &candidates, &mut graph) {
+                    Ok(unique) => {
+                        assert!(unique);
+                        true
+                    }
+                    Err(detail) => {
+                        assert_eq!(detail.code, "evaluation-work-limit");
+                        false
+                    }
+                }
+            };
+            assert!(!completes(0));
+            let (mut lo, mut hi) = (0, 1usize);
+            while !completes(hi) {
+                hi = hi.checked_mul(2).unwrap();
+            }
+            while hi - lo > 1 {
+                let mid = lo + (hi - lo) / 2;
+                if completes(mid) {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
+            }
+            assert!(completes(hi));
+            assert!(!completes(hi - 1));
+            println!("forced unique collision: n={n}, minimum evaluation_sdk_work_units={hi}");
+            measurements.push(hi);
+        }
+        for pair in measurements.windows(2) {
+            assert!(pair[1] <= 8 * pair[0], "{} > 8 * {}", pair[1], pair[0]);
+        }
+    }
+
+    #[test]
+    fn noncolliding_verification_keeps_its_work_and_allocation_cost() {
+        let control = AtomicBool::new(false);
+        let value = JsonValue::parse(format!(
+            "[{}]",
+            (0..1_024)
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        ))
+        .unwrap();
+        // Fingerprints are a seam here: no pair is a verification candidate.
+        let candidates: Vec<_> = (0..1_024).map(|at| (at as u64, at)).collect();
+        let mut graph = Graph::new(0, Some(1_024), 0, &control);
+        assert!(verify_candidates(value.view(), &candidates, &mut graph).unwrap());
+        assert_eq!(graph.remaining().work, Some(0));
+        assert_eq!(graph.remaining().bytes, 0);
+    }
+
+    #[test]
+    fn forced_large_collision_positions_use_the_evaluation_reservation() {
+        let control = AtomicBool::new(false);
+        let value = JsonValue::parse(format!(
+            "[{}]",
+            (0..64).map(|i| i.to_string()).collect::<Vec<_>>().join(",")
+        ))
+        .unwrap();
+        let candidates: Vec<_> = (0..64).map(|at| (0, at)).collect();
+        let mut tight = Graph::new(4 * 64 - 1, None, 0, &control);
+        assert_eq!(
+            verify_candidates(value.view(), &candidates, &mut tight)
+                .unwrap_err()
+                .code,
+            "semantic-analysis-memory-limit"
+        );
+        let mut funded = Graph::new(4 * 64, None, 0, &control);
+        assert!(verify_candidates(value.view(), &candidates, &mut funded).unwrap());
+        assert_eq!(funded.remaining().bytes, 0);
+    }
+
+    #[test]
+    fn forced_large_collision_groups_find_duplicate_pairs_anywhere() {
+        let control = AtomicBool::new(false);
+        for n in [8, 9, 17] {
+            for a in 0..n {
+                for b in a + 1..n {
+                    let value = JsonValue::parse(format!(
+                        "[{}]",
+                        (0..n)
+                            .map(|i| if i == b {
+                                format!("{a}.0")
+                            } else {
+                                i.to_string()
+                            })
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    ))
+                    .unwrap();
+                    let candidates: Vec<_> = (0..n).map(|at| (7, at)).collect();
+                    let mut graph = Graph::new(1 << 24, None, 0, &control);
+                    assert!(!verify_candidates(value.view(), &candidates, &mut graph).unwrap());
+                }
+            }
+        }
+        for (a, b) in [
+            ("1e400", "10e399"),
+            (r#""\uD800""#, r#""\ud800""#),
+            (r#""😀""#, r#""\ud83d\ude00""#),
+            (r#"{"a":[1,2],"b":0}"#, r#"{"b":-0.0,"a":[1.0,2e0]}"#),
+        ] {
+            let value =
+                JsonValue::parse(format!("[{a},null,false,true,[],{{}},2,3,4,{b}]")).unwrap();
+            let candidates: Vec<_> = (0..10).map(|at| (0, at)).collect();
+            let mut graph = Graph::new(1 << 24, None, 0, &control);
+            assert!(!verify_candidates(value.view(), &candidates, &mut graph).unwrap());
+        }
+        for (last, expected) in [(99, false), (100, true)] {
+            let value = JsonValue::parse(format!(
+                "[{},99,{last}]",
+                (0..17).map(|i| i.to_string()).collect::<Vec<_>>().join(",")
+            ))
+            .unwrap();
+            let candidates: Vec<_> = (0..19).map(|at| (u64::from(at >= 17), at)).collect();
+            let mut graph = Graph::new(1 << 20, None, 0, &control);
+            assert_eq!(
+                verify_candidates(value.view(), &candidates, &mut graph).unwrap(),
                 expected
             );
         }
