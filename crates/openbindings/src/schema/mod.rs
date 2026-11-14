@@ -7,7 +7,8 @@ use crate::*;
 pub use evaluation::*;
 pub use inventory::{ResourceBase, ResourceIdentity, SchemaEnvironment, SchemaNode};
 pub use references::{
-    Reference, ReferenceRefusal, ReferenceRefusalReason, ReferenceReport, ReferenceResolution,
+    Reference, ReferenceLimits, ReferenceRefusal, ReferenceRefusalReason, ReferenceReport,
+    ReferenceResolution,
 };
 pub use references::{ReferenceDefect, ReferenceTarget, ResolutionFailure, ResolutionFailureKind};
 pub use resources::*;

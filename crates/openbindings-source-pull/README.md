@@ -27,7 +27,8 @@ then checks key/alias collisions, selected-source attribution, report coverage,
 canonical operation keys, uses labels and input-document labels in binding
 `references` and omitted `existing`, `alsoIdentifies` and `through` fields.
 Input-document labels use primary keys, with operation slots required to exist. It validates a prospective document
-with all additions before returning the exact result. The original remains
+with all additions before returning `(PullResult, ConformantDocument)`. The second
+element is that prospective snapshot, retaining the original JSON limits. The original remains
 unchanged and stale proposals are never applied.
 Use `pull_source_with_limits(request, control, limits)` for caller-selected limits.
 The blanket implementation cannot be overridden by an adapter; explicit calls to
@@ -41,7 +42,7 @@ async fn inspect<P: SourcePuller>(provider: P, document: ConformantDocument)
     -> Result<bool, PullError<P::Error>>
 {
     let request = PullRequest::new(document, "catalog");
-    let result = provider
+    let (result, _prospective) = provider
         .pull_source(request, CancellationToken::new()).await?;
     Ok(result.report().is_complete())
 }
@@ -62,6 +63,21 @@ When the native error implements `std::error::Error + 'static`,
 `PullError::source()` leads to `PullFailure`, then to that native error.
 Validation failures are sources too. Apply the application's disclosure policy
 before printing a native cause or a cause chain.
+
+`PullFailure::map_error` and `PullError::map_error` consume the failure and map
+only its native error parameter with an `FnOnce`. Context challenges, local
+validation failures and both cancellation layers pass through unchanged, without
+calling the closure. A concrete host combining kinds can use
+`failure.map_error(HostError::FirstKind)` without matching unknown variants.
+`RequestError`, `PullValidationError`, `PullFailure` and `PullError` are
+non-exhaustive. Refuse an unknown failure or propagate it unchanged.
+
+`CarrierError` is a struct with `kind() -> CarrierErrorKind`, a Copy category,
+and `pointer() -> Option<&openbindings::Pointer>`. A malformed `added`, `existing`
+or `omitted` row is located as `/existing/1`, or `/report/existing/1` when admitted
+through `PullResult::from_json`. Nested loss and proposal failures identify their
+enclosing row. Other failures may have no pointer. Formatting never repeats
+supplied names, messages or data; `Display` retains the category's fixed wording.
 
 `PullResult::validate_for` also checks an already supplied result and returns the
 prospective conformant document. That establishes core conformance, not offered

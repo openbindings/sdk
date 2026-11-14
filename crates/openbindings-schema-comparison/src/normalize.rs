@@ -1,3 +1,4 @@
+use crate::ComparisonFailureKind as FailureKind;
 use crate::{
     ComparisonFailure as Failure, SchemaInput,
     budget::Attempt,
@@ -140,8 +141,12 @@ fn retained_applicator(key: &[u16]) -> bool {
     .iter()
     .any(|s| is(key, s))
 }
-pub(crate) fn normalize(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
-    let resources = Resources::new(input, attempt)?;
+pub(crate) fn normalize(
+    input: &SchemaInput,
+    side: crate::ComparisonSide,
+    attempt: &mut Attempt<'_>,
+) -> Result<Value, Failure> {
+    let resources = Resources::new(input, side, attempt)?;
     let active = attempt.vector(129)?;
     Engine::<false> {
         resources,
@@ -154,11 +159,12 @@ pub(crate) fn normalize(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Resul
 }
 pub(crate) fn normalize_with_references(
     input: &SchemaInput,
+    side: crate::ComparisonSide,
     leaves: &BTreeMap<crate::reference_identity::ReferenceKey, ()>,
     accounted_for: &dyn Fn(crate::ReferenceContext<'_>) -> bool,
     attempt: &mut Attempt<'_>,
 ) -> Result<Value, Failure> {
-    let resources = Resources::new(input, attempt)?;
+    let resources = Resources::new(input, side, attempt)?;
     let active = attempt.vector(129)?;
     Engine::<true> {
         resources,
@@ -218,12 +224,20 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         let identity = (backend::occurrence(schema), scope);
         attempt.work(self.active.len().saturating_add(1))?;
         if self.active.contains(&identity) {
-            return Err(Failure::ReferenceCycle);
+            return Err(self.resources.locate_failure(
+                Failure::from(FailureKind::ReferenceCycle),
+                schema,
+                scope,
+                attempt,
+            ));
         }
         self.active.push(identity);
         let result = self.inner(schema, scope, depth, attempt);
         self.active.pop();
-        result
+        result.map_err(|failure| {
+            self.resources
+                .locate_failure(failure, schema, scope, attempt)
+        })
     }
     fn target_schema(
         &mut self,
@@ -280,7 +294,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         let reference = schema
             .get(if dynamic { "$dynamicRef" } else { "$ref" })
             .expect("reference leaf");
-        let spelling = reference.as_str().ok_or(Failure::InvalidReference)?;
+        let spelling = reference.as_str().ok_or(FailureKind::InvalidReference)?;
         Ok((self.accounted_for.expect("reference variant"))(
             self.resources.context(scope, schema, spelling, attempt)?,
         ))
@@ -308,7 +322,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
     ) -> Result<Value, Failure> {
         if is(key, "dependentSchemas") || is(key, "patternProperties") || is(key, "properties") {
             let mut object = Object::new();
-            for member in raw.members().ok_or(Failure::InvalidSchema)? {
+            for member in raw.members().ok_or(FailureKind::InvalidSchema)? {
                 let name = value::name(member.name, attempt)?;
                 let child = self.child(
                     member.value,
@@ -325,7 +339,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             .iter()
             .any(|s| is(key, s))
         {
-            let elements = raw.elements().ok_or(Failure::InvalidSchema)?;
+            let elements = raw.elements().ok_or(FailureKind::InvalidSchema)?;
             let mut children = attempt.vector(elements.len())?;
             for child in elements {
                 children.push(self.child(child, scope, depth + 1, (key, None), true, attempt)?);
@@ -347,12 +361,20 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         let identity = (backend::occurrence(schema), scope);
         attempt.work(self.active.len().saturating_add(1))?;
         if self.active.contains(&identity) {
-            return Err(Failure::ReferenceCycle);
+            return Err(self.resources.locate_failure(
+                Failure::from(FailureKind::ReferenceCycle),
+                schema,
+                scope,
+                attempt,
+            ));
         }
         self.active.push(identity);
         let result = self.retained_inner(schema, scope, depth, attempt);
         self.active.pop();
-        result
+        result.map_err(|failure| {
+            self.resources
+                .locate_failure(failure, schema, scope, attempt)
+        })
     }
     fn retained_inner(
         &mut self,
@@ -365,7 +387,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             return value::import(schema, depth, attempt);
         }
         let mut object = Object::new();
-        for member in schema.members().ok_or(Failure::InvalidSchema)? {
+        for member in schema.members().ok_or(FailureKind::InvalidSchema)? {
             let key = value::name(member.name, attempt)?;
             let child = if is(&key, "$ref") || is(&key, "$dynamicRef") {
                 if self.keep_reference(schema, scope, is(&key, "$dynamicRef"), attempt)? {
@@ -408,7 +430,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             }
             return Ok(Value::Object(object));
         }
-        let members = schema.members().ok_or(Failure::InvalidSchema)?;
+        let members = schema.members().ok_or(FailureKind::InvalidSchema)?;
         let mut raw = BTreeMap::new();
         // A schema has only fixed-size keyword probes below. Reserving their
         // aggregate work by member count also covers outside-keyword classification.
@@ -442,7 +464,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
                 strings(raw, false, attempt)?
             } else if is(&key, "properties") {
                 let mut properties = Object::new();
-                for member in raw.members().ok_or(Failure::InvalidSchema)? {
+                for member in raw.members().ok_or(FailureKind::InvalidSchema)? {
                     let name = value::name(member.name, attempt)?;
                     let child = self.child(
                         member.value,
@@ -460,11 +482,11 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             {
                 self.child(raw, scope, depth + 1, (&key, None), false, attempt)?
             } else if is(&key, "additionalProperties") {
-                Value::Boolean(raw.as_bool().ok_or(Failure::InvalidSchema)?)
+                Value::Boolean(raw.as_bool().ok_or(FailureKind::InvalidSchema)?)
             } else if is(&key, "allOf") || is(&key, "oneOf") || is(&key, "anyOf") {
-                let elements = raw.elements().ok_or(Failure::InvalidSchema)?;
+                let elements = raw.elements().ok_or(FailureKind::InvalidSchema)?;
                 if elements.len() == 0 {
-                    return Err(Failure::InvalidSchema);
+                    return Err(Failure::from(FailureKind::InvalidSchema));
                 }
                 let mut values = attempt.vector(elements.len())?;
                 for child in elements {
@@ -492,7 +514,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
                 }
             } else {
                 if is(&key, "enum") && raw.kind() != JsonKind::Array {
-                    return Err(Failure::InvalidSchema);
+                    return Err(Failure::from(FailureKind::InvalidSchema));
                 }
                 if [
                     "minimum",
@@ -508,7 +530,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
                 .any(|name| is(&key, name))
                     && raw.kind() != JsonKind::Number
                 {
-                    return Err(Failure::InvalidSchema);
+                    return Err(Failure::from(FailureKind::InvalidSchema));
                 }
                 value::import(raw, depth + 1, attempt)?
             };
@@ -541,7 +563,7 @@ fn strings(raw: JsonRef<'_>, types: bool, attempt: &mut Attempt<'_>) -> Result<V
             .iter()
             .any(|name| is(&key, name))
         {
-            return Err(Failure::InvalidSchema);
+            return Err(Failure::from(FailureKind::InvalidSchema));
         }
         // Deduplication is specifically part of type/required normalization.
         attempt.work(
@@ -558,9 +580,9 @@ fn strings(raw: JsonRef<'_>, types: bool, attempt: &mut Attempt<'_>) -> Result<V
     if types && raw.kind() == JsonKind::String {
         add(raw)?;
     } else {
-        let elements = raw.elements().ok_or(Failure::InvalidSchema)?;
+        let elements = raw.elements().ok_or(FailureKind::InvalidSchema)?;
         if types && elements.len() == 0 {
-            return Err(Failure::InvalidSchema);
+            return Err(Failure::from(FailureKind::InvalidSchema));
         }
         for item in elements {
             add(item)?;

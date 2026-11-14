@@ -24,7 +24,7 @@ fn proof(document: Document) -> ConformantDocument {
 }
 async fn pull(document: ConformantDocument, embedded: bool) -> PullResult {
     let request = PullRequest::new(document, "catalog");
-    if embedded {
+    let (result, _) = if embedded {
         (Embedded)
             .pull_source(request, CancellationToken::new())
             .await
@@ -34,7 +34,8 @@ async fn pull(document: ConformantDocument, embedded: bool) -> PullResult {
             .pull_source(request, CancellationToken::new())
             .await
             .unwrap()
-    }
+    };
+    result
 }
 async fn invoke(
     provider: Arc<Catalog>,

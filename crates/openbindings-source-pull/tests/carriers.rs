@@ -114,15 +114,16 @@ fn proposal_authority_is_target_local_and_unknown_metadata_never_gains_edit_powe
     ] {
         let proposal = json(&format!(r#"{{"data":null,"{name}":null}}"#));
         assert_eq!(
-            BindingProposal::from_json(proposal).unwrap_err(),
-            CarrierError::ProposalAuthority
+            BindingProposal::from_json(proposal).unwrap_err().kind(),
+            CarrierErrorKind::ProposalAuthority
         );
     }
     for name in ["kind", "description"] {
         assert_eq!(
             SourceProposal::from_json(json(&format!(r#"{{"data":null,"{name}":"new"}}"#)))
-                .unwrap_err(),
-            CarrierError::ProposalAuthority
+                .unwrap_err()
+                .kind(),
+            CarrierErrorKind::ProposalAuthority
         );
     }
     assert!(
@@ -153,15 +154,17 @@ fn absence_null_and_removal_only_drift_are_not_interchangeable() {
     let proposal = BindingProposal::from_json(json(r#"{"data":null}"#)).unwrap();
     assert_eq!(proposal.data().unwrap().text(), "null");
     assert_eq!(
-        BindingProposal::from_json(json(r#"{"uses":[]}"#)).unwrap_err(),
-        CarrierError::EmptyBindingProposal
+        BindingProposal::from_json(json(r#"{"uses":[]}"#))
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::EmptyBindingProposal
     );
     for proposal in [r#"{"input":null}"#, r#"{"output":null}"#] {
         assert!(BindingProposal::from_json(json(proposal)).is_err());
     }
     assert_eq!(
-        SourceProposal::from_json(json("{}")).unwrap_err(),
-        CarrierError::MissingField("data")
+        SourceProposal::from_json(json("{}")).unwrap_err().kind(),
+        CarrierErrorKind::MissingField("data")
     );
     let absent = PullReport::from_json(json(r#"{"exhaustive":true,"added":[]}"#)).unwrap();
     assert!(absent.existing().is_none());
@@ -208,15 +211,17 @@ fn complete_pull_checks_exhaustive_and_all_assessment_gaps() {
 fn duplicate_members_and_uses_are_rejected_without_rewriting_nested_opaque_data() {
     assert_eq!(
         PullReport::from_json(json(r#"{"exhaustive":true,"added":[],"\u0061dded":[]}"#))
-            .unwrap_err(),
-        CarrierError::DuplicateMember
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::DuplicateMember
     );
     assert_eq!(
         AddedEntry::from_json(json(
             r#"{"binding":"b","operation":"o","uses":["schemas/A","schemas/\u0041"]}"#
         ))
-        .unwrap_err(),
-        CarrierError::DuplicateUse
+        .unwrap_err()
+        .kind(),
+        CarrierErrorKind::DuplicateUse
     );
     let proposal = BindingProposal::from_json(json(r#"{"data":{"x":1,"x":2}}"#)).unwrap();
     assert!(proposal.data().unwrap().has_duplicate_names());
@@ -343,51 +348,64 @@ fn schema_proposal_uses_is_only_retained_unknown_metadata() {
 
 #[test]
 fn a_field_name_several_carriers_share_says_which_one() {
-    let missing = |field| CarrierError::MissingField(field);
+    let missing = |field| CarrierErrorKind::MissingField(field);
     assert_eq!(
-        PullLoss::from_json(json(r#"{"reasonCode":"r"}"#)).unwrap_err(),
+        PullLoss::from_json(json(r#"{"reasonCode":"r"}"#))
+            .unwrap_err()
+            .kind(),
         missing("lossy/message")
     );
     assert_eq!(
-        PullLimitation::from_json(json(r#"{"code":"c"}"#)).unwrap_err(),
+        PullLimitation::from_json(json(r#"{"code":"c"}"#))
+            .unwrap_err()
+            .kind(),
         missing("limitation/message")
     );
     assert_eq!(
-        ExistingEntry::from_json(json(r#"{"binding":"b"}"#)).unwrap_err(),
+        ExistingEntry::from_json(json(r#"{"binding":"b"}"#))
+            .unwrap_err()
+            .kind(),
         missing("existing/status")
     );
     assert_eq!(
         ExistingEntry::from_json(json(
             r#"{"binding":"b","status":"unassessed","reasonCode":"r"}"#
         ))
-        .unwrap_err(),
+        .unwrap_err()
+        .kind(),
         missing("existing/message")
     );
     assert_eq!(
-        OmittedEntry::from_json(json(r#"{"status":"invalid","reasonCode":"r"}"#)).unwrap_err(),
+        OmittedEntry::from_json(json(r#"{"status":"invalid","reasonCode":"r"}"#))
+            .unwrap_err()
+            .kind(),
         missing("omitted/message")
     );
     assert_eq!(
         OmittedEntry::from_json(json(r#"{"status":"nope","reasonCode":"r","message":"m"}"#))
-            .unwrap_err(),
-        CarrierError::FieldType("omitted/status")
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::FieldType("omitted/status")
     );
     assert_eq!(
         OmittedEntry::from_json(json(
             r#"{"status":"conflict","reasonCode":"r","message":"m","offered":true}"#
         ))
-        .unwrap_err(),
+        .unwrap_err()
+        .kind(),
         missing("omitted/existing")
     );
     assert_eq!(
         ExistingEntry::from_json(json(r#"{"binding":"b","status":"current","details":1}"#))
-            .unwrap_err(),
-        CarrierError::StatusFields
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::StatusFields
     );
     assert_eq!(
         ExistingEntry::from_json(json(r#"{"binding":"b","status":"unmatched","details":1}"#))
-            .unwrap_err(),
-        CarrierError::FieldType("existing/details")
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::FieldType("existing/details")
     );
     // The same message from a whole result, as an adapter's author would see it.
     let error = PullResult::from_json(json(

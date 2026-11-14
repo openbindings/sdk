@@ -1,4 +1,4 @@
-use openbindings_schema_comparison::ComparisonFailure;
+use openbindings_schema_comparison::{ComparisonFailure, ComparisonFailureKind};
 use source_pull_consumer::CatalogError;
 use std::error::Error;
 
@@ -7,13 +7,17 @@ fn catalog_errors_display_and_preserve_the_comparison_cause() {
     let source = CatalogError::Source;
     assert!(!source.to_string().is_empty());
     assert!(source.source().is_none());
-    let comparison = CatalogError::Comparison(ComparisonFailure::LimitExceeded("work"));
+    let comparison = CatalogError::Comparison(ComparisonFailure::from(
+        ComparisonFailureKind::LimitExceeded("work"),
+    ));
     assert!(comparison.to_string().contains("comparison"));
     assert_eq!(
         comparison
             .source()
             .unwrap()
             .downcast_ref::<ComparisonFailure>(),
-        Some(&ComparisonFailure::LimitExceeded("work"))
+        Some(&ComparisonFailure::from(
+            ComparisonFailureKind::LimitExceeded("work")
+        ))
     );
 }

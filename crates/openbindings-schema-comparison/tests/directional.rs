@@ -123,6 +123,8 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
     let report = check_interface(
         &required,
         &provided,
+        &ComparisonContext::new(required.document().value().clone()),
+        &ComparisonContext::new(provided.document().value().clone()),
         &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits::default(),
     )
@@ -149,14 +151,19 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
             ("z", InterfaceIssueKind::Missing),
         ]
     );
-    assert_eq!(summary(&report), Err(ComparisonFailure::UnsatisfiableMerge));
     assert_eq!(
-        report.issues().nth(1).unwrap().failure(),
-        Some(ComparisonFailure::UnsatisfiableMerge)
+        (summary(&report)).map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::UnsatisfiableMerge)
+    );
+    assert_eq!(
+        (report.issues().nth(1).unwrap().failure()).map(|failure| failure.kind()),
+        Some(ComparisonFailureKind::UnsatisfiableMerge)
     );
     let opposite = check_interface(
         &provided,
         &required,
+        &ComparisonContext::new(provided.document().value().clone()),
+        &ComparisonContext::new(required.document().value().clone()),
         &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits::default(),
     )
@@ -186,6 +193,8 @@ fn public_diagnostic_formatting_does_not_disclose_report_data() {
     let report = check_interface(
         &required,
         &provided,
+        &ComparisonContext::new(required.document().value().clone()),
+        &ComparisonContext::new(provided.document().value().clone()),
         &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits::default(),
     )
@@ -221,8 +230,8 @@ fn wide_enum_search_and_later_interface_slots_share_the_finite_allowance() {
         Ok(false)
     );
     assert!(matches!(
-        compare(Direction::Input, &target, &candidate, &limits),
-        Err(ComparisonFailure::LimitExceeded(_))
+        (compare(Direction::Input, &target, &candidate, &limits)).map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::LimitExceeded(_))
     ));
     let required = doc(&format!(
         r#"{{"openbindings":"0.2.0","operations":{{"a":{{"output":{c},"input":{t}}},"b":{{"input":true}}}}}}"#
@@ -233,6 +242,8 @@ fn wide_enum_search_and_later_interface_slots_share_the_finite_allowance() {
     let report = check_interface(
         &required,
         &provided,
+        &ComparisonContext::new(required.document().value().clone()),
+        &ComparisonContext::new(provided.document().value().clone()),
         &|_, _| Some(OperationRole::Realized),
         &limits,
     )
@@ -243,9 +254,18 @@ fn wide_enum_search_and_later_interface_slots_share_the_finite_allowance() {
         .unwrap()
         .as_ref()
         .unwrap_err();
-    assert!(matches!(failure, ComparisonFailure::LimitExceeded(_)));
-    assert_eq!(report.operations()[0].input().unwrap(), &Err(*failure));
-    assert_eq!(report.operations()[1].input().unwrap(), &Err(*failure));
+    assert!(matches!(
+        (failure).kind(),
+        ComparisonFailureKind::LimitExceeded(_)
+    ));
+    assert_eq!(
+        report.operations()[0].input().unwrap(),
+        &Err(failure.clone())
+    );
+    assert_eq!(
+        report.operations()[1].input().unwrap(),
+        &Err(failure.clone())
+    );
 }
 struct Control {
     checks: AtomicUsize,
@@ -287,7 +307,7 @@ fn controlled_directional_calls_refuse_resources_and_cancel_without_a_verdict() 
     let count = baseline.checks.load(Ordering::Relaxed);
     for cancel in [0, count / 2, count - 1] {
         assert_eq!(
-            compare_with_control(
+            (compare_with_control(
                 Direction::Input,
                 &target,
                 &candidate,
@@ -296,8 +316,9 @@ fn controlled_directional_calls_refuse_resources_and_cancel_without_a_verdict() 
                     checks: AtomicUsize::new(0),
                     cancel
                 }
-            ),
-            Err(ComparisonFailure::Cancelled)
+            ))
+            .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::Cancelled)
         );
     }
     for limits in [
@@ -315,19 +336,21 @@ fn controlled_directional_calls_refuse_resources_and_cancel_without_a_verdict() 
         },
     ] {
         assert!(matches!(
-            compare(Direction::Input, &target, &candidate, &limits),
-            Err(ComparisonFailure::LimitExceeded(_))
+            (compare(Direction::Input, &target, &candidate, &limits))
+                .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::LimitExceeded(_))
         ));
     }
     assert_eq!(
-        compare_with_control(
+        (compare_with_control(
             Direction::Input,
             &target,
             &candidate,
             &ComparisonLimits::default(),
             &AtomicBool::new(true)
-        ),
-        Err(ComparisonFailure::Cancelled)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::Cancelled)
     );
 }
 
@@ -347,6 +370,8 @@ fn interface_memory_allows_sequential_slots_but_refuses_one_large_slot() {
     let report = check_interface(
         &document,
         &document,
+        &ComparisonContext::new(document.document().value().clone()),
+        &ComparisonContext::new(document.document().value().clone()),
         &|_, _| Some(OperationRole::Realized),
         &limits,
     )
@@ -355,8 +380,8 @@ fn interface_memory_allows_sequential_slots_but_refuses_one_large_slot() {
     assert_eq!(report.issues().count(), 0);
     let wide = schema(&serde_json::json!({"enum":vec![literal; 32]}).to_string());
     assert_eq!(
-        compare(Direction::Input, &wide, &wide, &limits),
-        Err(ComparisonFailure::LimitExceeded("allocation-bytes"))
+        (compare(Direction::Input, &wide, &wide, &limits)).map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::LimitExceeded("allocation-bytes"))
     );
 }
 
@@ -373,9 +398,13 @@ fn interface_memory_keeps_retained_report_reasons_charged() {
             .collect();
         doc(&serde_json::json!({"openbindings":"0.2.0","operations":operations}).to_string())
     };
+    let required = document("a");
+    let provided = document("b");
     let report = check_interface(
-        &document("a"),
-        &document("b"),
+        &required,
+        &provided,
+        &ComparisonContext::new(required.document().value().clone()),
+        &ComparisonContext::new(provided.document().value().clone()),
         &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits {
             max_allocation_bytes: 64 * 1024,
@@ -393,8 +422,11 @@ fn interface_memory_keeps_retained_report_reasons_charged() {
         Verdict::Incompatible
     );
     assert_eq!(
-        report.operations().last().unwrap().input(),
-        Some(&Err(ComparisonFailure::LimitExceeded("allocation-bytes")))
+        (report.operations().last().unwrap().input())
+            .map(|slot| slot.as_ref().map_err(|failure| failure.kind())),
+        Some(Err(ComparisonFailureKind::LimitExceeded(
+            "allocation-bytes"
+        )))
     );
 }
 
@@ -408,7 +440,7 @@ fn summary(report: &InterfaceComparison) -> Result<Verdict, ComparisonFailure> {
             .into_iter()
             .flatten()
         {
-            verdicts.push(slot.as_ref().map_err(|e| *e)?.verdict());
+            verdicts.push(slot.as_ref().map_err(Clone::clone)?.verdict());
         }
     }
     Ok(Verdict::collapse(verdicts))
@@ -426,6 +458,8 @@ fn every_alias_match_is_checked_in_each_selected_role() {
         let report = check_interface(
             &required,
             &provided,
+            &ComparisonContext::new(required.document().value().clone()),
+            &ComparisonContext::new(provided.document().value().clone()),
             &|operation, _| match operation.key() {
                 "contract" => Some(OperationRole::Both),
                 "z" => Some(OperationRole::Consumed),
@@ -475,6 +509,8 @@ fn every_alias_match_is_checked_in_each_selected_role() {
         check_interface(
             &required,
             &provided,
+            &ComparisonContext::new(required.document().value().clone()),
+            &ComparisonContext::new(provided.document().value().clone()),
             &|_, _| Some(OperationRole::Realized),
             &ComparisonLimits::default()
         )
@@ -497,6 +533,8 @@ fn roles_are_selected_once_per_distinct_match_and_once_when_missing() {
     let report = check_interface(
         &required,
         &provided,
+        &ComparisonContext::new(required.document().value().clone()),
+        &ComparisonContext::new(provided.document().value().clone()),
         &|required, provided| {
             calls.borrow_mut().push((
                 required.key().to_owned(),
@@ -537,6 +575,8 @@ fn roles_are_selected_once_per_distinct_match_and_once_when_missing() {
     let excluded = check_interface(
         &required,
         &provided,
+        &ComparisonContext::new(required.document().value().clone()),
+        &ComparisonContext::new(provided.document().value().clone()),
         &|_, matched| matched.map(|_| OperationRole::Realized),
         &ComparisonLimits::default(),
     )
@@ -562,6 +602,8 @@ fn interface_cancellation_including_the_final_slot_returns_no_report() {
         check_interface_with_control(
             &document,
             &document,
+            &ComparisonContext::new(document.document().value().clone()),
+            &ComparisonContext::new(document.document().value().clone()),
             &|_, _| Some(OperationRole::Realized),
             &ComparisonLimits::default(),
             control,
@@ -577,7 +619,10 @@ fn interface_cancellation_including_the_final_slot_returns_no_report() {
             calls: AtomicUsize::new(0),
             cancel_at,
         };
-        assert!(matches!(run(&control), Err(ComparisonFailure::Cancelled)));
+        assert!(matches!(
+            (run(&control)).map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::Cancelled)
+        ));
     }
 }
 

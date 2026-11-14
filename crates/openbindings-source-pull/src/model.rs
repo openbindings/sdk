@@ -1,4 +1,7 @@
-use crate::carrier::{self, CarrierError};
+use crate::{
+    CarrierErrorKind,
+    carrier::{self, CarrierError},
+};
 use openbindings::{JsonKind, JsonObject, JsonRef, JsonStringRef, JsonValue};
 use std::fmt;
 
@@ -33,7 +36,7 @@ macro_rules! finite {
         pub enum $name { $(#[doc=$text] $variant),+ }
         impl $name {
             fn read(value:openbindings::JsonRef<'_>)->Result<Self,CarrierError> {
-                match value.as_str() { $(Some($text)=>Ok(Self::$variant),)+ _=>Err(CarrierError::FieldType($field)) }
+                match value.as_str() { $(Some($text)=>Ok(Self::$variant),)+ _=>Err(CarrierError::from(CarrierErrorKind::FieldType($field))) }
             }
             /// Return the published carrier spelling.
             pub fn as_str(self)->&'static str { match self { $(Self::$variant=>$text),+ } }
@@ -170,13 +173,13 @@ impl BindingProposal {
                 "tags",
             ],
         ) {
-            return Err(CarrierError::ProposalAuthority);
+            return Err(CarrierError::from(CarrierErrorKind::ProposalAuthority));
         }
         if !["data", "input", "output", "remove"]
             .iter()
             .any(|name| object.value().get(name).is_some())
         {
-            return Err(CarrierError::EmptyBindingProposal);
+            return Err(CarrierError::from(CarrierErrorKind::EmptyBindingProposal));
         }
         for name in ["input", "output"] {
             if let Some(schema) = object.value().get(name) {
@@ -218,11 +221,11 @@ impl SourceProposal {
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
         if object.value().get("data").is_none() && object.value().get("remove").is_none() {
-            return Err(CarrierError::MissingField("data"));
+            return Err(CarrierError::from(CarrierErrorKind::MissingField("data")));
         }
         carrier::removals(&object, &["data"])?;
         if carrier::forbidden(&object, &["kind", "description"]) {
-            return Err(CarrierError::ProposalAuthority);
+            return Err(CarrierError::from(CarrierErrorKind::ProposalAuthority));
         }
         Ok(Self(object))
     }
@@ -299,11 +302,11 @@ impl ExistingEntry {
             if let Some(value) = object.value().get(name) {
                 carrier::string(value, name, true)?;
                 if target.replace(name).is_some() {
-                    return Err(CarrierError::ExistingTarget);
+                    return Err(CarrierError::from(CarrierErrorKind::ExistingTarget));
                 }
             }
         }
-        let target = target.ok_or(CarrierError::ExistingTarget)?;
+        let target = target.ok_or(CarrierError::from(CarrierErrorKind::ExistingTarget))?;
         let status =
             ExistingStatus::read(carrier::labelled(&object, "status", "existing/status")?)?;
         match status {
@@ -312,7 +315,7 @@ impl ExistingEntry {
                     &object,
                     &["proposal", "change", "reasonCode", "message", "details"],
                 ) {
-                    return Err(CarrierError::StatusFields);
+                    return Err(CarrierError::from(CarrierErrorKind::StatusFields));
                 }
             }
             ExistingStatus::Unmatched | ExistingStatus::Unassessed => {
@@ -321,7 +324,7 @@ impl ExistingEntry {
                     carrier::labelled(&object, "message", "existing/message")?;
                 }
                 if carrier::forbidden(&object, &["proposal", "change"]) {
-                    return Err(CarrierError::StatusFields);
+                    return Err(CarrierError::from(CarrierErrorKind::StatusFields));
                 }
             }
             ExistingStatus::Stale => {
@@ -341,7 +344,9 @@ impl ExistingEntry {
             }
         }
         if target != "binding" && object.value().get("references").is_some() {
-            return Err(CarrierError::FieldType("references"));
+            return Err(CarrierError::from(CarrierErrorKind::FieldType(
+                "references",
+            )));
         }
         carrier::labels(&object, "references")?;
         carrier::optional_labelled(&object, "reasonCode", "existing/reasonCode", true)?;
@@ -425,13 +430,15 @@ impl AddedEntry {
         if let Some(value) = object.value().get("reused")
             && value.as_bool() != Some(true)
         {
-            return Err(CarrierError::FieldType("reused"));
+            return Err(CarrierError::from(CarrierErrorKind::FieldType("reused")));
         }
         carrier::uses(&object)?;
         if let Some(value) = object.value().get("lossy") {
-            let losses = value.elements().ok_or(CarrierError::FieldType("lossy"))?;
+            let losses = value
+                .elements()
+                .ok_or(CarrierError::from(CarrierErrorKind::FieldType("lossy")))?;
             if losses.len() == 0 {
-                return Err(CarrierError::FieldType("lossy"));
+                return Err(CarrierError::from(CarrierErrorKind::FieldType("lossy")));
             }
             for loss in losses {
                 PullLoss::from_json(loss.to_owned())?;
@@ -488,7 +495,7 @@ impl OmittedEntry {
             carrier::labelled(&object, "existing", "omitted/existing")?;
             carrier::schema(carrier::field(&object, "offered")?, "offered")?;
         } else if carrier::forbidden(&object, &["offered", "through", "identifier"]) {
-            return Err(CarrierError::StatusFields);
+            return Err(CarrierError::from(CarrierErrorKind::StatusFields));
         }
         carrier::details(&object, "omitted/details")?;
         Ok(Self(object))
@@ -549,36 +556,50 @@ carrier!(
 );
 impl PullReport {
     /// Admit report shape and its exhaustive/limitation relationship.
+    /// Failures within added, existing or omitted entries identify the enclosing
+    /// row through [`CarrierError::pointer`], including nested proposals and losses.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
-        let exhaustive = carrier::field(&object, "exhaustive")?
-            .as_bool()
-            .ok_or(CarrierError::FieldType("exhaustive"))?;
+        let exhaustive =
+            carrier::field(&object, "exhaustive")?
+                .as_bool()
+                .ok_or(CarrierError::from(CarrierErrorKind::FieldType(
+                    "exhaustive",
+                )))?;
         if !exhaustive {
             carrier::field(&object, "limitation")?;
         } else if object.value().get("limitation").is_some() {
-            return Err(CarrierError::StatusFields);
+            return Err(CarrierError::from(CarrierErrorKind::StatusFields));
         }
         if let Some(value) = object.value().get("limitation") {
             PullLimitation::from_json(value.to_owned())?;
         }
-        for entry in carrier::field(&object, "added")?
+        for (index, entry) in carrier::field(&object, "added")?
             .elements()
-            .ok_or(CarrierError::FieldType("added"))?
+            .ok_or(CarrierError::from(CarrierErrorKind::FieldType("added")))?
+            .enumerate()
         {
-            AddedEntry::from_json(entry.to_owned())?;
+            AddedEntry::from_json(entry.to_owned())
+                .map_err(|error| error.at_row("added", index))?;
         }
         if let Some(value) = object.value().get("existing") {
-            for entry in value
+            for (index, entry) in value
                 .elements()
-                .ok_or(CarrierError::FieldType("existing"))?
+                .ok_or(CarrierError::from(CarrierErrorKind::FieldType("existing")))?
+                .enumerate()
             {
-                ExistingEntry::from_json(entry.to_owned())?;
+                ExistingEntry::from_json(entry.to_owned())
+                    .map_err(|error| error.at_row("existing", index))?;
             }
         }
         if let Some(value) = object.value().get("omitted") {
-            for entry in value.elements().ok_or(CarrierError::FieldType("omitted"))? {
-                OmittedEntry::from_json(entry.to_owned())?;
+            for (index, entry) in value
+                .elements()
+                .ok_or(CarrierError::from(CarrierErrorKind::FieldType("omitted")))?
+                .enumerate()
+            {
+                OmittedEntry::from_json(entry.to_owned())
+                    .map_err(|error| error.at_row("omitted", index))?;
             }
         }
         Ok(Self(object))
@@ -652,7 +673,9 @@ impl PullAdditions {
                     match name {
                         "operations" => {
                             if member.value.kind() != JsonKind::Object {
-                                return Err(CarrierError::FieldType("operations"));
+                                return Err(CarrierError::from(CarrierErrorKind::FieldType(
+                                    "operations",
+                                )));
                             }
                         }
                         "schemas" => carrier::schema(member.value, "schemas")?,
@@ -692,10 +715,12 @@ carrier!(
 impl PullResult {
     /// Admit the open result and its carrier relationships. This alone does not
     /// establish consistency with an input document or a producer's truthfulness.
+    /// Report-row failures carry a pointer prefixed with `/report`.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = carrier::object(value)?;
         PullAdditions::from_json(carrier::field(&object, "additions")?.to_owned())?;
-        PullReport::from_json(carrier::field(&object, "report")?.to_owned())?;
+        PullReport::from_json(carrier::field(&object, "report")?.to_owned())
+            .map_err(CarrierError::in_report)?;
         Ok(Self(object))
     }
     /// Retain additions independently of this result owner.

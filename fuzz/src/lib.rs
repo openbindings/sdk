@@ -371,7 +371,7 @@ pub fn comparison(data: &[u8]) -> bool {
             reference_results[usize::from(accounted)].push(cold);
         }
     }
-    let identity = plain_results[0];
+    let identity = plain_results[0].clone();
     // Two independent failures may have different first causes. Neither order
     // may produce an answer when the other order fails.
     assert_eq!(identity.is_ok(), plain_results[1].is_ok());

@@ -37,7 +37,42 @@ entries by primary key, with operation slots required to exist. A caller keeping
 of a pull follows schema references and each reached added binding's operation
 and `uses`, as the [adapter guide](writing-a-kind.md#what-goes-in-uses) explains.
 
+Both `SourcePullerExt::pull_source` and `pull_source_with_limits` return
+`Result<(PullResult, ConformantDocument), PullError<Self::Error>>` through their
+futures. The prospective document contains all additions, retains the original
+JSON admission limits and leaves stale proposals unapplied. Adopting a selected
+subset or applying a proposal still requires validation of that edited document.
+`PullReport::from_json` and `PullResult::from_json` return a struct `CarrierError`:
+`kind()` gives a Copy `CarrierErrorKind` and `pointer()` borrows an optional
+failing row, such as `/existing/1` or `/report/existing/1`. Nested failures identify
+the enclosing row; unrelated top-level failures need not have a pointer.
+
+`CheckFailure<E>`, `KindError<E>`, `PullFailure<E>` and `PullError<E>` each expose
+`map_error<F>(self, map: impl FnOnce(E) -> F)` returning the same family with `F`.
+Only the generic error payload is transformed. Other variants and payloads pass
+through unchanged, and their closures are not called. Checked source checks use
+`error.map_error(|failure| failure.map_error(convert_native))` for the two layers.
+The pull errors `RequestError`, `PullValidationError`, `PullFailure` and `PullError`
+are non-exhaustive. Handle unknown failures by refusal or propagation.
+
 ## Exact documents and conformance
+
+Rust `JsonValue::parse_prefix(input)` and
+`parse_prefix_with_limits(input, limits)` return `(JsonValue, end)` for the first
+exact value. `end` is its exclusive byte offset, including leading whitespace
+and excluding trailing whitespace. `JsonPrefixError::Incomplete` means its end
+is unknown; `Invalid(InputError)` keeps the usual admission diagnostics.
+A number ending at the buffer end is always incomplete. At known EOF, pass an
+incomplete remainder to `JsonValue::parse_with_limits` to accept the final number
+or obtain the ordinary refusal. Complete strings, containers and literals need
+no lookahead. Only the value and constant lookahead are inspected; following
+bytes, including invalid UTF-8, remain with the host. The byte allowance covers
+the prefix through `end`; depth and node limits are unchanged.
+After `Incomplete`, append at least the current buffer length before retrying,
+unless EOF or a limit is reached first, so repeated parsing stays linear in the
+value's size. The host owns separators, buffering and I/O. See the tested
+[whitespace-separated host example](../crates/openbindings/examples/json_sequence.rs).
+The TypeScript facade does not yet expose this primitive.
 
 Rust `JsonValue::semantic_eq(&other)` compares exact JSON values without
 floating-point conversion. It returns `Some(true)` for `1e400` and `10e399`,
@@ -64,10 +99,28 @@ from a proof. It acquires no resources and proves neither document conformance
 nor value decidability. Supplied resources use `references_with_resources` on
 the same document snapshot.
 
+Match `ReferenceReport::Complete { references }` or
+`ReferenceReport::Incomplete { retained, limitation }` before reading observations.
+The TypeScript union uses `complete: true` with `references` and `complete: false`
+with `retained` and `limitation`. An incomplete inventory has no `references` field.
+`ReferenceLimits { max_report_bytes }` selects retained text through
+`references_with_limits` or `references_with_resources_and_limits`; TypeScript
+uses `references({ limits: { maxReportBytes } })`. The default stays 8 MiB.
+
 `Evidence` is `Met`, `Violated`, `Inconclusive` or `NotApplicable`. A document's
 `Conformance` is conformant, nonconformant or undetermined. Findings explain rule
 evidence; omitted findings do not erase an established violation. Use rule IDs,
 codes and evidence for logic, and treat explanatory messages as display text.
+`ValidationLimits { max_findings, max_pointer_bytes }` passed to
+`Document::validate_with_limits` controls finding retention only. The defaults
+remain 4,096 findings and 8 MiB of generated source-pointer text. TypeScript uses
+`document.validate({ limits: { maxFindings, maxPointerBytes } })` and exposes
+`validationLimits()` for the defaults. Its signature is
+`Document.validate(options?: ValidationOptions): DocumentValidation`, with
+`ValidationOptions { limits?: Partial<ValidationLimits> }`. Omitted options or
+limits use the cached default assessment; unknown option names are rejected.
+Zero allowances still assess every rule. Custom reports do not replace the
+cached default report.
 
 Plain Rust records whose fields are public data expose `code`
 and `kind` as fields. Enums and types whose private fields protect an invariant
@@ -101,7 +154,8 @@ The pinned OBI-02 schema has no `oneOf`. `pattern` and `uniqueItems` have no mat
 detail variant either. Guidance never copies document values or evaluates example
 or caller values. If keyword guidance is unavailable, the generic finding remains.
 
-`ValidationReport` retains at most 4096 findings and 8 MiB of source-pointer bytes.
+`ValidationReport` retains at most 4096 findings and 8 MiB of source-pointer bytes
+by default, adjustable through `ValidationLimits`.
 The pinned 0.2 schema's largest complete serialized `[keyword, schema, details]`
 tuple is 199 bytes in Rust JSON (198 in TypeScript JSON). An exhaustive schema
 test guards this fixed property; there is no runtime fact-size cap. Count and
@@ -229,14 +283,14 @@ top resource uses that source's URI and an empty pointer, even without `$id`.
 This is a location, not the resolved base; conformant Rust callers can use
 `SchemaNode::resource_base` for the base.
 
-Inspection has no separate schema nesting bound beyond document admission. One
-8 MiB allowance covers all generated and source text retained in reference
+Inspection has no separate schema nesting bound beyond document admission. The
+caller-selected allowance, 8 MiB by default, covers all generated and source text retained in reference
 entries: location, resource-root, target and refusal pointers, every origin's
 source URI, keywords, spellings, refusal codes/messages and unavailable-resource
 URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per
 UTF-16 unit. This bounds text, not total heap usage. Each whole entry is charged
 before its text is materialized or cloned. The first entry that does not fit
-stops traversal with `complete` false and a `LimitExceeded` limitation (TypeScript
+stops traversal with `ReferenceReport::Incomplete` and a `LimitExceeded` limitation (TypeScript
 `limit-exceeded`) with code `reference-report-bytes` and no omitted location. For
 unavailable resources, the refusal's `resource_uri` (TypeScript `resourceUri`)
 gives the resolved missing identity. Preparation can still succeed; evaluation
@@ -354,6 +408,13 @@ clone it explicitly when ownership is needed. Carrier `to_json` means bounded
 encoding: `InvocationError`, `BindingRequest` and `OperationRequest` retain those
 encoders. Schema comparison's `identical` returns `Result<bool,
 ComparisonFailure>`; a failure is separate from a negative comparison.
+`ComparisonFailure` is a struct with `kind() -> ComparisonFailureKind` (Copy),
+`origin() -> Option<&SchemaOrigin>` and `side() -> Option<ComparisonSide>`.
+Locations preserve original source frames and are redacted in formatting.
+Identity sides are `Left`/`Right`, directional sides `Target`/`Candidate`, and
+interface sides `Required`/`Provided` regardless of role. Global limits and
+cancellation have neither origin nor side. Use `kind()` for classification;
+whole-error equality includes provenance.
 `compare` and `compare_with_control` take `Direction`, a present target and a
 present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `finding()` accessors. `ComparisonContext::new(root)` retains a reusable document;
@@ -362,17 +423,20 @@ present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `context()` exposes its retained context. Indexing is lazy, shared within each
 call and reusable across calls. Failed and cancelled work leaves contexts usable.
 `check_interface` and `check_interface_with_control` take required/provided
-conformant documents and a callback
+conformant documents, their respective `&ComparisonContext`s, and a callback
 `&dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>` receiving the
 required operation and each distinct provided match, or `None` when missing.
-It selects realized, consumed, both, or excluded for that match. Every distinct
+Each context must retain the exact root of its paired proof; an equal but
+separately parsed root fails with `ContextMismatch` before callbacks. Initial
+cancellation takes precedence. Bases and external resources come from the caller.
+The callback selects realized, consumed, both, or excluded for that match. Every distinct
 provided match is retained, independent of alias order, with output then input
 results including failures. `operations()`, `issues()` and each issue's
 `correspondence()` expose keys, role and slot results. `role()` returns
 `Some(Realized)` or `Some(Consumed)` for present matches, never `Both`; an included
 missing operation has one correspondence with `None` role. Consumption reverses
 input and output flow. Allowance exhaustion remains in slots after setup;
-observed cancellation returns `Err(Cancelled)`. Summary failure policy is
+observed cancellation returns an error of kind `Cancelled`. Summary failure policy is
 the caller's; only `Verdict::collapse` supplies profile dominance over verdicts.
 `identical_with_references` and `identical_with_references_and_control` take a
 caller accounting predicate. `ReferenceContext::target()` exposes the initial

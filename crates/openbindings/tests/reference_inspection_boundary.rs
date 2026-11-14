@@ -1,4 +1,7 @@
+#[path = "common/reference_report.rs"]
+mod reference_report;
 use openbindings::*;
+use reference_report::{complete, incomplete};
 use std::sync::atomic::AtomicBool;
 #[test]
 fn diagnostic_inspection_refuses_document_preconditions_without_schema_locations() {
@@ -21,16 +24,16 @@ fn diagnostic_inspection_refuses_document_preconditions_without_schema_locations
     ] {
         let document = Document::parse(text).unwrap();
         let report = document.references();
-        assert!(!report.complete);
-        assert!(report.references.is_empty());
-        let limitation = report.limitation.unwrap();
+        assert!(matches!(report, ReferenceReport::Incomplete { .. }));
+        assert!(incomplete(&report).0.is_empty());
+        let limitation = incomplete(&report).1;
         assert_eq!(limitation.code, code);
         assert_eq!(limitation.reason, reason);
         assert!(limitation.location.is_none());
         let cancelled =
             document.references_with_resources(ExternalSchemas::default(), &AtomicBool::new(true));
         assert_eq!(
-            cancelled.limitation.unwrap().reason,
+            incomplete(&cancelled).1.reason,
             ReferenceRefusalReason::Cancelled
         );
         assert_eq!(document.as_bytes(), text.as_bytes());
@@ -56,27 +59,29 @@ fn missing_or_malformed_versions_inspect_under_0_2_without_a_limitation() {
     let valid = Document::parse(format!(r#"{{"openbindings":"0.2.0",{body}}}"#)).unwrap();
     let expected = valid.references();
     let supplied = valid.references_with_resources(resources.clone(), &control);
-    assert!(expected.complete && supplied.complete);
-    assert!(expected.limitation.is_none() && supplied.limitation.is_none());
-    assert_eq!(expected.references.len(), 4);
-    assert_eq!(supplied.references.len(), 5);
+    assert!(matches!(expected, ReferenceReport::Complete { .. }));
+    assert!(matches!(supplied, ReferenceReport::Complete { .. }));
+    assert!(matches!(expected, ReferenceReport::Complete { .. }));
+    assert!(matches!(supplied, ReferenceReport::Complete { .. }));
+    assert_eq!(complete(&expected).len(), 4);
+    assert_eq!(complete(&supplied).len(), 5);
     assert!(matches!(
-        &supplied.references[0].resolution,
+        &complete(&supplied)[0].resolution,
         ReferenceResolution::Located { target, dynamic_lookup: false }
             if target.pointer == "/schemas/target"
     ));
     assert!(matches!(
-        &supplied.references[1].resolution,
+        &complete(&supplied)[1].resolution,
         ReferenceResolution::Located { target, dynamic_lookup: true }
             if target.pointer == "/schemas/target"
     ));
     assert!(matches!(
-        &supplied.references[2].resolution,
+        &complete(&supplied)[2].resolution,
         ReferenceResolution::Unresolved { detail }
             if detail.reason == ReferenceRefusalReason::MissingTarget
     ));
     assert!(matches!(
-        &supplied.references[4].resolution,
+        &complete(&supplied)[4].resolution,
         ReferenceResolution::Located { target, dynamic_lookup: false }
             if target.source_uri.as_deref() == Some("https://example.test/external")
                 && target.pointer == "/$defs/target"
@@ -94,10 +99,8 @@ fn missing_or_malformed_versions_inspect_under_0_2_without_a_limitation() {
             supplied
         );
         assert_eq!(
-            draft
-                .references_with_resources(resources.clone(), &AtomicBool::new(true))
-                .limitation
-                .unwrap()
+            incomplete(&draft.references_with_resources(resources.clone(), &AtomicBool::new(true)))
+                .1
                 .reason,
             ReferenceRefusalReason::Cancelled
         );
@@ -109,9 +112,8 @@ fn missing_or_malformed_versions_inspect_under_0_2_without_a_limitation() {
         r#"{"openbindings":1,"operations":{}}"#,
     ] {
         let report = Document::parse(text).unwrap().references();
-        assert!(report.complete);
-        assert!(report.references.is_empty());
-        assert!(report.limitation.is_none());
+        assert!(matches!(report, ReferenceReport::Complete { .. }));
+        assert!(complete(&report).is_empty());
     }
 }
 #[test]
@@ -119,17 +121,17 @@ fn nonconformant_drafts_still_supply_original_reference_diagnostics() {
     let doc = Document::parse(r#"{"openbindings":"0.2.0","description":42,"operations":{"op":{"input":{"$ref":"https://missing.test/schema"}}},"sources":{"s":{"kind":"k","data":{"$ref":"opaque"}}}}"#).unwrap();
     assert!(doc.validate().unwrap().conformant().is_none());
     let report = doc.references();
-    assert!(report.complete);
-    assert_eq!(report.references.len(), 1);
+    assert!(matches!(report, ReferenceReport::Complete { .. }));
+    assert_eq!(complete(&report).len(), 1);
     assert_eq!(
-        report.references[0].location.pointer,
+        complete(&report)[0].location.pointer,
         "/operations/op/input/$ref"
     );
     assert_eq!(
-        report.references[0].spelling.as_deref(),
+        complete(&report)[0].spelling.as_deref(),
         Some("https://missing.test/schema")
     );
-    let ReferenceResolution::Unresolved { detail } = &report.references[0].resolution else {
+    let ReferenceResolution::Unresolved { detail } = &complete(&report)[0].resolution else {
         panic!()
     };
     assert_eq!(detail.reason, ReferenceRefusalReason::ResourceUnavailable);
@@ -162,9 +164,8 @@ fn supplied_resource_references_are_reported_transitively_once() {
             .document()
             .references_with_resources(resources, &cancelled)
     );
-    assert!(report.complete);
-    assert!(report.limitation.is_none());
-    assert_eq!(report.references.len(), 4);
+    assert!(matches!(report, ReferenceReport::Complete { .. }));
+    assert_eq!(complete(&report).len(), 4);
     // Freeze every field of this existing small transitive fixture, including
     // traversal order and the separately owned unresolved location.
     let origin = |source: Option<&str>, pointer: &str| serde_json::json!({"source_uri":source,"pointer":pointer});
@@ -178,7 +179,7 @@ fn supplied_resource_references_are_reported_transitively_once() {
     assert_eq!(
         serde_json::to_value(&report).unwrap(),
         serde_json::json!({
-            "complete":true,"limitation":null,"references":[
+            "complete":true,"references":[
                 located(None, "/operations/op/input/$ref", "https://example.test/a", "https://example.test/a"),
                 located(Some("https://example.test/a"), "/$ref", "b", "https://example.test/b"),
                 located(Some("https://example.test/b"), "/allOf/0/$ref", "a", "https://example.test/a"),
@@ -194,11 +195,11 @@ fn supplied_resource_references_are_reported_transitively_once() {
         })
     );
     assert!(
-        report.references[..3]
+        complete(&report)[..3]
             .iter()
             .all(|r| matches!(r.resolution, ReferenceResolution::Located { .. }))
     );
-    let missing = &report.references[3];
+    let missing = &complete(&report)[3];
     assert_eq!(
         missing.location.source_uri.as_deref(),
         Some("https://example.test/b")
@@ -229,10 +230,9 @@ fn reached_supplied_schemas_report_references_beyond_256_levels() {
     }])
     .unwrap();
     let report = draft.references_with_resources(resources, &AtomicBool::new(false));
-    assert!(report.complete);
-    assert!(report.limitation.is_none());
-    assert_eq!(report.references.len(), 2);
-    let reached = &report.references[1];
+    assert!(matches!(report, ReferenceReport::Complete { .. }));
+    assert_eq!(complete(&report).len(), 2);
+    let reached = &complete(&report)[1];
     assert_eq!(
         reached.location.source_uri.as_deref(),
         Some("https://example.test/a")
@@ -263,9 +263,9 @@ fn reached_supplied_sources_include_nested_identifier_scopes() {
     }])
     .unwrap();
     let report = document.references_with_resources(resources, &AtomicBool::new(false));
-    assert!(report.complete);
-    assert_eq!(report.references.len(), 2);
-    let reference = &report.references[1];
+    assert!(matches!(report, ReferenceReport::Complete { .. }));
+    assert_eq!(complete(&report).len(), 2);
+    let reference = &complete(&report)[1];
     assert_eq!(
         reference.location.source_uri.as_deref(),
         Some("https://example.test/a")
@@ -317,12 +317,12 @@ fn reference_refusals_preserve_the_public_cause_and_safe_message() {
         ))
         .unwrap();
         let report = document.references();
-        assert!(report.complete);
-        let ReferenceResolution::Unresolved { detail } = &report.references[0].resolution else {
+        assert!(matches!(report, ReferenceReport::Complete { .. }));
+        let ReferenceResolution::Unresolved { detail } = &complete(&report)[0].resolution else {
             panic!("expected reference refusal")
         };
         assert_eq!(detail.reason, reason);
-        assert_eq!(report.references[0].location.pointer, "/schemas/entry/$ref");
+        assert_eq!(complete(&report)[0].location.pointer, "/schemas/entry/$ref");
         assert!(!detail.to_string().is_empty());
         assert!(!detail.to_string().contains("private"));
         assert!(!detail.message.contains("private"));
@@ -334,7 +334,7 @@ fn reference_refusals_preserve_the_public_cause_and_safe_message() {
     }])
     .unwrap();
     let report = document.references_with_resources(external, &AtomicBool::new(false));
-    let ReferenceResolution::Unresolved { detail } = &report.references[0].resolution else {
+    let ReferenceResolution::Unresolved { detail } = &complete(&report)[0].resolution else {
         panic!("expected reference refusal")
     };
     assert_eq!(detail.reason, ReferenceRefusalReason::UnsupportedCapability);
@@ -350,7 +350,7 @@ fn reference_refusals_preserve_the_public_cause_and_safe_message() {
         &StopAfter(std::sync::atomic::AtomicUsize::new(0)),
     );
     assert_eq!(
-        report.limitation.unwrap().reason,
+        incomplete(&report).1.reason,
         ReferenceRefusalReason::Cancelled
     );
 }

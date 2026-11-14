@@ -1048,11 +1048,19 @@ impl SchemaSpace {
     }
 
     pub fn references(&self, control: &dyn Control) -> ReferenceReport {
-        self.references_with(&mut self.reference_resolver(), control)
+        self.references_with_limit(8 * 1024 * 1024, control)
+    }
+    pub fn references_with_limit(
+        &self,
+        max_report_bytes: usize,
+        control: &dyn Control,
+    ) -> ReferenceReport {
+        self.references_with(&mut self.reference_resolver(), max_report_bytes, control)
     }
     fn references_with(
         &self,
         resolver: &mut ReferenceResolver<'_>,
+        max_report_bytes: usize,
         control: &dyn Control,
     ) -> ReferenceReport {
         let mut report = ReferenceReport {
@@ -1060,8 +1068,7 @@ impl SchemaSpace {
             complete: true,
             limitation: None,
         };
-        const MAX_REPORT_BYTES: usize = 8 * 1024 * 1024;
-        let mut report_bytes = MAX_REPORT_BYTES;
+        let mut report_bytes = max_report_bytes;
         let measure = |id: usize, remaining: usize| {
             let node = self.node(id);
             let source = self.source(node.source);
@@ -1073,7 +1080,7 @@ impl SchemaSpace {
             Failure::new(
                 FailureReason::LimitExceeded,
                 "reference-report-bytes",
-                "reference inspection stops at 8 MiB of retained generated and source text in entries",
+                "reference inspection exceeds its retained generated and source text allowance",
             )
         };
         // Reuse an already retained root origin for consecutive sites in one

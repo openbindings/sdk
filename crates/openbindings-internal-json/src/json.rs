@@ -191,6 +191,38 @@ impl fmt::Display for InputError {
     }
 }
 impl std::error::Error for InputError {}
+
+/// A prefix needs more bytes, or its first value cannot be admitted.
+/// Diagnostics never include supplied input. Later versions may add variants.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum JsonPrefixError {
+    /// The buffer ends before the value's boundary is known. Retain the buffer
+    /// and, before retrying, append at least as many bytes as it already holds,
+    /// unless EOF or an admission limit is reached first. Geometric growth keeps
+    /// total parsing work linear in the accumulated value, even with tiny reads.
+    /// At known EOF, pass the remainder to [`JsonValue::parse_with_limits`].
+    Incomplete,
+    /// Invalid encoding, JSON syntax or an exceeded admission limit.
+    Invalid(InputError),
+}
+impl fmt::Display for JsonPrefixError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Incomplete => f.write_str("the buffer ends before the JSON value is complete"),
+            Self::Invalid(error) => error.fmt(f),
+        }
+    }
+}
+impl std::error::Error for JsonPrefixError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Incomplete => None,
+            Self::Invalid(error) => Some(error),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Exact JSON token category, without coercion or interpretation.
 ///
@@ -357,6 +389,67 @@ impl JsonValue {
         let owner = Arena::parse(bytes, arena_limits(limits))
             .map_err(|problem| admission(problem, bytes))?;
         Ok(Self { owner, id: 0 })
+    }
+    /// Parse the first JSON value under [`JsonLimits::default`]. See
+    /// [`Self::parse_prefix_with_limits`] for buffer and offset semantics.
+    ///
+    /// # Errors
+    /// Returns [`JsonPrefixError::Incomplete`] while the value's boundary is
+    /// unknown, or [`JsonPrefixError::Invalid`] for an admission failure.
+    pub fn parse_prefix(input: impl AsRef<[u8]>) -> Result<(Self, usize), JsonPrefixError> {
+        Self::parse_prefix_with_limits(input, JsonLimits::default())
+    }
+    /// Parse one exact value from a byte buffer, with explicit admission limits.
+    /// Returns the value and its exclusive token-end byte offset in `input`.
+    /// Leading JSON whitespace is included in that offset and the retained
+    /// source. Trailing whitespace and all following bytes are left to the host,
+    /// even if they are invalid UTF-8. Only the admitted value and constant
+    /// lookahead are inspected or validated. The byte cap covers `input[..end]`;
+    /// depth and node limits match [`Self::parse_with_limits`].
+    ///
+    /// A number ending at the buffer end is always incomplete: `12` could become
+    /// `123` or `12e3`. At known EOF, pass an incomplete remainder to
+    /// [`Self::parse_with_limits`], which accepts the final number or returns its
+    /// usual refusal for truncated or invalid input. Complete strings, containers
+    /// and literals need no lookahead. Adjacent values are accepted; the host
+    /// chooses its separator rule and handles an empty sequence itself.
+    ///
+    /// This stateless call borrows the buffer and copies only the admitted source
+    /// on success. After [`JsonPrefixError::Incomplete`], append at least as many
+    /// bytes as the buffer already holds before retrying, unless EOF or a limit
+    /// is reached first. This geometric rule bounds cumulative parsing work by
+    /// the value's size. See the `json_sequence` host example in `openbindings`.
+    /// No reader, I/O or async behavior is provided by this primitive.
+    ///
+    /// # Errors
+    /// Returns [`JsonPrefixError::Incomplete`] for a truncated value, empty or
+    /// whitespace-only buffer, or ambiguous numeric end. Invalid UTF-8 within
+    /// the value, a byte order mark, malformed syntax and exceeded limits return
+    /// [`JsonPrefixError::Invalid`]. Error locations refer to the supplied buffer.
+    ///
+    /// ```
+    /// # use openbindings_internal_json as openbindings;
+    /// use openbindings::{JsonLimits, JsonPrefixError, JsonValue};
+    /// assert_eq!(JsonValue::parse_prefix(b"12").unwrap_err(), JsonPrefixError::Incomplete);
+    /// // At known EOF, use whole-text admission for an incomplete remainder.
+    /// let value = JsonValue::parse_with_limits(b"12", JsonLimits::default())?;
+    /// assert_eq!(value.text(), "12");
+    /// let (value, end) = JsonValue::parse_prefix(b" \n{}[]\xff").unwrap();
+    /// assert_eq!((value.text(), end), ("{}", 4));
+    /// # Ok::<(), openbindings::InputError>(())
+    /// ```
+    pub fn parse_prefix_with_limits(
+        input: impl AsRef<[u8]>,
+        limits: JsonLimits,
+    ) -> Result<(Self, usize), JsonPrefixError> {
+        let bytes = input.as_ref();
+        // A number exactly at the cap may end before one uncharged delimiter.
+        let bounded = &bytes[..bytes.len().min(limits.max_bytes.saturating_add(1))];
+        match Arena::parse_prefix(bounded, arena_limits(limits)) {
+            Ok((owner, end)) if end <= limits.max_bytes => Ok((Self { owner, id: 0 }, end)),
+            Ok(_) => Err(JsonPrefixError::Invalid(byte_limit(bytes, limits))),
+            Err(problem) => Err(prefix_error(problem, bytes, limits)),
+        }
     }
     /// Parse as [`Self::parse_with_limits`] does, taking the bytes: the value
     /// keeps them as its source instead of a copy, so a caller that hands over
@@ -818,6 +911,17 @@ fn arena_limits(limits: JsonLimits) -> Limits {
     Limits {
         max_depth: limits.max_depth,
         max_nodes: limits.max_nodes.min(u32::MAX as usize),
+    }
+}
+fn prefix_error(problem: Problem, bytes: &[u8], limits: JsonLimits) -> JsonPrefixError {
+    if problem.offset > limits.max_bytes
+        || (problem.is_incomplete() && bytes.len() > limits.max_bytes)
+    {
+        JsonPrefixError::Invalid(byte_limit(bytes, limits))
+    } else if problem.is_incomplete() {
+        JsonPrefixError::Incomplete
+    } else {
+        JsonPrefixError::Invalid(admission(problem, bytes))
     }
 }
 fn admission(p: Problem, bytes: &[u8]) -> InputError {

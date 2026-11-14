@@ -64,6 +64,19 @@ pub enum CheckFailure<E = std::convert::Infallible> {
     /// claim that the kind rejected the proposed entry.
     Operational(E),
 }
+impl<E> CheckFailure<E> {
+    /// Transform only the native operational error, preserving rejections,
+    /// context challenges and cancellation without calling the closure for them.
+    #[inline]
+    pub fn map_error<F>(self, map: impl FnOnce(E) -> F) -> CheckFailure<F> {
+        match self {
+            Self::Operational(error) => CheckFailure::Operational(map(error)),
+            Self::ContextRequired(challenge) => CheckFailure::ContextRequired(challenge),
+            Self::Rejected(rejection) => CheckFailure::Rejected(rejection),
+            Self::Cancelled => CheckFailure::Cancelled,
+        }
+    }
+}
 impl<E> fmt::Debug for CheckFailure<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -104,6 +117,20 @@ pub enum KindError<E> {
     KindMismatch,
     /// A configured carrier handoff bound was reached.
     LimitExceeded(&'static str),
+}
+impl<E> KindError<E> {
+    /// Transform only the provider failure, preserving local caller failures
+    /// without calling the closure for them.
+    /// For source checks, map the nested [`CheckFailure`] separately.
+    #[inline]
+    pub fn map_error<F>(self, map: impl FnOnce(E) -> F) -> KindError<F> {
+        match self {
+            Self::Provider(error) => KindError::Provider(map(error)),
+            Self::Cancelled => KindError::Cancelled,
+            Self::KindMismatch => KindError::KindMismatch,
+            Self::LimitExceeded(resource) => KindError::LimitExceeded(resource),
+        }
+    }
 }
 impl<E> fmt::Debug for KindError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

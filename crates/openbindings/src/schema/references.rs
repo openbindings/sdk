@@ -77,37 +77,42 @@ impl SchemaSpace {
         }
         Ok(())
     }
-    fn references(&self, control: &dyn WorkControl) -> ReferenceReport {
-        let report = self.inner.references(&|| control.is_cancelled());
-        ReferenceReport {
-            complete: report.complete,
-            limitation: report.limitation.map(reference_refusal),
-            references: report
-                .references
-                .into_iter()
-                .map(|r| Reference {
-                    location: crate::schema::evaluation::original_location(r.location),
-                    resource_root: r
-                        .resource_root
-                        .map(crate::schema::evaluation::original_location),
-                    keyword: r.keyword,
-                    spelling: r.spelling,
-                    resolution: match r.resolution {
-                        embedding::ReferenceResolution::Located {
-                            target,
-                            dynamic_lookup,
-                        } => ReferenceResolution::Located {
-                            target: crate::schema::evaluation::original_location(target),
-                            dynamic_lookup,
-                        },
-                        embedding::ReferenceResolution::Unresolved { detail } => {
-                            ReferenceResolution::Unresolved {
-                                detail: reference_refusal(detail),
-                            }
-                        }
+    fn references(&self, limits: ReferenceLimits, control: &dyn WorkControl) -> ReferenceReport {
+        let report = self
+            .inner
+            .references_with_limit(limits.max_report_bytes, &|| control.is_cancelled());
+        let references = report
+            .references
+            .into_iter()
+            .map(|r| Reference {
+                location: crate::schema::evaluation::original_location(r.location),
+                resource_root: r
+                    .resource_root
+                    .map(crate::schema::evaluation::original_location),
+                keyword: r.keyword,
+                spelling: r.spelling,
+                resolution: match r.resolution {
+                    embedding::ReferenceResolution::Located {
+                        target,
+                        dynamic_lookup,
+                    } => ReferenceResolution::Located {
+                        target: crate::schema::evaluation::original_location(target),
+                        dynamic_lookup,
                     },
-                })
-                .collect(),
+                    embedding::ReferenceResolution::Unresolved { detail } => {
+                        ReferenceResolution::Unresolved {
+                            detail: reference_refusal(detail),
+                        }
+                    }
+                },
+            })
+            .collect();
+        match report.limitation {
+            Some(limitation) => ReferenceReport::Incomplete {
+                retained: references,
+                limitation: reference_refusal(limitation),
+            },
+            None => ReferenceReport::Complete { references },
         }
     }
 }
@@ -286,33 +291,81 @@ impl std::fmt::Debug for Reference {
             .finish_non_exhaustive()
     }
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
 /// A missing or malformed `openbindings` declaration is inspected under 0.2's
 /// rules, as specified for texts declaring no version. This assumption adds no
 /// limitation: a complete traversal of such a draft is complete. Well-formed
 /// unsupported declarations and duplicate member names still prevent inspection.
 /// Inspection has no separate schema nesting bound beyond document admission.
-/// Retains at most 8 MiB of generated and source text in reference entries:
+/// By default retains at most 8 MiB of generated and source text in reference entries,
+/// adjustable with [`ReferenceLimits`]:
 /// all location, resource-root, target and refusal pointers, every origin's
 /// source URI, keywords, spellings, refusal codes/messages and unavailable-resource
 /// URIs. Text is counted in UTF-8 bytes; pointers through an unpaired name use
 /// two bytes per UTF-16 unit. This is a text allowance, not total heap usage.
 /// The whole entry is charged before its text is materialized or cloned. The
-/// first entry that does not fit stops traversal, sets `complete` to false and
-/// reports `LimitExceeded` with code `reference-report-bytes`, without a
+/// first entry that does not fit stops traversal and returns [`Self::Incomplete`]
+/// with `LimitExceeded` and code `reference-report-bytes`, without a
 /// location for the omitted entry.
-/// Later versions may add fields: read them by name and match with `..`.
-#[non_exhaustive]
-pub struct ReferenceReport {
-    /// Retained reference observations in traversal order.
-    pub references: Vec<Reference>,
-    /// Whether traversal completed; individual unresolved references may still occur in a complete report.
-    pub complete: bool,
-    /// Traversal-level cause when inspection is incomplete, distinct from per-reference refusals.
-    pub limitation: Option<ReferenceRefusal>,
+/// The inventory is available only after choosing a completion case:
+/// ```compile_fail,E0609
+/// use openbindings::Document;
+/// fn unchecked_rename(document: &Document) {
+///     for reference in document.references().references { let _ = reference; }
+/// }
+/// ```
+pub enum ReferenceReport {
+    /// Traversal completed. Individual references can still be unresolved.
+    Complete {
+        /// All reference observations in traversal order.
+        references: Vec<Reference>,
+    },
+    /// Traversal stopped before the full inventory was established.
+    Incomplete {
+        /// Observations retained before traversal stopped, in traversal order.
+        retained: Vec<Reference>,
+        /// Traversal-level cause, separate from per-reference refusals.
+        limitation: ReferenceRefusal,
+    },
 }
-use serde::Serialize;
+use serde::{Serialize, ser::SerializeStruct};
+impl Serialize for ReferenceReport {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Complete { references } => {
+                let mut record = serializer.serialize_struct("ReferenceReport", 2)?;
+                record.serialize_field("complete", &true)?;
+                record.serialize_field("references", references)?;
+                record.end()
+            }
+            Self::Incomplete {
+                retained,
+                limitation,
+            } => {
+                let mut record = serializer.serialize_struct("ReferenceReport", 3)?;
+                record.serialize_field("complete", &false)?;
+                record.serialize_field("retained", retained)?;
+                record.serialize_field("limitation", limitation)?;
+                record.end()
+            }
+        }
+    }
+}
+
+/// Memory allowance for retained reference-report text, not total heap usage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReferenceLimits {
+    /// Maximum generated and source text bytes in complete entries; default 8 MiB.
+    pub max_report_bytes: usize,
+}
+impl Default for ReferenceLimits {
+    fn default() -> Self {
+        Self {
+            max_report_bytes: 8 * 1024 * 1024,
+        }
+    }
+}
 
 impl Document {
     /// Inspect schema references in an admitted draft without claiming conformance.
@@ -321,7 +374,15 @@ impl Document {
     /// unsupported version, duplicate member names, cancellation and traversal
     /// limits produce an incomplete report with a structured limitation.
     pub fn references(&self) -> ReferenceReport {
-        self.references_with_resources(ExternalSchemas::default(), &crate::control::NeverCancelled)
+        self.references_with_limits(ReferenceLimits::default())
+    }
+    /// Inspect references with a caller-selected retained-text allowance.
+    pub fn references_with_limits(&self, limits: ReferenceLimits) -> ReferenceReport {
+        self.references_with_resources_and_limits(
+            ExternalSchemas::default(),
+            limits,
+            &crate::control::NeverCancelled,
+        )
     }
     /// Inspect the draft and supplied resources reached by its references,
     /// transitively, within the report's traversal limits. Unreached supplied
@@ -329,6 +390,16 @@ impl Document {
     pub fn references_with_resources(
         &self,
         resources: ExternalSchemas,
+        control: &dyn WorkControl,
+    ) -> ReferenceReport {
+        self.references_with_resources_and_limits(resources, ReferenceLimits::default(), control)
+    }
+    /// Inspect reached supplied resources with a caller-selected text allowance.
+    /// Inventory and identity protection retain their existing defaults.
+    pub fn references_with_resources_and_limits(
+        &self,
+        resources: ExternalSchemas,
+        limits: ReferenceLimits,
         control: &dyn WorkControl,
     ) -> ReferenceReport {
         use ReferenceRefusalReason::{Cancelled, ResolverFailure, UnsupportedCapability};
@@ -350,19 +421,18 @@ impl Document {
             None
         };
         if let Some((reason, code, message)) = refusal {
-            return ReferenceReport {
-                complete: false,
-                references: Vec::new(),
-                limitation: Some(ReferenceRefusal {
+            return ReferenceReport::Incomplete {
+                retained: Vec::new(),
+                limitation: ReferenceRefusal {
                     reason,
                     code: code.into(),
                     message: message.into(),
                     location: None,
                     resource_uri: None,
-                }),
+                },
             };
         }
-        inspect(self, &resources, control)
+        inspect(self, &resources, limits, control)
     }
 }
 
@@ -661,6 +731,7 @@ pub(crate) fn query_kind(error: embedding::QueryFailure) -> ResolutionFailureKin
 fn inspect(
     document: &Document,
     resources: &ExternalSchemas,
+    report_limits: ReferenceLimits,
     control: &dyn WorkControl,
 ) -> ReferenceReport {
     let limits = PreparationLimits::default();
@@ -671,11 +742,10 @@ fn inspect(
         limits.max_identity_bytes,
         &|| control.is_cancelled(),
     ) {
-        Ok(space) => space.references(control),
-        Err(failure) => ReferenceReport {
-            complete: false,
-            references: Vec::new(),
-            limitation: Some(reference_refusal(failure)),
+        Ok(space) => space.references(report_limits, control),
+        Err(failure) => ReferenceReport::Incomplete {
+            retained: Vec::new(),
+            limitation: reference_refusal(failure),
         },
     }
 }

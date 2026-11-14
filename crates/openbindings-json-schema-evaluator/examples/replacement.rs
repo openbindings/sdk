@@ -63,11 +63,12 @@ fn candidate(
     let report = proof
         .document()
         .references_with_resources(resources.clone(), control);
-    if !report.complete
-        || report
-            .references
-            .iter()
-            .any(|r| matches!(r.resolution, ReferenceResolution::Unresolved { .. }))
+    let ReferenceReport::Complete { references } = &report else {
+        return Err(LoadFailure::UnresolvedReferences(Box::new(report)));
+    };
+    if references
+        .iter()
+        .any(|r| matches!(r.resolution, ReferenceResolution::Unresolved { .. }))
     {
         return Err(LoadFailure::UnresolvedReferences(Box::new(report)));
     }
@@ -200,7 +201,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // declared completeness before accepting the candidate, without a probe value.
     match candidate(DOCUMENT, ExternalSchemas::default(), &healthy) {
         Err(LoadFailure::UnresolvedReferences(report)) => {
-            assert!(report.references.iter().any(|r| matches!(
+            let ReferenceReport::Complete { references } = &*report else {
+                panic!("complete inventory required")
+            };
+            assert!(references.iter().any(|r| matches!(
                 &r.resolution,
                 ReferenceResolution::Unresolved { detail }
                     if detail.reason == ReferenceRefusalReason::ResourceUnavailable
@@ -214,11 +218,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Cancellation is observed at the first cooperative boundary, reference inspection.
     match candidate(DOCUMENT, resources(r#"{"const":7}"#)?, &cancelled) {
         Err(LoadFailure::UnresolvedReferences(report)) => {
-            assert!(!report.complete);
-            assert!(matches!(
-                &report.limitation,
-                Some(refusal) if refusal.reason == ReferenceRefusalReason::Cancelled
-            ));
+            let ReferenceReport::Incomplete { limitation, .. } = &*report else {
+                panic!("incomplete inventory required")
+            };
+            assert_eq!(limitation.reason, ReferenceRefusalReason::Cancelled);
         }
         other => panic!("expected cancelled loading: {other:?}"),
     }

@@ -1,3 +1,4 @@
+use crate::ComparisonFailureKind as FailureKind;
 use crate::{
     Comparison, ComparisonContext, ComparisonFailure, ComparisonLimits, Direction, Verdict,
     budget::Attempt, directional,
@@ -119,7 +120,7 @@ impl<'a> InterfaceIssue<'a> {
     }
     /// Comparison failure, if this issue has no verdict.
     pub fn failure(&self) -> Option<ComparisonFailure> {
-        self.result.and_then(|r| r.as_ref().err()).copied()
+        self.result.and_then(|r| r.as_ref().err()).cloned()
     }
 }
 /// All required operations, including successful, unspecified and failed checks.
@@ -175,6 +176,9 @@ impl InterfaceComparison {
     }
 }
 /// Check every provided operation identified by any required key or alias.
+/// Each context must retain the exact document root of its paired conformance
+/// proof. A mismatch fails with [`crate::ComparisonFailureKind::ContextMismatch`]
+/// before the callback runs. Context bases and supplied resources are used as-is.
 /// The callback receives the required operation and each distinct matched
 /// provided operation, or None for a missing match. It selects the value flow,
 /// or returns None to exclude that match. Both expands a present match into two
@@ -184,12 +188,16 @@ impl InterfaceComparison {
 pub fn check_interface(
     required: &ConformantDocument,
     provided: &ConformantDocument,
+    required_context: &ComparisonContext,
+    provided_context: &ComparisonContext,
     role: &dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>,
     limits: &ComparisonLimits,
 ) -> Result<InterfaceComparison, ComparisonFailure> {
     check_interface_with_control(
         required,
         provided,
+        required_context,
+        provided_context,
         role,
         limits,
         &std::sync::atomic::AtomicBool::new(false),
@@ -199,10 +207,12 @@ pub fn check_interface(
 /// The callback selects each match's flow as in check_interface. Setup failure
 /// returns no report. After setup, exhausted allowances stay in slots and later
 /// slots retain the sticky failure. Observed cancellation always returns
-/// Err(ComparisonFailure::Cancelled), including cancellation during the final slot.
+/// an error of kind [`crate::ComparisonFailureKind::Cancelled`], including in the final slot.
 pub fn check_interface_with_control(
     required: &ConformantDocument,
     provided: &ConformantDocument,
+    required_context: &ComparisonContext,
+    provided_context: &ComparisonContext,
     role: &dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>,
     limits: &ComparisonLimits,
     control: &dyn openbindings::WorkControl,
@@ -211,8 +221,20 @@ pub fn check_interface_with_control(
     attempt.check()?;
     let root = required.document().value();
     let provided_root = provided.document().value();
-    let required_context = ComparisonContext::new(root.clone());
-    let provided_context = ComparisonContext::new(provided_root.clone());
+    for (root, context, side) in [
+        (root, required_context, crate::ComparisonSide::Required),
+        (
+            provided_root,
+            provided_context,
+            crate::ComparisonSide::Provided,
+        ),
+    ] {
+        if openbindings_internal_json::backend::occurrence(root.view())
+            != openbindings_internal_json::backend::occurrence(context.document().view())
+        {
+            return Err(ComparisonFailure::from(FailureKind::ContextMismatch).with_side(side));
+        }
+    }
     let members = root
         .get("operations")
         .expect("conformant operations")
@@ -324,15 +346,35 @@ pub fn check_interface_with_control(
             let c = provided_context.schema(c.to_owned());
             Some(attempt.scratch(|attempt| {
                 let result = if role == Some(OperationRole::Consumed) {
-                    directional::inputs(direction, &c, &t, attempt)
+                    directional::inputs(
+                        direction,
+                        &c,
+                        &t,
+                        (
+                            crate::ComparisonSide::Provided,
+                            crate::ComparisonSide::Required,
+                        ),
+                        attempt,
+                    )
                 } else {
-                    directional::inputs(direction, &t, &c, attempt)
+                    directional::inputs(
+                        direction,
+                        &t,
+                        &c,
+                        (
+                            crate::ComparisonSide::Required,
+                            crate::ComparisonSide::Provided,
+                        ),
+                        attempt,
+                    )
                 };
-                // Only the final report reason escapes this slot. Formatting
-                // scratch and intermediate reasons have already been dropped.
-                if let Ok(comparison) = &result {
-                    attempt.retain(comparison.reason().map_or(0, str::len))?;
-                }
+                // Only the final reason or failure location escapes this slot.
+                // Scratch and intermediate diagnostics have already been dropped.
+                let retained = match &result {
+                    Ok(comparison) => comparison.reason().map_or(0, str::len),
+                    Err(failure) => failure.retained_bytes(),
+                };
+                attempt.retain(retained)?;
                 result
             }))
         };
@@ -347,7 +389,7 @@ pub fn check_interface_with_control(
         });
     }
     if control.is_cancelled() {
-        return Err(ComparisonFailure::Cancelled);
+        return Err(ComparisonFailure::from(FailureKind::Cancelled));
     }
     Ok(InterfaceComparison {
         operations: comparisons,

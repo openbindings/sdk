@@ -78,8 +78,13 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                     let (doc, resources) = fixture(&schema, &reference, supplied);
                     let report =
                         doc.references_with_resources(resources.clone(), &AtomicBool::new(false));
-                    let found = report
-                        .references
+                    let ReferenceReport::Complete {
+                        references: observations,
+                    } = &report
+                    else {
+                        panic!("complete inventory required")
+                    };
+                    let found = observations
                         .iter()
                         .find(|r| r.location.pointer == "/operations/op/input/$ref")
                         .unwrap();
@@ -154,8 +159,14 @@ fn inspection_root_never_masks_missing_references_including_suffix_candidates() 
                 .join(",");
             let doc = Document::parse(format!(r#"{{"openbindings":"0.2.0","schemas":{{{schemas}}},"operations":{{"op":{{"input":{input}}}}}}}"#)).unwrap();
             let report = doc.references();
-            assert!(report.complete);
-            assert!(report.references.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
+            let ReferenceReport::Complete {
+                references: observations,
+            } = &report
+            else {
+                panic!("complete inventory required")
+            };
+
+            assert!(observations.iter().all(|r| matches!(&r.resolution, ReferenceResolution::Unresolved { detail } if detail.reason == ReferenceRefusalReason::ResourceUnavailable && detail.code == "resource-unavailable")), "{report:?}");
             // A dominating branch decides without the missing resource; a
             // value reaching it gives no verdict.
             let Ok(contract) = prepare_input(&doc, &ExternalSchemas::default()) else {
@@ -183,8 +194,13 @@ fn unused_malformed_siblings_do_not_change_the_selected_schema() {
                 format!(r#"{{"$id":"{BASE}","$defs":{{"good":{{"type":"string"}},"bad":{bad}}}}}"#);
             let (doc, resources) = fixture(&schema, &format!("{BASE}#/$defs/good"), supplied);
             let report = doc.references_with_resources(resources.clone(), &AtomicBool::new(false));
-            let reference = report
-                .references
+            let ReferenceReport::Complete {
+                references: observations,
+            } = &report
+            else {
+                panic!("complete inventory required")
+            };
+            let reference = observations
                 .iter()
                 .find(|r| r.location.pointer == "/operations/op/input/$ref")
                 .unwrap();

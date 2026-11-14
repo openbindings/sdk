@@ -44,6 +44,15 @@ Their SDK-owned blanket implementations apply carrier handoff limits, exact
 request/response kind matching and cooperative cancellation. The corresponding
 `*_with_limits` methods take caller-selected `DescriptionLimits` as the last argument.
 Explicit `handle_*` calls bypass SDK checks. Local checked failures are `KindError`.
+
+`CheckFailure::map_error` consumes a failure and maps only its native operational
+error with an `FnOnce`. Context challenges, rejections and cancellation pass
+through unchanged without calling the closure. `KindError::map_error` maps its
+provider failure and preserves every local failure. A host combining kinds with
+different errors can use `failure.map_error(HostError::FirstKind)`; for a checked
+source check, use `error.map_error(|failure| failure.map_error(HostError::FirstKind))`.
+These methods preserve future variants inside the defining crate, so a host does
+not need a wildcard that invents an operational failure.
 Providers own admission of their outputs. A transport, decoding or admission
 failure remains `CheckFailure::Operational`; a kind's rejection carries its own
 code, readable message and optional exact data. `ContextRequired` carries the

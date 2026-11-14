@@ -18,8 +18,9 @@ fn accounted_leaves_keep_siblings_and_containing_conjunctions_unmerged() {
         r#"{"type":"string"}"#,
     );
     assert_eq!(
-        identical(Some(&a), Some(&b), &ComparisonLimits::default()),
-        Err(ComparisonFailure::UnsatisfiableMerge)
+        (identical(Some(&a), Some(&b), &ComparisonLimits::default()))
+            .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::UnsatisfiableMerge)
     );
     assert_eq!(
         identical_with_references(
@@ -117,18 +118,20 @@ fn only_same_spelled_accounted_references_can_hide_missing_content_or_cycles() {
         Ok(true)
     );
     assert_eq!(
-        identical_with_references(Some(&a), Some(&a), &|_| false, &ComparisonLimits::default()),
-        Err(ComparisonFailure::ReferenceCycle)
+        (identical_with_references(Some(&a), Some(&a), &|_| false, &ComparisonLimits::default()))
+            .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::ReferenceCycle)
     );
     let opaque = input(r#"{"not":{"$ref":"not a uri"}}"#, "true");
     assert_eq!(
-        identical_with_references(
+        (identical_with_references(
             Some(&opaque),
             Some(&opaque),
             &|_| false,
             &ComparisonLimits::default()
-        ),
-        Err(ComparisonFailure::InvalidReference)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::InvalidReference)
     );
     let malformed_target = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"$ref":"not a uri"}"#);
     assert_eq!(
@@ -141,13 +144,14 @@ fn only_same_spelled_accounted_references_can_hide_missing_content_or_cycles() {
         Ok(true)
     );
     assert_eq!(
-        identical_with_references(
+        (identical_with_references(
             Some(&malformed_target),
             Some(&malformed_target),
             &|_| false,
             &ComparisonLimits::default()
-        ),
-        Err(ComparisonFailure::InvalidReference)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::InvalidReference)
     );
     let missing = input(r##"{"$ref":"#/missing"}"##, "true");
     assert_eq!(
@@ -160,36 +164,39 @@ fn only_same_spelled_accounted_references_can_hide_missing_content_or_cycles() {
         Ok(true)
     );
     assert_eq!(
-        identical_with_references(
+        (identical_with_references(
             Some(&missing),
             Some(&missing),
             &|_| false,
             &ComparisonLimits::default()
-        ),
-        Err(ComparisonFailure::MissingReference)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::MissingReference)
     );
     assert_eq!(
-        identical_with_references(
+        (identical_with_references(
             Some(&a),
             Some(&missing),
             &|_| true,
             &ComparisonLimits::default()
-        ),
-        Err(ComparisonFailure::ReferenceCycle)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::ReferenceCycle)
     );
 }
 #[test]
 fn reference_rule_variants_apply_limits_and_cooperative_control() {
     let a = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"type":"string"}"#);
     assert_eq!(
-        identical_with_references_and_control(
+        (identical_with_references_and_control(
             Some(&a),
             Some(&a),
             &|_| true,
             &ComparisonLimits::default(),
             &AtomicBool::new(true)
-        ),
-        Err(ComparisonFailure::Cancelled)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::Cancelled)
     );
     for limits in [
         ComparisonLimits {
@@ -206,8 +213,9 @@ fn reference_rule_variants_apply_limits_and_cooperative_control() {
         },
     ] {
         assert!(matches!(
-            identical_with_references(Some(&a), Some(&a), &|_| true, &limits),
-            Err(ComparisonFailure::LimitExceeded(_))
+            (identical_with_references(Some(&a), Some(&a), &|_| true, &limits))
+                .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::LimitExceeded(_))
         ));
     }
 }

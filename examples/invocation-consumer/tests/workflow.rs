@@ -2,7 +2,7 @@ use invocation_consumer::Catalog;
 use openbindings::{ConformantDocument, Document, Edit, ExternalSchemas, JsonValue};
 use openbindings_invocation::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use openbindings_source_pull::{PullLimits, PullRequest, SourcePullerExt};
+use openbindings_source_pull::{PullRequest, SourcePullerExt};
 use source_pull_consumer::Fixed;
 use std::{future::Future, sync::Arc};
 
@@ -12,15 +12,13 @@ fn json(text: &str) -> JsonValue {
 async fn authored() -> ConformantDocument {
     let original = Document::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"fixed":{"kind":"example.fixed@1"}}}"#).unwrap().validate().unwrap().conformant().unwrap();
     let request = PullRequest::new(original.clone(), "fixed");
-    let result = (Fixed)
+    let (_, prospective) = (Fixed)
         .pull_source(request.clone(), CancellationToken::new())
         .await
         .unwrap();
     assert!(original.value().get("bindings").is_none());
     // This caller deliberately chooses all additions. Pulling never adopts them.
-    result
-        .validate_for(&request, &PullLimits::default(), &CancellationToken::new())
-        .unwrap()
+    prospective
 }
 
 async fn exchange<F: Future<Output = Result<(), InvocationError>>>(

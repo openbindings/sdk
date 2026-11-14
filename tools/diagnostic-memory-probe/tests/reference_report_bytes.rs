@@ -53,14 +53,19 @@ mod existing_fixtures;
 mod retained_text_fixtures;
 
 fn assert_report(report: ReferenceReport, source: &str, target: &str, count: usize) {
-    assert!(!report.complete);
-    assert_eq!(report.references.len(), count);
-    let limitation = report.limitation.unwrap();
+    let ReferenceReport::Incomplete {
+        retained,
+        limitation,
+    } = report
+    else {
+        panic!("incomplete")
+    };
+    assert_eq!(retained.len(), count);
     assert_eq!(limitation.reason, ReferenceRefusalReason::LimitExceeded);
     assert_eq!(limitation.code, "reference-report-bytes");
     assert!(limitation.location.is_none());
     let mut bytes = 0;
-    for (i, reference) in report.references.iter().enumerate() {
+    for (i, reference) in retained.iter().enumerate() {
         let expected = format!("{source}/allOf/{i}/$ref");
         assert_eq!(reference.location.pointer, expected);
         assert_eq!(reference.keyword, "$ref");
@@ -157,11 +162,17 @@ fn unpaired_names_charge_two_bytes_per_unit_including_the_keyword() {
     // Unpaired JSON strings are admitted drafts but violate document OBI-01.
     {
         let report = document.references();
-        assert!(!report.complete);
-        assert_eq!(report.limitation.unwrap().code, "reference-report-bytes");
-        assert_eq!(report.references.len(), 8);
+        let ReferenceReport::Incomplete {
+            retained,
+            limitation,
+        } = report
+        else {
+            panic!("incomplete")
+        };
+        assert_eq!(limitation.code, "reference-report-bytes");
+        assert_eq!(retained.len(), 8);
         let mut bytes = 0;
-        for (i, reference) in report.references.iter().enumerate() {
+        for (i, reference) in retained.iter().enumerate() {
             let expected: Vec<u16> = format!("{prefix}{key}")
                 .encode_utf16()
                 .chain([0xd800])
@@ -209,9 +220,16 @@ fn unresolved_refusal_pointers_share_the_allowance() {
     );
     let proof = validation.conformant().unwrap();
     for report in [document.references(), proof.document().references()] {
-        assert_eq!(report.references.len(), 1);
-        assert_eq!(report.limitation.unwrap().code, "reference-report-bytes");
-        let reference = &report.references[0];
+        let ReferenceReport::Incomplete {
+            retained,
+            limitation,
+        } = report
+        else {
+            panic!("incomplete")
+        };
+        assert_eq!(retained.len(), 1);
+        assert_eq!(limitation.code, "reference-report-bytes");
+        let reference = &retained[0];
         let ReferenceResolution::Unresolved { detail } = &reference.resolution else {
             panic!("unresolved")
         };

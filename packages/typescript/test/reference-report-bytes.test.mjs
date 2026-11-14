@@ -43,9 +43,9 @@ for (const longTarget of [false, true]) {
         assert.equal(report.limitation.reason, "limit-exceeded");
         assert.equal(report.limitation.code, "reference-report-bytes");
         assert.equal(report.limitation.location, null);
-        assert.equal(report.references.length, 8);
+        assert.equal(report.retained.length, 8);
         let bytes = 0;
-        for (const [i, reference] of report.references.entries()) {
+        for (const [i, reference] of report.retained.entries()) {
           assert.equal(reference.location.pointer, `${source}/allOf/${i}/$ref`);
           assert.equal(reference.resolution.status, "located");
           assert.equal(reference.resolution.target.pointer, target);
@@ -91,10 +91,10 @@ function bounded(report, count) {
   assert.equal(report.limitation.code, "reference-report-bytes");
   assert.equal(report.limitation.location, null);
   assert.equal(report.limitation.resourceUri, null);
-  assert.equal(report.references.length, count);
-  const bytes = report.references.reduce((sum, r) => sum + entryBytes(r), 0);
+  assert.equal(report.retained.length, count);
+  const bytes = report.retained.reduce((sum, r) => sum + entryBytes(r), 0);
   assert.ok(bytes <= 8 * 1024 * 1024);
-  assert.ok(bytes + entryBytes(report.references.at(-1)) > 8 * 1024 * 1024);
+  assert.ok(bytes + entryBytes(report.retained.at(-1)) > 8 * 1024 * 1024);
 }
 
 test("resource-root pointers share the allowance including unpaired names", () => {
@@ -114,7 +114,7 @@ test("resource-root pointers share the allowance including unpaired names", () =
     try {
       const report = document.references();
       bounded(report, unpaired ? 5 : 10);
-      for (const r of report.references) {
+      for (const r of report.retained) {
         assert.deepEqual(r.resourceRoot, r.resolution.target);
         assert.equal(r.resourceRoot.pointer, `/schemas/${key}`);
       }

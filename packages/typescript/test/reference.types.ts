@@ -10,6 +10,7 @@ import {
   type SchemaPreparation,
   type PreparedSchema,
   type DocumentValidation,
+  type ValidationOptions,
   type DocumentReport,
   validateDocument,
 } from "../dist/index.js";
@@ -20,9 +21,36 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   const parsed = Document.parse(source);
   if (parsed.status !== "parsed") return parsed.error;
   using document = parsed.value;
-  for (const reference of document.references().references) {
-    reference.resourceRoot satisfies SchemaOrigin | null;
+  const inventory = document.references();
+  // @ts-expect-error Reading the list without handling completion caused stale renames.
+  inventory.references;
+  if (inventory.complete) {
+    for (const reference of inventory.references) {
+      reference.resourceRoot satisfies SchemaOrigin | null;
+    }
+    // @ts-expect-error Partial observations exist only in the incomplete case.
+    inventory.retained;
+  } else {
+    inventory.retained satisfies readonly import("../dist/index.js").Reference[];
+    inventory.limitation satisfies import("../dist/index.js").ReferenceRefusal;
+    // @ts-expect-error Incomplete observations cannot be read as the full inventory.
+    inventory.references;
   }
+  document.references({ limits: { maxReportBytes: 16 * 1024 * 1024 } });
+  const validationOptions: ValidationOptions = {
+    limits: { maxFindings: 4200, maxPointerBytes: 16 * 1024 * 1024 },
+  };
+  document.validate(validationOptions);
+  document.validate({});
+  document.validate(undefined);
+  // @ts-expect-error The removed separate method has no compatibility alias.
+  document.validateWithLimits({ maxFindings: 4200 });
+  // @ts-expect-error Limits belong under the limits option.
+  document.validate({ maxFindings: 4200 });
+  // @ts-expect-error Validation options reject unknown names.
+  document.validate({ unexpected: true });
+  // @ts-expect-error Validation retention accepts only known budgets.
+  document.validate({ limits: { unexpected: 0 } });
   // Every access returns its own owner; this one is scoped independently.
   using original = document.value();
   const copy: Uint8Array = original.bytes;

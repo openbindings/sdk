@@ -223,9 +223,13 @@ mod tests {
                 // Initialize the name inventory once. The measured pass must
                 // still resolve every occurrence, with no query-result cache.
                 crate::resolution_work::take();
-                assert!(space.references_with(&mut resolver, &|| false).complete);
+                assert!(
+                    space
+                        .references_with(&mut resolver, 8 * 1024 * 1024, &|| false)
+                        .complete
+                );
                 cold.push(crate::resolution_work::take());
-                let report = space.references_with(&mut resolver, &|| false);
+                let report = space.references_with(&mut resolver, 8 * 1024 * 1024, &|| false);
                 work.push(crate::resolution_work::take());
                 assert!(report.complete);
                 assert_eq!(report.references.len(), refs);
@@ -233,10 +237,18 @@ mod tests {
                 // It still starts with no bases or query inputs.
                 drop(resolver);
                 let mut resolver = space.reference_resolver();
-                assert!(space.references_with(&mut resolver, &|| false).complete);
+                assert!(
+                    space
+                        .references_with(&mut resolver, 8 * 1024 * 1024, &|| false)
+                        .complete
+                );
                 drop(resolver);
                 let mut resolver = space.reference_resolver();
-                assert!(space.references_with(&mut resolver, &|| false).complete);
+                assert!(
+                    space
+                        .references_with(&mut resolver, 8 * 1024 * 1024, &|| false)
+                        .complete
+                );
                 if shape != "leaf" {
                     assert!(
                         report

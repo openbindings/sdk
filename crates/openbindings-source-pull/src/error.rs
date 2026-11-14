@@ -2,6 +2,22 @@ use openbindings::{DocumentValidation, EditError, VersionRefusal};
 use std::fmt;
 
 /// Request shape or original document admission failure, before provider work.
+///
+/// New failure categories may be added. Handle unknown categories by refusing
+/// the attempt or propagating the original error. Exhaustive downstream matches
+/// are intentionally rejected:
+///
+/// ```compile_fail,E0004
+/// use openbindings_source_pull::RequestError;
+/// fn classify(error: RequestError) {
+///     match error {
+///         RequestError::Shape(_) => (),
+///         RequestError::Interface(_) => (),
+///         RequestError::Version(_) => (),
+///     }
+/// }
+/// ```
+#[non_exhaustive]
 pub enum RequestError {
     /// Invalid fixed request field or closed-carrier rule.
     Shape(&'static str),
@@ -68,6 +84,26 @@ pub enum RelationshipError {
     Uses,
 }
 /// Failure of local result validation, distinct from a provider's operational error.
+///
+/// New failure categories may be added. Handle unknown categories by refusing
+/// the attempt or propagating the original error. Exhaustive downstream matches
+/// are intentionally rejected:
+///
+/// ```compile_fail,E0004
+/// use openbindings_source_pull::PullValidationError;
+/// fn classify(error: PullValidationError) {
+///     match error {
+///         PullValidationError::MissingSource => (),
+///         PullValidationError::Relationship(_) => (),
+///         PullValidationError::LimitExceeded(_) => (),
+///         PullValidationError::Cancelled => (),
+///         PullValidationError::Edit(_) => (),
+///         PullValidationError::Prospective(_) => (),
+///         PullValidationError::Version(_) => (),
+///     }
+/// }
+/// ```
+#[non_exhaustive]
 pub enum PullValidationError {
     /// The selected source is absent from the original document.
     MissingSource,

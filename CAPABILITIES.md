@@ -26,6 +26,14 @@ values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.
 
 Default parsing admits 32 MiB, 10,000 container levels and 1,000,000 nodes.
+Rust `JsonValue::parse_prefix` also admits one exact value from a byte buffer,
+returning its exclusive end offset or a distinct `JsonPrefixError::Incomplete`.
+At EOF the host uses whole-text admission on an incomplete remainder. The host
+owns separators and I/O and doubles retained input before retrying Incomplete,
+unless EOF or a limit is reached first. Prefix calls inspect only the first
+value and constant lookahead. The `_with_limits` form applies
+the same allowances to the prefix through the value end, excluding trailing
+whitespace and subsequent input. The TypeScript facade does not expose it.
 `validate_document` uses the same defaults, including 10,000 container levels. These
 admission limits are a setting at `validate_document_with_limits`,
 `Document::parse_with_limits` and `JsonValue::parse_with_limits` (`JsonLimits`),
@@ -53,16 +61,20 @@ plus the selected evaluator's capability and execution limits. Parser-limit
 findings use `byte-limit`, `depth-limit` or `node-limit` and describe the limit
 without API advice. The [Rust guide](docs/rust-first-use.md) explains how to
 choose admission limits. Ordinary Rust Serde conversion has a 128-container
-ceiling. Document reports retain at most 4,096 findings and 8 MiB of pointers;
-truncation leaves rule evidence intact. OBI-02 findings include fixed-schema
+ceiling. Document reports retain at most 4,096 findings and 8 MiB of pointers by
+default. `ValidationLimits` and `Document::validate_with_limits` select other
+retention allowances. Truncation leaves rule evidence intact. OBI-02 findings include fixed-schema
 keyword, origin and optional facts, as documented in the
 [API reference](docs/api-reference.md#document-finding-codes).
 
 Reference inspection works on drafts, including missing or malformed version
 declarations, under 0.2's rules and throughout the admitted depth. Unsupported
 versions and duplicate names produce incomplete reports. `resource_root` names
-the site's resource origin, absent exactly for the document resource. An 8 MiB
-retained-text allowance can stop inspection with `reference-report-bytes`.
+the site's resource origin, absent exactly for the document resource. A
+caller-selected retained-text allowance, 8 MiB by default, can stop inspection
+with `reference-report-bytes`. Match `ReferenceReport::Complete { references }`
+or `Incomplete { retained, limitation }` before consuming observations.
+`ReferenceLimits` is accepted by the `_with_limits` reference methods.
 See [reference inspection](docs/api-reference.md#schemas-and-value-results) for
 completion, resources and accounting details.
 

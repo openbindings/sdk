@@ -126,10 +126,21 @@ record!(Reference, v, {
     "location": json(&v.location), "resource_root": json(&v.resource_root), "keyword": &v.keyword,
     "spelling": &v.spelling, "resolution": json(&v.resolution),
 });
-record!(ReferenceReport, v, {
-    "references": json(&v.references), "complete": v.complete,
-    "limitation": json(&v.limitation),
-});
+impl Exact for ReferenceReport {
+    fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Complete { references } => fields!(serializer;
+                "complete": true, "references": json(references),
+            ),
+            Self::Incomplete {
+                retained,
+                limitation,
+            } => fields!(serializer;
+                "complete": false, "retained": json(retained), "limitation": json(limitation),
+            ),
+        }
+    }
+}
 record!(NoVerdict, v, {
     "reason": v.reason, "code": &v.code, "message": &v.message,
     "location": json(&v.location),
@@ -265,25 +276,29 @@ mod tests {
         }
 
         let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://example.test/missing"}}}}"#).unwrap();
-        let mut references = document.references();
-        let ReferenceResolution::Unresolved { detail } = &references.references[0].resolution
-        else {
+        let report = document.references();
+        agrees(&report);
+        let ReferenceReport::Complete { mut references } = report else {
+            panic!("complete")
+        };
+        let ReferenceResolution::Unresolved { detail } = &references[0].resolution else {
             panic!("missing resource")
         };
         assert!(detail.location.is_some());
         assert!(detail.resource_uri.is_some());
         agrees(detail);
-        agrees(&references.references[0]);
-        agrees(&references.references[0].resolution);
-        references.limitation = Some(detail.clone());
-        references.complete = false;
-        agrees(&references);
-        references.references[0].resolution = ReferenceResolution::Located {
+        agrees(&references[0]);
+        agrees(&references[0].resolution);
+        agrees(&ReferenceReport::Incomplete {
+            retained: references.clone(),
+            limitation: detail.clone(),
+        });
+        references[0].resolution = ReferenceResolution::Located {
             target: origin.clone(),
             dynamic_lookup: true,
         };
-        agrees(&references.references[0].resolution);
-        agrees(&references.references[0]);
+        agrees(&references[0].resolution);
+        agrees(&references[0]);
 
         let refusal = NoVerdict::new(NoVerdictReason::LimitExceeded, "limit", "bounded work")
             .with_location(origin.clone());

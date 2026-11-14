@@ -37,7 +37,8 @@ nothing new comes in and validate the edited document. The selective-adoption
 test follows an operation's input reference without a hand-written `uses` list.
 
 `src/using_the_result.rs` holds these steps as application code, along with
-applying proposals. To take everything a pull offers, call `validate_for`.
+applying proposals. To take every addition from a checked pull, use the returned prospective
+document. For a separately supplied result, call `validate_for`.
 
 Run `python3 tools/verify-source-pull.py` from the SDK root; add `--archives --wasm`
 to qualify extracted dependencies and the local TypeScript/Node async Wasm bridge.

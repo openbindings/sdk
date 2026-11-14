@@ -1,3 +1,4 @@
+use openbindings::ReferenceReport;
 use openbindings::{Document, ExternalSchema, ExternalSchemas, JsonValue};
 use serde_json::{Value, json};
 use std::sync::atomic::AtomicBool;
@@ -67,7 +68,7 @@ fn probe_reports_preserve_the_original_resolver_results() {
                 .document()
                 .references_with_resources(resources, &AtomicBool::new(false));
             assert_eq!(draft, conformant, "{shape}/{supplied}");
-            assert!(draft.complete);
+            assert!(matches!(draft, ReferenceReport::Complete { .. }));
             observed.insert(
                 format!("{shape}/{supplied}"),
                 serde_json::to_value(draft).unwrap(),

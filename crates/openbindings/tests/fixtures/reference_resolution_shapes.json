@@ -1,7 +1,6 @@
 {
   "deep-relative-id/false": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -52,7 +51,6 @@
   },
   "deep-relative-id/true": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -118,7 +116,6 @@
   },
   "fragment/false": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -184,7 +181,6 @@
   },
   "fragment/true": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -250,7 +246,6 @@
   },
   "identical/false": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -316,7 +311,6 @@
   },
   "identical/true": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -382,7 +376,6 @@
   },
   "long-directory/false": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -463,7 +456,6 @@
   },
   "long-directory/true": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -589,7 +581,6 @@
   },
   "long-leaf/false": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",
@@ -670,7 +661,6 @@
   },
   "long-leaf/true": {
     "complete": true,
-    "limitation": null,
     "references": [
       {
         "keyword": "$ref",

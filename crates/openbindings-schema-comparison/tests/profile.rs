@@ -55,9 +55,13 @@ fn all_30_identity_and_62_directional_groups_preserve_the_published_verdicts() {
             let fixture = json(
                 &std::fs::read_to_string(root.join(record["path"].as_str().unwrap())).unwrap(),
             );
+            let required = conformant(&fixture.get("left").unwrap().to_owned());
+            let provided = conformant(&fixture.get("right").unwrap().to_owned());
             let report = check_interface(
-                &conformant(&fixture.get("left").unwrap().to_owned()),
-                &conformant(&fixture.get("right").unwrap().to_owned()),
+                &required,
+                &provided,
+                &ComparisonContext::new(required.document().value().clone()),
+                &ComparisonContext::new(provided.document().value().clone()),
                 &|_, _| Some(OperationRole::Realized),
                 &ComparisonLimits::default(),
             )
@@ -163,17 +167,21 @@ fn all_10_identity_and_29_directional_exact_groups_preserve_the_published_verdic
     for case in pack["cases"].as_array().unwrap() {
         if case["mode"] != "identical" {
             directional += 1;
+            let required = conformant(&json(case["leftJSON"].as_str().unwrap()));
+            let provided = conformant(&json(case["rightJSON"].as_str().unwrap()));
             let report = check_interface(
-                &conformant(&json(case["leftJSON"].as_str().unwrap())),
-                &conformant(&json(case["rightJSON"].as_str().unwrap())),
+                &required,
+                &provided,
+                &ComparisonContext::new(required.document().value().clone()),
+                &ComparisonContext::new(provided.document().value().clone()),
                 &|_, _| Some(OperationRole::Realized),
                 &ComparisonLimits::default(),
             )
             .unwrap();
             if case["expected"]["error"] == "schema" {
                 assert_eq!(
-                    summary(&report),
-                    Err(ComparisonFailure::UnsatisfiableMerge),
+                    (summary(&report)).map_err(|failure| failure.kind()),
+                    Err(ComparisonFailureKind::UnsatisfiableMerge),
                     "{}",
                     case["id"]
                 );
@@ -238,7 +246,7 @@ fn summary(report: &InterfaceComparison) -> Result<Verdict, ComparisonFailure> {
             .into_iter()
             .flatten()
         {
-            verdicts.push(slot.as_ref().map_err(|e| *e)?.verdict());
+            verdicts.push(slot.as_ref().map_err(Clone::clone)?.verdict());
         }
     }
     Ok(Verdict::collapse(verdicts))

@@ -25,6 +25,7 @@ import {
   isExact,
   jsonRaw,
   limitsOption,
+  ownEntries,
   scalar,
   wellFormed,
 } from "./json.js";
@@ -35,6 +36,7 @@ import type {
   JsonLimits,
 } from "./json.js";
 import { requireReady } from "./runtime.js";
+import { reportLimits } from "./report-limits.js";
 import {
   ExternalSchemas,
   Schema,
@@ -72,7 +74,61 @@ export interface Finding {
   details?: ValueProblemDetails;
 }
 
-/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. Presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate); the pinned 0.2 schema's largest keyword/schema/details tuple is 198 serialized JSON bytes (199 in Rust JSON), guarded by an exhaustive schema test without a runtime fact-size cap. findingsTruncated records omissions without changing the conclusion. */
+/** Retention allowances for explanatory findings, independent of rule evidence and JSON admission. Each value is a nonnegative 32-bit integer. */
+export interface ValidationLimits {
+  /** Maximum retained findings; default 4096. Zero retains none. */
+  maxFindings: number;
+  /** Aggregate generated source-pointer bytes; default 8 MiB. UTF-8, or two bytes per UTF-16 unit through an unpaired name. This is not a total heap allowance. */
+  maxPointerBytes: number;
+}
+
+/** Options for assessing every document rule, with independent finding retention. */
+export interface ValidationOptions {
+  /** Override report retention; omitted limits use the cached default assessment. Unspecified entries use validationLimits(). */
+  limits?: Partial<ValidationLimits>;
+}
+
+// These budgets are fixed by the initialized module. Public defaults still
+// return fresh frozen copies; custom assessments reuse only this metadata.
+let defaultValidationLimits: Readonly<ValidationLimits> | undefined;
+
+function validationOptions(
+  options: ValidationOptions,
+): ValidationLimits | undefined {
+  if (!options || typeof options !== "object" || Array.isArray(options))
+    throw new SdkError(
+      "invalid-validation-options",
+      "Validation options must be an object.",
+    );
+  let limits: unknown;
+  for (const [key, value] of ownEntries(options)) {
+    if (key !== "limits")
+      throw new SdkError(
+        "invalid-validation-options",
+        "Unknown validation option.",
+      );
+    limits = value;
+  }
+  return limits === undefined
+    ? undefined
+    : reportLimits(
+        (defaultValidationLimits ??= validationLimits()),
+        limits,
+        "invalid-validation-limits",
+      );
+}
+
+/** Return a fresh frozen copy of default validation-report retention allowances. Requires initialization. */
+export function validationLimits(): Readonly<ValidationLimits> {
+  requireReady();
+  const [maxFindings, maxPointerBytes] = wasm.validationLimits();
+  return Object.freeze({
+    maxFindings: maxFindings!,
+    maxPointerBytes: maxPointerBytes!,
+  });
+}
+
+/** Normative OBI assessment at an exact specification revision. All rules retain independent evidence even if findings are omitted. By default presentation retains at most 4096 findings and 8 MiB aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate); the pinned 0.2 schema's largest keyword/schema/details tuple is 198 serialized JSON bytes (199 in Rust JSON), guarded by an exhaustive schema test without a runtime fact-size cap. Document.validate({ limits }) selects different retention allowances. findingsTruncated records omissions without changing the conclusion. */
 export interface ValidationReport {
   /** Applied specification release. */
   release: string;
@@ -84,7 +140,7 @@ export interface ValidationReport {
   evidence: Readonly<Record<string, Evidence>>;
   /** Retained explanatory findings, bounded independently of rule evidence. */
   findings: readonly Finding[];
-  /** True when the 4096-finding or 8 MiB aggregate generated-pointer byte cap omitted findings. Omission never changes evidence or substitutes a shortened pointer. */
+  /** True when the selected finding-count or aggregate generated-pointer byte allowance omitted findings. Omission never changes evidence or substitutes a shortened pointer. */
   findingsTruncated: boolean;
 }
 
@@ -253,7 +309,7 @@ abstract class DocumentSnapshot extends Managed {
   }
   /** Inspect original schema references without fetching resources or claiming conformance. Missing or malformed openbindings declarations use 0.2's rules without adding a limitation; well-formed unsupported versions and duplicate member names are refused. */
   references(options: ReferenceOptions = {}): ReferenceReport {
-    const { resources, aborted } = referenceOptions(options),
+    const { resources, aborted, maxReportBytes } = referenceOptions(options),
       empty = resources ? undefined : new ExternalSchemas();
     try {
       return decode(
@@ -261,6 +317,7 @@ abstract class DocumentSnapshot extends Managed {
           documentRaw(this).references(
             resourceRaw(resources ?? empty!),
             aborted,
+            maxReportBytes,
           ),
         ),
       );
@@ -334,9 +391,12 @@ export class Document extends DocumentSnapshot {
   retain(): Document {
     return adoptDocument(handle<wasm.WasmDocument>(this).retain());
   }
-  /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner keeps its revision. Other branches retain evidence or a version refusal. */
-  validate(): DocumentValidation {
-    return assessDocument(this);
+  /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner keeps its revision. Other branches retain evidence or a version refusal. Omitted limits use the cached default assessment; selected retention never changes rule evidence or the conclusion. Custom reports do not replace the default cache. */
+  validate(options?: ValidationOptions): DocumentValidation {
+    return assessDocument(
+      this,
+      options === undefined ? undefined : validationOptions(options),
+    );
   }
   #commit(call: (raw: wasm.WasmDocument) => void): Document {
     editableRaw(this);
@@ -427,7 +487,10 @@ const conformanceToken = Symbol("established conformance");
 
 let adoptConformant: (raw: wasm.WasmConformantDocument) => ConformantDocument;
 
-let assessDocument: (document: DocumentSnapshot) => DocumentValidation;
+let assessDocument: (
+  document: DocumentSnapshot,
+  limits?: ValidationLimits,
+) => DocumentValidation;
 
 /** Retained proof for one immutable snapshot whose normative OBI rules were established. Obtain via Document.validate(); preparation remains evaluator-dependent. It shares read-only inspection and deterministic disposal, without inheriting Document or its setters. */
 export class ConformantDocument extends DocumentSnapshot {
@@ -439,8 +502,17 @@ export class ConformantDocument extends DocumentSnapshot {
   }
   static {
     adoptConformant = (raw) => new ConformantDocument(raw, conformanceToken);
-    assessDocument = (document: DocumentSnapshot): DocumentValidation => {
-      const transfer = documentRaw(document).validate();
+    assessDocument = (
+      document: DocumentSnapshot,
+      limits?: ValidationLimits,
+    ): DocumentValidation => {
+      const raw = documentRaw(document);
+      const transfer = limits
+        ? (raw as wasm.WasmDocument).validateWithLimits(
+            limits.maxFindings,
+            limits.maxPointerBytes,
+          )
+        : raw.validate();
       try {
         const result = decode<DocumentReport>(transfer.report());
         const proof = transfer.takeConformant();

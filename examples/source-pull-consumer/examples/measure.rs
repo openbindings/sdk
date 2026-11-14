@@ -69,7 +69,7 @@ async fn main() {
             projection.push(start.elapsed().as_nanos());
             black_box(result);
             let start = Instant::now();
-            let result = client
+            let (result, _) = client
                 .pull_source(request.clone(), control.clone())
                 .await
                 .unwrap();

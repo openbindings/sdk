@@ -102,6 +102,7 @@ Operation
 OperationRequest
 Operational
 OutputResourceLimit
+Pointer
 ProposalAuthority
 Proposed
 Prospective
@@ -347,6 +348,7 @@ path
 per-operation
 perform
 performed
+pointer
 preference
 presence
 present

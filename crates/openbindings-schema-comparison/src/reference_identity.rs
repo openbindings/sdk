@@ -1,3 +1,4 @@
+use crate::ComparisonFailureKind as FailureKind;
 use crate::{
     ComparisonFailure as Failure, ComparisonLimits, SchemaInput,
     budget::Attempt,
@@ -48,7 +49,7 @@ impl<'a> ReferenceContext<'a> {
     /// Initial resolved target, or its resolution failure. An accounted leaf
     /// may still be kept when its target is unavailable.
     pub fn target(&self) -> Result<&JsonValue, Failure> {
-        self.target.as_ref().map_err(|e| *e)
+        self.target.as_ref().map_err(Clone::clone)
     }
 }
 
@@ -87,8 +88,8 @@ pub fn identical_with_references_and_control(
     attempt.check()?;
     let mut common = BTreeMap::new();
     if let (Some(left), Some(right)) = (left, right) {
-        let mut left = Inventory::new(left, &mut attempt)?;
-        let mut right = Inventory::new(right, &mut attempt)?;
+        let mut left = Inventory::new(left, crate::ComparisonSide::Left, &mut attempt)?;
+        let mut right = Inventory::new(right, crate::ComparisonSide::Right, &mut attempt)?;
         loop {
             for (path, references) in &left.found {
                 attempt.work(
@@ -152,10 +153,26 @@ pub fn identical_with_references_and_control(
         }
     }
     let left = left
-        .map(|i| normalize::normalize_with_references(i, &common, accounted_for, &mut attempt))
+        .map(|i| {
+            normalize::normalize_with_references(
+                i,
+                crate::ComparisonSide::Left,
+                &common,
+                accounted_for,
+                &mut attempt,
+            )
+        })
         .transpose()?;
     let right = right
-        .map(|i| normalize::normalize_with_references(i, &common, accounted_for, &mut attempt))
+        .map(|i| {
+            normalize::normalize_with_references(
+                i,
+                crate::ComparisonSide::Right,
+                &common,
+                accounted_for,
+                &mut attempt,
+            )
+        })
         .transpose()?;
     let equal = match (&left, &right) {
         (None, None) => true,
@@ -179,9 +196,13 @@ struct Inventory {
     pending: Vec<PendingReference>,
 }
 impl Inventory {
-    fn new(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Result<Self, Failure> {
+    fn new(
+        input: &SchemaInput,
+        side: crate::ComparisonSide,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Self, Failure> {
         let mut inventory = Self {
-            resources: Resources::new(input, attempt)?,
+            resources: Resources::new(input, side, attempt)?,
             seen: Default::default(),
             templates: BTreeMap::new(),
             found: BTreeMap::new(),
@@ -212,7 +233,7 @@ impl Inventory {
             };
             // A later round may discover a counterpart and keep this reference.
             // Normalization enforces every non-leaf failure after inventory.
-            if matches!(result, Err(Failure::LimitExceeded(_) | Failure::Cancelled)) {
+            if result.as_ref().is_err_and(|e| e.is_global()) {
                 return result;
             }
         }
@@ -296,14 +317,26 @@ impl Inventory {
         out: &mut Vec<RelativeReference>,
         attempt: &mut Attempt<'_>,
     ) -> Result<(), Failure> {
+        self.collect_inner(schema, scope, path, depth, out, attempt)
+            .map_err(|e| self.resources.locate_failure(e, schema, scope, attempt))
+    }
+    fn collect_inner(
+        &mut self,
+        schema: JsonRef<'_>,
+        scope: usize,
+        path: Name,
+        depth: usize,
+        out: &mut Vec<RelativeReference>,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<(), Failure> {
         attempt.depth(depth)?;
         let scope = self.resources.enter(schema, scope, attempt)?;
         for (keyword, dynamic) in [("$ref", false), ("$dynamicRef", true)] {
             if let Some(reference) = schema.get(keyword) {
-                let text = reference.as_str().ok_or(Failure::InvalidReference)?;
+                let text = reference.as_str().ok_or(FailureKind::InvalidReference)?;
                 attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
                 if !uri::valid(text) {
-                    return Err(Failure::InvalidReference);
+                    return Err(Failure::from(FailureKind::InvalidReference));
                 }
                 attempt.allocate(path.len().saturating_mul(2).saturating_add(256))?;
                 out.push((path.clone(), schema.to_owned(), scope, dynamic));

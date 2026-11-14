@@ -55,6 +55,24 @@ before an identity verdict, including when the other side is absent.
 `identical` returns `Result<bool, ComparisonFailure>`: true means normalized
 identity, false means difference, and a failure gives no answer.
 
+`ComparisonFailure` is a struct: `kind()` returns the Copy
+`ComparisonFailureKind`, `origin()` borrows an optional original `SchemaOrigin`,
+and `side()` returns an optional `ComparisonSide`. Identity calls use `Left` and
+`Right`; directional calls use `Target` and `Candidate`; interface failures use
+`Required` and `Provided` even for consumed roles. Match on `kind()` to classify
+failures. Whole-error equality also compares provenance. Cloning a failure shares
+its immutable location; `InterfaceIssue::failure()` preserves that location.
+
+Locations point into original documents or supplied resource roots, including
+supplied subtrees, rather than normalized schemas. A nested `$id` never replaces
+the supplied retrieval identity. One known schema coordinate is retained for a
+merge involving multiple sources. Unknown ancestry leaves the origin absent;
+global allowance exhaustion and cancellation also have no operand side. Location
+storage is bounded by the attempt's allocation allowance, retained across slots,
+and limited to an 8 MiB exact pointer. A pointer exceeding that cap is omitted;
+an exhausted attempt allowance returns `LimitExceeded`. Debug and Display never
+include supplied values; inspect `origin()` explicitly for editor diagnostics.
+
 References resolve within their containing schema resource, including nested `$id`
 resources and plain-name anchors. Without `$id`, fragments use the supplied document
 root. Relative references need a resource base; external content must be supplied
@@ -146,9 +164,15 @@ Reasons retain nested paths, exact JSON values, exclusive markers, actual union
 keys and authored indexes. Types, properties and required names choose the first
 lexical failure; enum and union traversal retain authored order.
 
-`check_interface(required, provided, role, limits)` accepts two
-`ConformantDocument`s and a callback
+`check_interface(required, provided, required_context, provided_context, role, limits)`
+accepts two `ConformantDocument`s, their caller-configured `ComparisonContext`s and a callback
 `&dyn Fn(&Operation, Option<&Operation>) -> Option<OperationRole>`.
+Each context must retain the exact root of its paired proof, obtained from
+`document.document().value().clone()`. An equal but separately parsed root fails
+with `ComparisonFailureKind::ContextMismatch` before any callback runs. Initial
+cancellation takes precedence. Retrieval bases and supplied resources remain
+independent on the two sides, and no reference causes I/O.
+
 The callback receives the required operation and each distinct matched provided
 operation, or `None` when missing. It runs once per match, before expanding `Both`.
 Return `Realized`, `Consumed`, `Both`, or `None` to exclude that match.
@@ -173,10 +197,11 @@ have no collapse method that interprets comparison failures.
 
 ```rust
 use openbindings::Document;
-use openbindings_schema_comparison::{check_interface, ComparisonLimits, OperationRole, Verdict};
+use openbindings_schema_comparison::{check_interface, ComparisonContext, ComparisonLimits, OperationRole, Verdict};
 let document = Document::parse(r#"{"openbindings":"0.2.0","operations":{"echo":{"input":true}}}"#)?
     .validate()?.conformant().unwrap();
-let report = check_interface(&document, &document,
+let context = ComparisonContext::new(document.document().value().clone());
+let report = check_interface(&document, &document, &context, &context,
     &|_, _| Some(OperationRole::Both), &ComparisonLimits::default())?;
 // This caller counts comparison failures as indeterminate.
 let outcomes = report.operations().iter().flat_map(|operation| {
@@ -192,7 +217,7 @@ assert_eq!(Verdict::collapse(outcomes), Verdict::Compatible);
 the entire fold, including shared document contexts. Setup failure returns no
 report; after setup, a failed slot stays in the report and later checks continue.
 Exhaustion is sticky and remains in slots. Observed cancellation always returns
-`Err(ComparisonFailure::Cancelled)`, including during the final slot. Normalized
+an error with `kind() == ComparisonFailureKind::Cancelled`, including during the final slot. Normalized
 reference targets are reused within the call when scope and depth agree;
 reference-rule calls retain their path-dependent accounting.
 Release measurements of self-comparison with 40 shared eight-property records

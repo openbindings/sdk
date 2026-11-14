@@ -298,12 +298,14 @@ enum DocumentRevision {
 }
 struct DocumentHandle {
     revision: DocumentRevision,
+    assessment: Option<Box<Result<DocumentValidation, VersionRefusal>>>,
     taken: Cell<bool>,
 }
 impl DocumentHandle {
     fn new(document: Document) -> Self {
         Self {
             revision: DocumentRevision::Editable(document),
+            assessment: None,
             taken: Cell::new(false),
         }
     }
@@ -335,12 +337,22 @@ impl DocumentHandle {
     ) -> Result<(), JsValue> {
         let next = apply(self.editable()?).map_err(edit_error)?;
         self.revision = DocumentRevision::Editable(next);
+        self.assessment = None;
         Ok(())
     }
     fn into_document(self) -> Document {
         match self.revision {
             DocumentRevision::Editable(document) => document,
             DocumentRevision::ConformantDocument(proof) => proof.into_inner(),
+        }
+    }
+    fn with_assessment<T>(
+        &self,
+        read: impl FnOnce(&Result<DocumentValidation, VersionRefusal>) -> T,
+    ) -> T {
+        match &self.assessment {
+            Some(assessment) => read(assessment),
+            None => read(&self.document().validate()),
         }
     }
     fn proof(&self, code: &str) -> Result<ConformantDocument, JsValue> {
@@ -493,12 +505,33 @@ impl WasmDocument {
             handle: DocumentHandle::new(self.handle.document().clone()),
         }
     }
-    pub fn references(&self, resources: &WasmResources, cancelled: bool) -> String {
+    #[wasm_bindgen(js_name=validateWithLimits)]
+    pub fn validate_with_limits(
+        &self,
+        max_findings: usize,
+        max_pointer_bytes: usize,
+    ) -> WasmDocumentValidation {
+        let mut handle = DocumentHandle::new(self.handle.document().clone());
+        handle.assessment = Some(Box::new(handle.document().validate_with_limits(
+            ValidationLimits {
+                max_findings,
+                max_pointer_bytes,
+            },
+        )));
+        WasmDocumentValidation { handle }
+    }
+    pub fn references(
+        &self,
+        resources: &WasmResources,
+        cancelled: bool,
+        max_report_bytes: usize,
+    ) -> String {
         encoded(exact::json(
-            &self
-                .handle
-                .document()
-                .references_with_resources(resources.resources.clone(), &control(cancelled)),
+            &self.handle.document().references_with_resources_and_limits(
+                resources.resources.clone(),
+                ReferenceLimits { max_report_bytes },
+                &control(cancelled),
+            ),
         ))
     }
 }
@@ -518,22 +551,23 @@ impl std::fmt::Debug for WasmDocumentValidation {
 #[wasm_bindgen]
 impl WasmDocumentValidation {
     pub fn report(&self) -> String {
-        match self.handle.document().validate() {
+        self.handle.with_assessment(|assessment| match assessment {
             Ok(v) => object!("report": exact::json(v.report()), "status": "report"),
             Err(e) => encoded(json!({"status":"version-refused", "refusal":e})),
-        }
+        })
     }
     #[wasm_bindgen(js_name=takeConformant)]
     pub fn take_conformant(&self) -> Option<WasmConformantDocument> {
         if self.handle.taken.replace(true) {
             return None;
         }
-        self.handle
-            .document()
-            .validate()
-            .ok()?
-            .conformant()
-            .map(WasmConformantDocument::from_proof)
+        self.handle.with_assessment(|assessment| {
+            assessment
+                .as_ref()
+                .ok()?
+                .conformant()
+                .map(WasmConformantDocument::from_proof)
+        })
     }
 }
 /// Immutable revision owning its established conformance proof.
@@ -554,6 +588,7 @@ impl WasmConformantDocument {
         Self {
             handle: DocumentHandle {
                 revision: DocumentRevision::ConformantDocument(document),
+                assessment: None,
                 taken: Cell::new(false),
             },
         }
@@ -699,8 +734,14 @@ impl WasmConformantDocument {
             .dependency(key)
             .map(WasmDependency::from_view))
     }
-    pub fn references(&self, resources: &WasmResources, cancelled: bool) -> String {
-        self.document().references(resources, cancelled)
+    pub fn references(
+        &self,
+        resources: &WasmResources,
+        cancelled: bool,
+        max_report_bytes: usize,
+    ) -> String {
+        self.document()
+            .references(resources, cancelled, max_report_bytes)
     }
 }
 impl WasmDocument {
@@ -1391,6 +1432,17 @@ pub fn check_version_bridge(version: &str) -> String {
 #[wasm_bindgen(js_name=liveStorageOwners)]
 pub fn live_storage_owners() -> usize {
     openbindings_internal_json::backend::live_arenas()
+}
+/// Default reference-report text allowance.
+#[wasm_bindgen(js_name=referenceLimits)]
+pub fn reference_limits() -> usize {
+    ReferenceLimits::default().max_report_bytes
+}
+/// Default retained finding count and generated-pointer byte allowance.
+#[wasm_bindgen(js_name=validationLimits)]
+pub fn validation_limits_bridge() -> Vec<usize> {
+    let limits = ValidationLimits::default();
+    vec![limits.max_findings, limits.max_pointer_bytes]
 }
 #[wasm_bindgen(js_name=evaluatorLimits)]
 pub fn evaluator_limits() -> String {

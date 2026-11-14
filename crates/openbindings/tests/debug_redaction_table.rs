@@ -290,8 +290,10 @@ fn debug_redacts_caller_text_at_every_boundary() {
         .unwrap_err();
     version.declared = SECRET.into();
     version.supported = SECRET;
-    let mut references = parsed_ref.references();
-    let mut reference_item = references.references[0].clone();
+    let ReferenceReport::Complete { references } = parsed_ref.references() else {
+        panic!("complete")
+    };
+    let mut reference_item = references[0].clone();
     let ReferenceResolution::Unresolved { detail } = &reference_item.resolution else {
         panic!("an unsupplied resource leaves its reference unresolved")
     };
@@ -307,9 +309,10 @@ fn debug_redacts_caller_text_at_every_boundary() {
     reference_item.resolution = ReferenceResolution::Unresolved {
         detail: reference_refusal.clone(),
     };
-    references.references = vec![reference_item.clone()];
-    references.complete = false;
-    references.limitation = Some(reference_refusal.clone());
+    let references = ReferenceReport::Incomplete {
+        retained: vec![reference_item.clone()],
+        limitation: reference_refusal.clone(),
+    };
     let problem = ValueProblem::new(
         format!("/{SECRET}").parse().unwrap(),
         location(),
@@ -358,8 +361,14 @@ fn debug_redacts_caller_text_at_every_boundary() {
     assert!(serde_json::to_string(&outcome).unwrap().contains(SECRET));
     assert!(!refusal().to_string().contains(SECRET));
     assert!(!version.to_string().contains(SECRET));
+    let ReferenceReport::Complete {
+        references: actual_references,
+    } = parsed_ref.references()
+    else {
+        panic!("complete")
+    };
     assert!(
-        parsed_ref.references().references[0]
+        actual_references[0]
             .spelling
             .as_ref()
             .unwrap()

@@ -1,4 +1,5 @@
 //! Lazy resource resolution. Schema ancestry never interprets carrier members.
+use crate::ComparisonFailureKind as FailureKind;
 use crate::{ComparisonContext, ComparisonFailure as Failure, SchemaInput, budget::Attempt};
 use openbindings::{JsonKind, JsonRef, JsonValue};
 use openbindings_internal_json::backend;
@@ -33,14 +34,15 @@ pub(crate) struct Index {
 #[derive(Clone)]
 pub(crate) struct Resources {
     index: Arc<Mutex<Index>>,
+    side: crate::ComparisonSide,
 }
 fn identity(text: &str, attempt: &mut Attempt<'_>) -> Result<String, Failure> {
     attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
     attempt.allocate(text.len().saturating_mul(8).saturating_add(128))?;
     if !uri::absolute(text) || uri::fragment(text).is_some_and(|f| !f.is_empty()) {
-        return Err(Failure::InvalidReference);
+        return Err(Failure::from(FailureKind::InvalidReference));
     }
-    let mut resolved = uri::resolve(text, text).ok_or(Failure::InvalidReference)?;
+    let mut resolved = uri::resolve(text, text).ok_or(FailureKind::InvalidReference)?;
     if resolved.ends_with('#') {
         resolved.pop();
     }
@@ -81,7 +83,11 @@ impl Resources {
     pub(crate) fn identity(&self) -> usize {
         Arc::as_ptr(&self.index) as usize
     }
-    pub(crate) fn new(input: &SchemaInput, attempt: &mut Attempt<'_>) -> Result<Self, Failure> {
+    pub(crate) fn new(
+        input: &SchemaInput,
+        side: crate::ComparisonSide,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Self, Failure> {
         // A call canonicalizes independently constructed inputs for the same root.
         let context = &input.context;
         let mut index = context.index.clone();
@@ -100,12 +106,13 @@ impl Resources {
             attempt.retain(2 * std::mem::size_of::<ComparisonContext>())?;
             attempt.contexts.push(context.clone());
         }
-        let result = Self { index };
+        let result = Self { index, side };
         result
             .index
             .lock()
             .expect("comparison index")
-            .setup(context, attempt)?;
+            .setup(context, attempt)
+            .map_err(|e| e.with_side(side))?;
         let mut top = input.schema.view();
         while !context_roots(context)
             .any(|root| backend::occurrence(root.view()) == backend::occurrence(top))
@@ -124,13 +131,18 @@ impl Resources {
         attempt.work(attempt.local_resources.len().saturating_add(1))?;
         for (index, node, resources) in &attempt.local_resources {
             if (*index, *node) == key {
-                return Ok(resources.clone());
+                return Ok(Self {
+                    index: resources.index.clone(),
+                    side,
+                });
             }
         }
         // A selection outside configured schema positions layers its declarations
         // over the configured index without copying or retaining cache history.
         let mut local = Index::default();
-        local.setup(context, attempt)?;
+        local
+            .setup(context, attempt)
+            .map_err(|e| e.with_side(side))?;
         local.local_root = Some(top.to_owned());
         local.parent = Some(result.index.clone());
         for scope in 1..local.entries.len() {
@@ -139,6 +151,7 @@ impl Resources {
         }
         let result = Self {
             index: Arc::new(Mutex::new(local)),
+            side,
         };
         attempt.retain(2 * std::mem::size_of::<(usize, (usize, usize), Self)>())?;
         attempt.local_resources.push((key.0, key.1, result.clone()));
@@ -155,6 +168,7 @@ impl Resources {
             .lock()
             .expect("comparison index")
             .enter(schema, fallback, 0, attempt)
+            .map_err(|e| e.with_side(self.side))
     }
     pub(crate) fn resolve(
         &self,
@@ -162,10 +176,28 @@ impl Resources {
         reference: JsonRef<'_>,
         attempt: &mut Attempt<'_>,
     ) -> Result<(JsonValue, usize), Failure> {
+        let mut index = self.index.lock().expect("comparison index");
+        index.resolve(scope, reference, attempt).map_err(|e| {
+            index
+                .locate_failure(e, reference, scope, attempt)
+                .with_side(self.side)
+        })
+    }
+    pub(crate) fn locate_failure(
+        &self,
+        failure: Failure,
+        value: JsonRef<'_>,
+        scope: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Failure {
+        if !failure.needs_origin() {
+            return failure.with_side(self.side);
+        }
         self.index
             .lock()
             .expect("comparison index")
-            .resolve(scope, reference, attempt)
+            .locate_failure(failure, value, scope, attempt)
+            .with_side(self.side)
     }
     pub(crate) fn context<'a>(
         &self,
@@ -180,9 +212,18 @@ impl Resources {
             .filter(|v| v.as_str() == Some(spelling))
             .or_else(|| schema.get("$dynamicRef"))
             .expect("reference context");
-        let target = index.resolve(scope, token, attempt).map(|(v, _)| v);
-        if let Err(e @ (Failure::LimitExceeded(_) | Failure::Cancelled)) = target {
-            return Err(e);
+        let target = index
+            .resolve(scope, token, attempt)
+            .map(|(v, _)| v)
+            .map_err(|e| {
+                index
+                    .locate_failure(e, token, scope, attempt)
+                    .with_side(self.side)
+            });
+        if let Err(e) = &target
+            && e.is_global()
+        {
+            return Err(e.clone());
         }
         let entry = &index.entries[scope];
         attempt.allocate(entry.base.as_ref().map_or(0, String::len))?;
@@ -247,6 +288,48 @@ fn configured_top(root: JsonRef<'_>, top: JsonRef<'_>, obi: bool) -> bool {
         .is_some_and(|operations| root.get("operations").is_some_and(|v| same(v, operations)))
 }
 impl Index {
+    fn locate_failure(
+        &self,
+        mut failure: Failure,
+        value: JsonRef<'_>,
+        scope: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Failure {
+        if !failure.needs_origin() {
+            return failure;
+        }
+        // Preserve the first failing coordinate even when its pointer cannot be
+        // retained. Unwinding must not substitute a shorter referring location.
+        failure.mark_origin_attempted();
+        let Some(entry) = self.entries.get(scope) else {
+            return failure;
+        };
+        let source = &self.entries[entry.origin];
+        let Some(size) =
+            backend::relative_pointer_size(value, source.document.view(), 8 * 1024 * 1024)
+        else {
+            return failure;
+        };
+        // A supplied subtree is its own source frame. Nested $id changes the
+        // resolution base, never this retrieval identity or pointer frame.
+        let uri = (entry.origin != 0)
+            .then_some(source.base.as_deref())
+            .flatten();
+        let bytes = size
+            .saturating_add(uri.map_or(0, str::len))
+            .saturating_add(256);
+        if let Err(limit) = attempt.allocate(bytes) {
+            return limit;
+        }
+        failure.located(
+            openbindings::SchemaOrigin::new(
+                uri.map(str::to_owned),
+                backend::relative_pointer(value, source.document.view()),
+            ),
+            bytes,
+        )
+    }
+
     fn setup(
         &mut self,
         context: &ComparisonContext,
@@ -282,7 +365,7 @@ impl Index {
                     .saturating_mul(12),
             )?;
             if uris.contains_key(&base) {
-                return Err(Failure::InvalidReference);
+                return Err(Failure::from(FailureKind::InvalidReference));
             }
             attempt.retain(base.len().saturating_add(2048))?;
             uris.insert(base.clone(), Some(entries.len()));
@@ -298,6 +381,16 @@ impl Index {
         Ok(())
     }
     fn enter(
+        &mut self,
+        schema: JsonRef<'_>,
+        fallback: usize,
+        depth: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<usize, Failure> {
+        self.enter_inner(schema, fallback, depth, attempt)
+            .map_err(|e| self.locate_failure(e, schema, fallback, attempt))
+    }
+    fn enter_inner(
         &mut self,
         schema: JsonRef<'_>,
         fallback: usize,
@@ -361,7 +454,7 @@ impl Index {
         let node = backend::occurrence(schema);
         let origin = self.entries[scope].origin;
         if let Some(id) = schema.get("$id") {
-            let text = id.as_str().ok_or(Failure::InvalidReference)?;
+            let text = id.as_str().ok_or(FailureKind::InvalidReference)?;
             attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
             attempt.allocate(
                 text.len()
@@ -376,10 +469,10 @@ impl Index {
                     self.entries[scope]
                         .base
                         .as_deref()
-                        .ok_or(Failure::InvalidReference)?,
+                        .ok_or(FailureKind::InvalidReference)?,
                     text,
                 )
-                .ok_or(Failure::InvalidReference)?
+                .ok_or(FailureKind::InvalidReference)?
             };
             let base = identity(&resolved, attempt)?;
             self.uri_work(&base, attempt)?;
@@ -522,7 +615,7 @@ impl Index {
                 }
                 let scope = match self.declare(schema.view(), inherited, attempt) {
                     Ok(scope) => scope,
-                    Err(e @ (Failure::LimitExceeded(_) | Failure::Cancelled)) => return Err(e),
+                    Err(e) if e.is_global() => return Err(e),
                     Err(_) => inherited,
                 };
                 let mut children = attempt.vector(0)?;
@@ -617,7 +710,7 @@ impl Index {
         attempt: &mut Attempt<'_>,
     ) -> Result<(JsonValue, usize), Failure> {
         attempt.allocate(fragment.len())?;
-        let decoded = uri::decode_fragment(fragment).ok_or(Failure::InvalidReference)?;
+        let decoded = uri::decode_fragment(fragment).ok_or(FailureKind::InvalidReference)?;
         if scope == 0
             && let Some(parent) = self.parent.clone()
         {
@@ -631,7 +724,7 @@ impl Index {
             let own = self.anchors.get(&key);
             let inherited = parent.anchors.get(&key);
             if own.is_some() && inherited.is_some() {
-                return Err(Failure::InvalidReference);
+                return Err(Failure::from(FailureKind::InvalidReference));
             }
             if inherited.is_some() {
                 return self.parent_target(&mut parent, 0, fragment, attempt);
@@ -649,9 +742,9 @@ impl Index {
             )?;
             self.anchors
                 .get(&(scope, decoded))
-                .ok_or(Failure::MissingReference)?
+                .ok_or(FailureKind::MissingReference)?
                 .clone()
-                .ok_or(Failure::InvalidReference)?
+                .ok_or(FailureKind::InvalidReference)?
         };
         let scope = self.enter(target.view(), scope, 0, attempt)?;
         Ok((target, scope))
@@ -668,7 +761,7 @@ impl Index {
         self.uri_work(name, attempt)?;
         match self.uris.get(name) {
             Some(Some(scope)) => Ok(Some(*scope)),
-            Some(None) => Err(Failure::InvalidReference),
+            Some(None) => Err(Failure::from(FailureKind::InvalidReference)),
             None => Ok(None),
         }
     }
@@ -689,10 +782,10 @@ impl Index {
             let (target, target_scope) = parent.resolve(parent_scope, reference, attempt)?;
             return Ok((target, self.import(&parent, target_scope, attempt)?));
         }
-        let text = reference.as_str().ok_or(Failure::InvalidReference)?;
+        let text = reference.as_str().ok_or(FailureKind::InvalidReference)?;
         attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
         if !uri::valid(text) {
-            return Err(Failure::InvalidReference);
+            return Err(Failure::from(FailureKind::InvalidReference));
         }
         if text.is_empty() {
             return self.target(scope, "", attempt);
@@ -710,11 +803,14 @@ impl Index {
             uri::resolve(text, text)
         } else {
             uri::resolve(
-                current.base.as_deref().ok_or(Failure::InvalidReference)?,
+                current
+                    .base
+                    .as_deref()
+                    .ok_or(FailureKind::InvalidReference)?,
                 text,
             )
         }
-        .ok_or(Failure::InvalidReference)?;
+        .ok_or(FailureKind::InvalidReference)?;
         let (resource, fragment) = resolved.split_once('#').unwrap_or((&resolved, ""));
         self.catalog(attempt)?;
         let own = self.lookup(resource, attempt)?;
@@ -726,12 +822,12 @@ impl Index {
                     && backend::occurrence(self.entries[own].document.view())
                         != backend::occurrence(parent.entries[inherited].document.view())
                 {
-                    return Err(Failure::InvalidReference);
+                    return Err(Failure::from(FailureKind::InvalidReference));
                 }
                 return self.parent_target(&mut parent, inherited, fragment, attempt);
             }
         }
-        self.target(own.ok_or(Failure::MissingReference)?, fragment, attempt)
+        self.target(own.ok_or(FailureKind::MissingReference)?, fragment, attempt)
     }
 }
 fn fragment_target(
@@ -741,13 +837,13 @@ fn fragment_target(
 ) -> Result<JsonValue, Failure> {
     attempt.work(fragment.len().saturating_mul(4).saturating_add(1))?;
     attempt.allocate(fragment.len())?;
-    let pointer = uri::decode_fragment(fragment).ok_or(Failure::InvalidReference)?;
+    let pointer = uri::decode_fragment(fragment).ok_or(FailureKind::InvalidReference)?;
     if pointer.is_empty() {
         return Ok(root.clone());
     }
     let path = pointer
         .strip_prefix('/')
-        .ok_or(Failure::UnsupportedReference)?;
+        .ok_or(FailureKind::UnsupportedReference)?;
     let mut node = root.view();
     for segment in path.split('/') {
         attempt.work(segment.len().saturating_mul(4).saturating_add(1))?;
@@ -758,7 +854,7 @@ fn fragment_target(
                 match units.next() {
                     Some(unit) if unit == b'0' as u16 => b'~' as u16,
                     Some(unit) if unit == b'1' as u16 => b'/' as u16,
-                    _ => return Err(Failure::InvalidReference),
+                    _ => return Err(Failure::from(FailureKind::InvalidReference)),
                 }
             } else {
                 unit
@@ -787,36 +883,36 @@ fn fragment_target(
                         .eq(decoded.iter().copied())
                     {
                         if found.is_some() {
-                            return Err(Failure::DuplicateMember);
+                            return Err(Failure::from(FailureKind::DuplicateMember));
                         }
                         found = Some(member.value);
                     }
                 }
-                found.ok_or(Failure::MissingReference)?
+                found.ok_or(FailureKind::MissingReference)?
             }
             JsonKind::Array => {
                 // Index syntax is ASCII and must use the canonical array spelling.
                 if decoded.is_empty() || (decoded.len() > 1 && decoded[0] == b'0' as u16) {
-                    return Err(Failure::InvalidReference);
+                    return Err(Failure::from(FailureKind::InvalidReference));
                 }
                 let mut index = 0usize;
                 for unit in decoded {
                     if !(b'0' as u16..=b'9' as u16).contains(&unit) {
-                        return Err(Failure::InvalidReference);
+                        return Err(Failure::from(FailureKind::InvalidReference));
                     }
                     index = index
                         .checked_mul(10)
                         .and_then(|n| n.checked_add((unit - b'0' as u16) as usize))
-                        .ok_or(Failure::MissingReference)?;
+                        .ok_or(FailureKind::MissingReference)?;
                 }
                 let mut elements = node.elements().expect("array");
                 if index >= elements.len() {
-                    return Err(Failure::MissingReference);
+                    return Err(Failure::from(FailureKind::MissingReference));
                 }
                 attempt.work(index.saturating_add(1))?;
                 elements.nth(index).expect("existing element")
             }
-            _ => return Err(Failure::MissingReference),
+            _ => return Err(Failure::from(FailureKind::MissingReference)),
         };
     }
     Ok(node.to_owned())
@@ -845,7 +941,7 @@ mod tests {
         .with_resource("https://example.test/canonical/b", json("false"));
         let control = AtomicBool::new(false);
         let mut attempt = Attempt::new(ComparisonLimits::default(), &control);
-        let resources = Resources::new(&input, &mut attempt).unwrap();
+        let resources = Resources::new(&input, crate::ComparisonSide::Left, &mut attempt).unwrap();
         let reference = json(r##""#/schemas/A""##);
         assert_eq!(
             resources
@@ -863,7 +959,7 @@ mod tests {
         assert_eq!(b.text(), "false");
         let other = SchemaInput::new(selected, json(r##"{"schemas":{"A":true}}"##));
         assert_eq!(
-            Resources::new(&other, &mut attempt)
+            Resources::new(&other, crate::ComparisonSide::Left, &mut attempt)
                 .unwrap()
                 .resolve(0, reference.view(), &mut attempt)
                 .unwrap()
@@ -880,7 +976,7 @@ mod tests {
             let schema = json(r##"{"a/b":[true,false],"duplicate":true,"duplicate":false}"##);
             SchemaInput::new(schema.clone(), schema)
         };
-        let resources = Resources::new(&input, &mut attempt).unwrap();
+        let resources = Resources::new(&input, crate::ComparisonSide::Left, &mut attempt).unwrap();
         let reference = json(r##""#/a~1b/1""##);
         assert_eq!(
             resources
@@ -891,13 +987,25 @@ mod tests {
             "false"
         );
         for (text, error) in [
-            (r##""#/duplicate""##, Failure::DuplicateMember),
-            (r##""#/a~2b""##, Failure::InvalidReference),
-            (r##""relative""##, Failure::InvalidReference),
-            (r##""https://missing.test/""##, Failure::MissingReference),
+            (
+                r##""#/duplicate""##,
+                Failure::from(FailureKind::DuplicateMember),
+            ),
+            (
+                r##""#/a~2b""##,
+                Failure::from(FailureKind::InvalidReference),
+            ),
+            (
+                r##""relative""##,
+                Failure::from(FailureKind::InvalidReference),
+            ),
+            (
+                r##""https://missing.test/""##,
+                Failure::from(FailureKind::MissingReference),
+            ),
         ] {
             assert!(
-                matches!(resources.resolve(0,json(text).view(),&mut attempt),Err(found) if found==error)
+                matches!(resources.resolve(0,json(text).view(),&mut attempt),Err(found) if found.kind()==error.kind())
             );
         }
         let duplicate = {
@@ -907,8 +1015,9 @@ mod tests {
         .with_resource("https://x/a/../b", json("true"))
         .with_resource("https://x/b#", json("false"));
         assert!(matches!(
-            Resources::new(&duplicate, &mut attempt),
-            Err(Failure::InvalidReference)
+            Resources::new(&duplicate, crate::ComparisonSide::Left, &mut attempt)
+                .map_err(|e| e.kind()),
+            Err(FailureKind::InvalidReference)
         ));
     }
 }

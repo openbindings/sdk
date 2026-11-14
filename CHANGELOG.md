@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-11-13 panel decisions (unreleased)
+
+### Changed
+
+- Breaking: `check_interface` and `check_interface_with_control` now take the two
+  conformance proofs followed by their two caller-configured comparison contexts.
+  Contexts must retain their paired proof's exact root; `ContextMismatch` identifies
+  a mismatch. One shared attempt still covers the entire fold.
+- Breaking: `ComparisonFailure` is a Clone struct with a Copy
+  `ComparisonFailureKind` returned by `kind()`, optional original schema location
+  from `origin()`, and established operand from `side()`. Match the kind instead
+  of error variants; whole-error equality includes provenance. Automatic
+  formatting remains redacted and retained locations stay within the allowance.
+- Breaking: checked `pull_source` and `pull_source_with_limits` now return
+  `(PullResult, ConformantDocument)`, preserving the already proved snapshot with
+  all additions and no stale proposals applied.
+- Breaking: source-pull `CarrierError` is now a struct with a Copy
+  `CarrierErrorKind` from `kind()` and an optional report-row `pointer()`. It
+  retains Clone, PartialEq and Eq but no longer implements Copy. Nested result
+  errors prefix known report rows with `/report`.
+- Breaking: `RequestError`, `PullValidationError`, `PullFailure` and `PullError`
+  are now non-exhaustive. Downstream matches must handle unknown failures.
+- Breaking: reference inspection returns `ReferenceReport::Complete { references }`
+  or `Incomplete { retained, limitation }`. TypeScript discriminates on `complete`
+  and exposes `references` only in the complete branch. Serialization follows
+  these alternatives. Validation findings, value problems and pull reports keep
+  their fields.
+
+### Added
+
+- Consuming `map_error` methods on `CheckFailure`, `KindError`, `PullFailure` and
+  `PullError` convert their generic error parameter while preserving every other
+  variant and payload, without adding bounds on the error or allocating.
+- `JsonValue::parse_prefix` and `parse_prefix_with_limits` return the first exact
+  value in a byte buffer and its exclusive token-end offset, with a distinct
+  `JsonPrefixError::Incomplete`. Calls inspect only the value and constant
+  lookahead. Hosts own separators and I/O, grow incomplete buffers geometrically
+  before retrying, and use `parse_with_limits` on incomplete input at final EOF.
+  Admission limits apply through the value end. Invalid UTF-8 in later buffered
+  bytes is deferred.
+- `ReferenceLimits { max_report_bytes }`, `references_with_limits` and
+  `references_with_resources_and_limits`; TypeScript reference options accept
+  `limits.maxReportBytes` and `referenceLimits()` exposes the defaults. The default
+  retained-text allowance remains 8 MiB.
+- `ValidationLimits { max_findings, max_pointer_bytes }` and
+  `Document::validate_with_limits`; TypeScript offers `validate({ limits })` with
+  `ValidationOptions` and `validationLimits()`. Defaults remain 4,096 findings and
+  8 MiB of generated
+  source-pointer text. Retention never changes rule evidence or the conclusion.
+
 ## 2026-11-13 experiment repairs (unreleased)
 
 ### Changed

@@ -139,6 +139,19 @@ admission limits or repeated checks. `JsonValue::from_serializable` checks Rust
 data, including nested `JsonValue` fields, but cannot recover precision already lost by application code. It preserves
 embedded number tokens and string units, and refuses duplicate object members.
 
+For a buffer that may contain several values, use
+`JsonValue::parse_prefix(&buffer)`. It returns the first value and its exclusive
+token-end byte offset, leaving trailing whitespace and subsequent bytes to the
+host. After `JsonPrefixError::Incomplete`, retain the buffer and append at least
+as many bytes as it already holds before retrying, unless EOF or a limit is
+reached first. This geometric rule keeps cumulative parsing work linear. At
+known EOF pass an incomplete remainder to `JsonValue::parse_with_limits`, which
+accepts a final number or returns the usual refusal. Use
+`parse_prefix_with_limits` for explicit `JsonLimits`. The
+[sequence example](../crates/openbindings/examples/json_sequence.rs) owns bounded
+reads, geometric retries and whitespace separators. Each prefix call inspects
+only its value and constant lookahead, even with a large buffered remainder.
+
 Use `JsonValue::semantic_eq(&other)` for value equality without floating-point
 conversion: `1e400` and `10e399` compare as `Some(true)` despite different tokens.
 The result is `Some(false)` for unequal values and `None` when either value

@@ -190,8 +190,28 @@ impl std::fmt::Debug for Finding {
     }
 }
 
+/// Retention allowances for explanatory findings, independent of rule evidence.
+/// Zero omits findings that need the exhausted allowance; assessment still runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ValidationLimits {
+    /// Maximum retained findings; default 4096.
+    pub max_findings: usize,
+    /// Aggregate generated source-pointer bytes; default 8 MiB. UTF-8 bytes,
+    /// or two bytes per UTF-16 unit for a pointer through an unpaired name.
+    /// This allowance bounds pointer text, not total report or heap storage.
+    pub max_pointer_bytes: usize,
+}
+impl Default for ValidationLimits {
+    fn default() -> Self {
+        Self {
+            max_findings: MAX_FINDINGS,
+            max_pointer_bytes: MAX_FINDING_POINTER_BYTES,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Serialize)]
-/// Assessment of all normative document rules at the pinned specification revision. At most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
+/// Assessment of all normative document rules at the pinned specification revision. By default at most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained, adjustable with [`ValidationLimits`]. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
 ///
 /// The pinned 0.2 schema's largest OBI-02 keyword/schema/details tuple is 199
 /// serialized JSON bytes. An exhaustive schema test guards this fixed property;
@@ -214,7 +234,7 @@ pub struct ValidationReport {
     pub evidence: BTreeMap<&'static str, Evidence>,
     /// Retained explanatory findings; an empty or truncated list alone does not prove conformance.
     pub findings: Vec<Finding>,
-    /// True when findings exceed the 4096-entry or 8 MiB aggregate generated-pointer byte cap. Omission never changes rule evidence or fabricates a shortened source pointer.
+    /// True when findings exceed the selected count or aggregate generated-pointer byte allowance. Omission never changes rule evidence or fabricates a shortened source pointer.
     pub findings_truncated: bool,
 }
 impl std::fmt::Debug for ValidationReport {
@@ -487,6 +507,7 @@ fn fixed_facts() -> &'static [FixedFact] {
 const MAX_FINDINGS: usize = 4096;
 const MAX_FINDING_POINTER_BYTES: usize = backend::MAX_REPORT_POINTER_BYTES;
 struct Checks<'a> {
+    limits: ValidationLimits,
     evidence: [Evidence; 14],
     findings: Vec<Finding>,
     pending_locations: Vec<(usize, JsonRef<'a>)>,
@@ -501,13 +522,17 @@ struct Checks<'a> {
 }
 impl<'a> Checks<'a> {
     fn new() -> Self {
+        Self::with_limits(ValidationLimits::default())
+    }
+    fn with_limits(limits: ValidationLimits) -> Self {
         Self {
+            limits,
             evidence: [Evidence::Met; 14],
             findings: Vec::new(),
             pending_locations: Vec::new(),
             retained_at: HashMap::new(),
             retained_direct: Vec::new(),
-            pointer_bytes: MAX_FINDING_POINTER_BYTES,
+            pointer_bytes: limits.max_pointer_bytes,
             pointer_sizes: None,
             truncated: false,
         }
@@ -564,7 +589,7 @@ impl<'a> Checks<'a> {
         }) {
             return;
         }
-        if self.findings.len() < MAX_FINDINGS {
+        if self.findings.len() < self.limits.max_findings {
             self.retained_direct.push(self.findings.len());
             self.findings.push(Finding {
                 rule: rule.id(),
@@ -632,7 +657,7 @@ impl<'a> Checks<'a> {
         {
             return;
         }
-        if self.findings.len() >= MAX_FINDINGS {
+        if self.findings.len() >= self.limits.max_findings {
             self.truncated = true;
             return;
         }
@@ -644,7 +669,7 @@ impl<'a> Checks<'a> {
             if self.pointer_sizes.is_none() {
                 self.pointer_sizes = Some(backend::LocationPointerSizes::new(
                     at,
-                    MAX_FINDING_POINTER_BYTES + 1,
+                    self.limits.max_pointer_bytes.saturating_add(1),
                 ));
             }
             self.truncated = true;
@@ -719,7 +744,7 @@ impl<'a> Checks<'a> {
         let checked = fixed_schema::check_with_retained(
             value,
             is_meta,
-            MAX_FINDINGS.saturating_sub(self.findings.len()),
+            self.limits.max_findings.saturating_sub(self.findings.len()),
             |at, message| {
                 self.contains_at(rule, Evidence::Violated, at, "schema-mismatch", message)
             },
@@ -731,7 +756,7 @@ impl<'a> Checks<'a> {
     fn meta_fixed(&mut self, meta: &mut inventory::MetaChecks<'a>) {
         let rule = Rule::Obi10;
         let (value, checked) = meta.check_next(
-            MAX_FINDINGS.saturating_sub(self.findings.len()),
+            self.limits.max_findings.saturating_sub(self.findings.len()),
             |at, message| {
                 self.contains_at(rule, Evidence::Violated, at, "schema-mismatch", message)
             },
@@ -779,15 +804,18 @@ pub fn is_valid_name(name: &str) -> bool {
             c.is_ascii_alphanumeric() || c == b'_' || (i > 0 && (c == b'-' || c == b'.'))
         })
 }
-pub(crate) fn assess_value(document: &Document) -> Result<ValidationReport, VersionRefusal> {
+pub(crate) fn assess_value(
+    document: &Document,
+    limits: ValidationLimits,
+) -> Result<ValidationReport, VersionRefusal> {
     let value = document.value();
     if let Some(refusal) = version_refusal(value) {
         return Err(refusal);
     }
-    let mut c = Checks::new();
+    let mut c = Checks::with_limits(limits);
     // Version declaration follows §8.1's JSON grammar, independently of this
     // line's OBI-01 exclusions. OBI-02 through OBI-14 require OBI-01 (§10).
-    for at in backend::unpaired_strings(value).take(MAX_FINDINGS + 1) {
+    for at in backend::unpaired_strings(value).take(limits.max_findings.saturating_add(1)) {
         c.violation(
             Rule::Obi01,
             at,
@@ -797,8 +825,9 @@ pub(crate) fn assess_value(document: &Document) -> Result<ValidationReport, Vers
     }
     let duplicates = backend::duplicate_member_names(value);
     if duplicates.len() != 0 {
-        c.truncated |= duplicates.len() > MAX_FINDINGS.saturating_sub(c.findings.len());
-        for at in duplicates.take(MAX_FINDINGS) {
+        c.update_evidence(Rule::Obi01, Evidence::Violated);
+        c.truncated |= duplicates.len() > limits.max_findings.saturating_sub(c.findings.len());
+        for at in duplicates.take(limits.max_findings) {
             c.mark_at(
                 Rule::Obi01,
                 Evidence::Violated,

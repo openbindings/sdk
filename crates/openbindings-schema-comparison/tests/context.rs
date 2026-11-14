@@ -42,6 +42,8 @@ fn shared_record_interfaces_fit_default_limits() {
     let report = check_interface(
         &document,
         &document,
+        &ComparisonContext::new(document.document().value().clone()),
+        &ComparisonContext::new(document.document().value().clone()),
         &|_, _| Some(OperationRole::Realized),
         &ComparisonLimits::default(),
     )
@@ -134,12 +136,13 @@ fn unused_defects_and_carrier_members_do_not_affect_selected_schemas() {
         r##"{"$ref":"#/schemas/unused/$defs/a","not":{"$ref":"#/schemas/missing"}}"##,
     ));
     assert_eq!(
-        identical(
+        (identical(
             Some(&invalid),
             Some(&expected),
             &ComparisonLimits::default()
-        ),
-        Err(ComparisonFailure::MissingReference)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::MissingReference)
     );
     assert_eq!(
         identical(
@@ -160,25 +163,27 @@ fn cancelled_and_refused_indexing_leave_contexts_usable() {
     let limits = ComparisonLimits::default();
     for allowance in [1, 200, 2000] {
         assert!(matches!(
-            identical(
+            (identical(
                 Some(&selected),
                 Some(&expected),
                 &ComparisonLimits {
                     max_work: Some(allowance),
                     ..limits
                 }
-            ),
-            Err(ComparisonFailure::LimitExceeded(_))
+            ))
+            .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::LimitExceeded(_))
         ));
     }
     assert_eq!(
-        identical_with_control(
+        (identical_with_control(
             Some(&selected),
             Some(&expected),
             &limits,
             &AtomicBool::new(true)
-        ),
-        Err(ComparisonFailure::Cancelled)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::Cancelled)
     );
     assert_eq!(
         identical(Some(&selected), Some(&expected), &limits),
@@ -233,12 +238,14 @@ fn retained_applicators_compare_normalized_targets_and_preserve_authored_data() 
             Verdict::Indeterminate
         );
         assert_eq!(
-            identical(Some(&missing), Some(&missing), &ComparisonLimits::default()),
-            Err(ComparisonFailure::MissingReference)
+            (identical(Some(&missing), Some(&missing), &ComparisonLimits::default()))
+                .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::MissingReference)
         );
         assert_eq!(
-            identical(Some(&cycle), Some(&cycle), &ComparisonLimits::default()),
-            Err(ComparisonFailure::ReferenceCycle)
+            (identical(Some(&cycle), Some(&cycle), &ComparisonLimits::default()))
+                .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::ReferenceCycle)
         );
     }
     let opaque = input(r#"{"not":{"const":{"$ref":"not a uri"}},"unknown":{"$ref":"not a uri"}}"#);
@@ -271,13 +278,14 @@ fn cancelled_resource_discovery_does_not_hide_ambiguous_targets_on_retry() {
         cancel: usize::MAX,
     };
     assert_eq!(
-        identical_with_control(
+        (identical_with_control(
             Some(&fresh()),
             Some(&expected),
             &ComparisonLimits::default(),
             &baseline
-        ),
-        Err(ComparisonFailure::InvalidReference)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::InvalidReference)
     );
     let count = baseline.count.load(Ordering::Relaxed);
     for cancel in [count / 3, count / 2, count - 1] {
@@ -287,21 +295,23 @@ fn cancelled_resource_discovery_does_not_hide_ambiguous_targets_on_retry() {
             cancel,
         };
         assert_eq!(
-            identical_with_control(
+            (identical_with_control(
                 Some(&selected),
                 Some(&expected),
                 &ComparisonLimits::default(),
                 &control
-            ),
-            Err(ComparisonFailure::Cancelled)
+            ))
+            .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::Cancelled)
         );
         assert_eq!(
-            identical(
+            (identical(
                 Some(&selected),
                 Some(&expected),
                 &ComparisonLimits::default()
-            ),
-            Err(ComparisonFailure::InvalidReference)
+            ))
+            .map_err(|failure| failure.kind()),
+            Err(ComparisonFailureKind::InvalidReference)
         );
     }
 }
@@ -327,7 +337,7 @@ fn carrier_selections_resolve_private_declarations_and_document_pointers() {
         ),
         (
             r##"{"components":{"P":{"$ref":"#/components/Q"},"Q":{"type":"string"}}}"##,
-            Err(ComparisonFailure::MissingReference),
+            Err(ComparisonFailureKind::MissingReference),
         ),
     ] {
         for warmed in [false, true] {
@@ -348,7 +358,8 @@ fn carrier_selections_resolve_private_declarations_and_document_pointers() {
                 }
                 for (schema, result) in [(&selected, Ok(true)), (&detached, detached_result)] {
                     assert_eq!(
-                        identical(Some(schema), Some(schema), &ComparisonLimits::default()),
+                        identical(Some(schema), Some(schema), &ComparisonLimits::default())
+                            .map_err(|e| e.kind()),
                         result
                     );
                     assert_eq!(
@@ -357,7 +368,8 @@ fn carrier_selections_resolve_private_declarations_and_document_pointers() {
                             Some(schema),
                             &|_| false,
                             &ComparisonLimits::default()
-                        ),
+                        )
+                        .map_err(|e| e.kind()),
                         result
                     );
                 }
@@ -367,7 +379,7 @@ fn carrier_selections_resolve_private_declarations_and_document_pointers() {
                     (&selected, &detached)
                 };
                 assert_eq!(
-                    identical(Some(a), Some(b), &ComparisonLimits::default()),
+                    identical(Some(a), Some(b), &ComparisonLimits::default()).map_err(|e| e.kind()),
                     detached_result
                 );
                 assert_eq!(
@@ -376,7 +388,8 @@ fn carrier_selections_resolve_private_declarations_and_document_pointers() {
                         Some(b),
                         &|_| false,
                         &ComparisonLimits::default()
-                    ),
+                    )
+                    .map_err(|e| e.kind()),
                     detached_result
                 );
             }
@@ -391,7 +404,7 @@ fn root_declarations_are_independent_of_selections_and_argument_order() {
             r##"{"components":{"X":{"$anchor":"foo","type":"string"},"Y":{"$ref":"#foo"}}}"##,
             "/components/X",
             "/components/Y",
-            Err(ComparisonFailure::MissingReference),
+            Err(ComparisonFailureKind::MissingReference),
         ),
         (
             r##"{"$defs":{"X":{"$anchor":"foo","type":"string"},"Y":{"$ref":"#foo"}}}"##,
@@ -409,13 +422,13 @@ fn root_declarations_are_independent_of_selections_and_argument_order() {
             r##"{"components":{"P":{"$defs":{"a":{"$anchor":"a","type":"string"}},"$ref":"#a"},"Q":{"$ref":"#a"}}}"##,
             "/components/P",
             "/components/Q",
-            Err(ComparisonFailure::MissingReference),
+            Err(ComparisonFailureKind::MissingReference),
         ),
         (
             r##"{"components":{"P":{"$id":"https://example.test/pet","$defs":{"a":{"$anchor":"a","type":"string"}},"$ref":"#a"},"Q":{"$ref":"https://example.test/pet#a"}}}"##,
             "/components/P",
             "/components/Q",
-            Err(ComparisonFailure::MissingReference),
+            Err(ComparisonFailureKind::MissingReference),
         ),
     ] {
         for reverse in [false, true] {
@@ -426,7 +439,7 @@ fn root_declarations_are_independent_of_selections_and_argument_order() {
                 let (a, b) = (at(context, a), at(context, b));
                 let (a, b) = if reverse { (&b, &a) } else { (&a, &b) };
                 assert_eq!(
-                    identical(Some(a), Some(b), &ComparisonLimits::default()),
+                    identical(Some(a), Some(b), &ComparisonLimits::default()).map_err(|e| e.kind()),
                     expected
                 );
                 assert_eq!(
@@ -435,7 +448,8 @@ fn root_declarations_are_independent_of_selections_and_argument_order() {
                         Some(b),
                         &|_| false,
                         &ComparisonLimits::default()
-                    ),
+                    )
+                    .map_err(|e| e.kind()),
                     expected
                 );
             }
@@ -460,17 +474,19 @@ fn ambiguous_identifiers_fail_after_selection_and_in_both_orders() {
             for other in [&a, &r] {
                 let (a, b) = if reverse { (&r, other) } else { (other, &r) };
                 assert_eq!(
-                    identical(Some(a), Some(b), &ComparisonLimits::default()),
-                    Err(ComparisonFailure::InvalidReference)
+                    (identical(Some(a), Some(b), &ComparisonLimits::default()))
+                        .map_err(|failure| failure.kind()),
+                    Err(ComparisonFailureKind::InvalidReference)
                 );
                 assert_eq!(
-                    identical_with_references(
+                    (identical_with_references(
                         Some(a),
                         Some(b),
                         &|_| false,
                         &ComparisonLimits::default()
-                    ),
-                    Err(ComparisonFailure::InvalidReference)
+                    ))
+                    .map_err(|failure| failure.kind()),
+                    Err(ComparisonFailureKind::InvalidReference)
                 );
             }
         }
@@ -493,17 +509,19 @@ fn selected_source_data_never_publishes_schema_identifiers() {
             let r = at(&context, "/schemas/r");
             let (a, b) = if reverse { (&r, &data) } else { (&data, &r) };
             assert_eq!(
-                identical(Some(a), Some(b), &ComparisonLimits::default()),
-                Err(ComparisonFailure::MissingReference)
+                (identical(Some(a), Some(b), &ComparisonLimits::default()))
+                    .map_err(|failure| failure.kind()),
+                Err(ComparisonFailureKind::MissingReference)
             );
             assert_eq!(
-                identical_with_references(
+                (identical_with_references(
                     Some(a),
                     Some(b),
                     &|_| false,
                     &ComparisonLimits::default()
-                ),
-                Err(ComparisonFailure::MissingReference)
+                ))
+                .map_err(|failure| failure.kind()),
+                Err(ComparisonFailureKind::MissingReference)
             );
         }
     }
@@ -554,11 +572,12 @@ fn detached_declarations_do_not_survive_a_call() {
     drop(detached);
     let reference = context.schema(json(r#"{"$ref":"https://example.test/detached"}"#));
     assert_eq!(
-        identical(
+        (identical(
             Some(&reference),
             Some(&reference),
             &ComparisonLimits::default()
-        ),
-        Err(ComparisonFailure::MissingReference)
+        ))
+        .map_err(|failure| failure.kind()),
+        Err(ComparisonFailureKind::MissingReference)
     );
 }

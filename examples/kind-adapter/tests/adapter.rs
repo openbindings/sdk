@@ -31,7 +31,7 @@ async fn pull_then_invoke() -> Result<(), Box<dyn std::error::Error>> {
     use openbindings_invocation::{
         BindingInvokerExt, BindingRequest, CancellationToken, InvocationError, OutputEvent,
     };
-    use openbindings_source_pull::{PullLimits, PullRequest, SourcePullerExt};
+    use openbindings_source_pull::{PullRequest, SourcePullerExt};
 
     let original = Document::parse(
         r#"{
@@ -44,13 +44,11 @@ async fn pull_then_invoke() -> Result<(), Box<dyn std::error::Error>> {
     .ok_or("nonconformant document")?;
     let adapter = Memory;
     let request = PullRequest::new(original, "s");
-    let result = adapter
+    let (result, interface) = adapter
         .pull_source(request.clone(), CancellationToken::new())
         .await?;
     assert!(result.report().is_complete());
     // This application chooses every addition. No stale proposal is applied.
-    let interface =
-        result.validate_for(&request, &PullLimits::default(), &CancellationToken::new())?;
     let call = adapter.invoke(
         BindingRequest::new(interface, "echo.s"),
         CancellationToken::new(),
@@ -117,12 +115,9 @@ async fn describe_and_preflight_agree_with_implemented_facets() {
     assert!(!description.invoke().unwrap().executes());
     assert!(!description.pull().unwrap().executes());
     let request = PullRequest::new(seed(), "s");
-    let result = adapter
+    let (_, interface) = adapter
         .pull_source(request.clone(), CancellationToken::new())
         .await
-        .unwrap();
-    let interface = result
-        .validate_for(&request, &PullLimits::default(), &CancellationToken::new())
         .unwrap();
     assert!(matches!(
         adapter
@@ -139,14 +134,11 @@ async fn describe_and_preflight_agree_with_implemented_facets() {
 #[tokio::test]
 async fn repeat_pull_is_current_and_schema_drift_is_a_removal_proposal() {
     let request = PullRequest::new(seed(), "s");
-    let result = Memory
+    let (_, interface) = Memory
         .pull_source(request.clone(), CancellationToken::new())
         .await
         .unwrap();
-    let interface = result
-        .validate_for(&request, &PullLimits::default(), &CancellationToken::new())
-        .unwrap();
-    let repeat = Memory
+    let (repeat, _) = Memory
         .pull_source(
             PullRequest::new(interface.clone(), "s"),
             CancellationToken::new(),
@@ -169,7 +161,7 @@ async fn repeat_pull_is_current_and_schema_drift_is_a_removal_proposal() {
         .unwrap()
         .conformant()
         .unwrap();
-    let drift = Memory
+    let (drift, _) = Memory
         .pull_source(PullRequest::new(edited, "s"), CancellationToken::new())
         .await
         .unwrap();
@@ -201,7 +193,7 @@ async fn reuse_resolves_aliases_and_conflicts_are_not_reuse() {
             .unwrap()
             .conformant()
             .unwrap();
-        let result = Memory
+        let (result, _) = Memory
             .pull_source(PullRequest::new(interface, "s"), CancellationToken::new())
             .await
             .unwrap();
@@ -300,12 +292,9 @@ fn nested_exact_json_survives_checked_composition() {
 #[tokio::test]
 async fn streams_past_queue_capacity_in_order() {
     let request = PullRequest::new(seed(), "s");
-    let result = Memory
+    let (_, interface) = Memory
         .pull_source(request.clone(), CancellationToken::new())
         .await
-        .unwrap();
-    let interface = result
-        .validate_for(&request, &PullLimits::default(), &CancellationToken::new())
         .unwrap();
     let call = Memory
         .invoke(
@@ -456,7 +445,7 @@ async fn object_schema_comparison_gaps_are_explicit() {
                 .unwrap();
         }
         let interface = draft.validate().unwrap().conformant().unwrap();
-        let result = Memory
+        let (result, _) = Memory
             .pull_source(PullRequest::new(interface, "s"), CancellationToken::new())
             .await
             .unwrap();

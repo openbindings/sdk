@@ -11,7 +11,7 @@ mod relationships;
 mod request;
 mod validation;
 pub use budget::PullLimits;
-pub use carrier::CarrierError;
+pub use carrier::{CarrierError, CarrierErrorKind};
 pub use error::{PullValidationError, RelationshipError, RequestError};
 pub use model::*;
 pub use openbindings_context::{Context, ContextChallenge};

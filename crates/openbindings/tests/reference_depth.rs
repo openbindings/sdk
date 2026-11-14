@@ -1,6 +1,10 @@
+use openbindings::ReferenceReport;
+#[path = "common/reference_report.rs"]
+mod reference_report;
 use openbindings::{
     Document, Evidence, ReferenceRefusalReason, ReferenceResolution, validate_document,
 };
+use reference_report::{complete, incomplete};
 
 #[test]
 fn deep_references_agree_with_validation_on_a_small_stack() {
@@ -28,10 +32,9 @@ fn deep_references_agree_with_validation_on_a_small_stack() {
                             if present { Evidence::Met } else { Evidence::Violated }
                         );
                         let report = Document::parse(&text).unwrap().references();
-                        assert!(report.complete);
-                        assert!(report.limitation.is_none());
-                        assert_eq!(report.references.len(), 1);
-                        let observed = &report.references[0];
+                        assert!(matches!(report, ReferenceReport::Complete { .. }));
+                        assert_eq!(complete(&report).len(), 1);
+                        let observed = &complete(&report)[0];
                         let holder = format!("/schemas/entry{}", "/not".repeat(depth));
                         assert_eq!(observed.location.pointer, format!("{holder}/$ref"));
                         assert_eq!(observed.spelling.as_deref(), Some(reference.as_str()));
@@ -76,18 +79,17 @@ fn deep_relative_identifiers_stop_at_the_identity_budget_on_a_small_stack() {
                 assert_eq!(validation.report().evidence["OBI-12"], Evidence::Met);
                 let report = Document::parse(&text).unwrap().references();
                 if depth == 2_360 {
-                    assert!(!report.complete);
-                    assert!(report.references.is_empty());
-                    let limitation = report.limitation.unwrap();
+                    assert!(matches!(report, ReferenceReport::Incomplete { .. }));
+                    assert!(incomplete(&report).0.is_empty());
+                    let limitation = incomplete(&report).1;
                     assert_eq!(limitation.reason, ReferenceRefusalReason::LimitExceeded);
                     assert_eq!(limitation.code, "schema-identity-bytes");
                     assert!(limitation.location.is_none());
                 } else {
-                    assert!(report.complete);
-                    assert!(report.limitation.is_none());
-                    assert_eq!(report.references.len(), 1);
+                    assert!(matches!(report, ReferenceReport::Complete { .. }));
+                    assert_eq!(complete(&report).len(), 1);
                     let ReferenceResolution::Located { target, dynamic_lookup } =
-                        &report.references[0].resolution
+                        &complete(&report)[0].resolution
                     else {
                         panic!("deepest relative resource must resolve")
                     };
@@ -112,16 +114,16 @@ fn deep_reference_locations_still_obey_the_aggregate_report_allowance() {
         "}".repeat(depth)
     );
     let report = Document::parse(text).unwrap().references();
-    assert!(!report.complete);
-    let limitation = report.limitation.unwrap();
+    assert!(matches!(report, ReferenceReport::Incomplete { .. }));
+    let limitation = incomplete(&report).1;
     assert_eq!(limitation.reason, ReferenceRefusalReason::LimitExceeded);
     assert_eq!(limitation.code, "reference-report-bytes");
     assert!(limitation.location.is_none());
-    assert!(!report.references.is_empty());
-    assert!(report.references.len() < references);
+    assert!(!incomplete(&report).0.is_empty());
+    assert!(incomplete(&report).0.len() < references);
     let prefix = format!("/schemas/entry{}/allOf", "/not".repeat(depth));
     let mut retained = 0;
-    for (index, reference) in report.references.iter().enumerate() {
+    for (index, reference) in incomplete(&report).0.iter().enumerate() {
         assert_eq!(reference.location.pointer, format!("{prefix}/{index}/$ref"));
         let ReferenceResolution::Located { target, .. } = &reference.resolution else {
             panic!("present target")
@@ -131,7 +133,7 @@ fn deep_reference_locations_still_obey_the_aggregate_report_allowance() {
         retained += target.pointer.as_str().unwrap().len();
         retained += reference.keyword.len() + reference.spelling.as_ref().unwrap().len();
     }
-    let next = format!("{prefix}/{}/$ref", report.references.len());
+    let next = format!("{prefix}/{}/$ref", incomplete(&report).0.len());
     assert!(retained <= 8 * 1024 * 1024);
     assert!(
         retained + next.len() + "/schemas/target".len() + "$ref".len() + "#/schemas/target".len()
