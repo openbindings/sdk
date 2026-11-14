@@ -102,6 +102,7 @@ Operation
 OperationRequest
 Operational
 OutputResourceLimit
+Pointer
 ProposalAuthority
 Proposed
 Prospective
