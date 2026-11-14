@@ -141,6 +141,13 @@ cooperative cancellation at work and allocation boundaries. It never publishes a
 partial normalized tree or caches a failed result. Completed document indexing
 can be reused without charging that indexing again in a later call.
 
+`tests/work_growth.rs` searches the smallest public `max_work` that completes
+enum subsets, const against enum, and required subsets at 1,000, 4,000 and 16,000
+values. Each fourfold increase may use at most eight times the work: fixed-width
+`n log n` growth fits, while quadratic growth does not. It also bounds extra
+cancellation polls by four, independently of input width. These are deterministic
+SDK work and poll checks, not duration guarantees.
+
 The fixture harness passes all 30 ordinary and 10 exact identity groups, and all
 65 ordinary and 29 exact directional groups, including expected normalization
 failures. No groups are skipped. All copied inputs are byte-identical to the pin,

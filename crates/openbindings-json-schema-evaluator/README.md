@@ -209,6 +209,12 @@ no prepared owner; a cancelled evaluation does not poison cached predicates or
 prevent a later uncancelled retry. A smaller budget can replace an answer with an
 honest inability, but cannot manufacture `Undefined` or reverse validity.
 
+`tests/cancellation_work.rs` checks large-schema preparation and pattern-free
+value evaluation through public controls. After the control first reports
+cancellation, at most four additional polls may occur, independent of input size.
+This bounds propagation at cooperative boundaries, not work between polls or
+synchronous dependency execution.
+
 ## Patterns, exact values and diagnostics
 
 Patterns follow ECMA-262 11th edition with Unicode semantics. The linear matcher

@@ -28,6 +28,14 @@
   error behind `source()`, a registration check against published support, and a
   context store keyed by the exact source entry.
 
+
+- Tests that fail if comparison cost grows faster than n log n for enum, const and
+  required membership, measured in the SDK's own work units, and tests that a
+  cancelled preparation, evaluation or comparison returns within a fixed number of
+  further polls whatever the input's size.
+- The TypeScript memory test now asserts the two Wasm memory ceilings the
+  performance notes say it guards (224 MiB and 228 MiB).
+
 ### Fixed
 
 - Directional enum, const and required membership uses an ordered lookup in place

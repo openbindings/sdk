@@ -1010,9 +1010,10 @@ above at the default limit adds 247.2 MiB to the resident memory of a process
 that has read the file, and 351.5 MiB at a 64 MiB limit. The package's tests
 (`packages/typescript/test/wasm-memory.test.mjs`) validate the probe's two
 copied-identifier documents, each in a fresh process, and fail if a call adds
-more module memory than it does now: 223.75 and 227.75 MiB, rounded up to the
-next MiB. Module memory is the same on every run of one build, so any growth
-fails.
+more than 224 and 228 MiB of module memory respectively. The recorded growth
+was 223.75 and 227.75 MiB, rounded up to the next MiB, leaving 0.25 MiB of
+headroom per case. Module memory is the same on every run of one build;
+growth beyond those ceilings fails.
 
 The operating system's maximum resident set size of a process that reads a file
 and validates it three times, including that process's own copy of the file,
