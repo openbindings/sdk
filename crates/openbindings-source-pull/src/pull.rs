@@ -2,10 +2,27 @@ use crate::{
     CancellationToken, ContextChallenge, PullLimits, PullRequest, PullResult, PullValidationError,
     budget::Attempt, validation,
 };
+use openbindings::ConformantDocument;
 use std::{fmt, future::Future};
 
 /// Provider outcome separate from local carrier/relationship validation.
 /// The publication prescribes no universal operational-error JSON envelope.
+///
+/// New failure categories may be added. Handle unknown categories by refusing
+/// the attempt or propagating the original error. Exhaustive downstream matches
+/// are intentionally rejected:
+///
+/// ```compile_fail,E0004
+/// use openbindings_source_pull::PullFailure;
+/// fn classify(error: PullFailure<()>) {
+///     match error {
+///         PullFailure::ContextRequired(_) => (),
+///         PullFailure::Operational(_) => (),
+///         PullFailure::Cancelled => (),
+///     }
+/// }
+/// ```
+#[non_exhaustive]
 pub enum PullFailure<E> {
     /// The provider requires additional separately supplied context.
     ContextRequired(ContextChallenge),
@@ -13,6 +30,17 @@ pub enum PullFailure<E> {
     Operational(E),
     /// The provider cancelled the attempt.
     Cancelled,
+}
+impl<E> PullFailure<E> {
+    /// Transform only the native operational error, preserving context and cancellation.
+    #[inline]
+    pub fn map_error<F>(self, map: impl FnOnce(E) -> F) -> PullFailure<F> {
+        match self {
+            Self::Operational(error) => PullFailure::Operational(map(error)),
+            Self::ContextRequired(challenge) => PullFailure::ContextRequired(challenge),
+            Self::Cancelled => PullFailure::Cancelled,
+        }
+    }
 }
 impl<E> fmt::Debug for PullFailure<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -72,6 +100,22 @@ macro_rules! forward {
 forward!(&P, Box<P>, std::sync::Arc<P>, std::rc::Rc<P>);
 
 /// Checked caller failure. Native provider errors remain distinct from local checks.
+///
+/// New failure categories may be added. Handle unknown categories by refusing
+/// the attempt or propagating the original error. Exhaustive downstream matches
+/// are intentionally rejected:
+///
+/// ```compile_fail,E0004
+/// use openbindings_source_pull::PullError;
+/// fn classify(error: PullError<()>) {
+///     match error {
+///         PullError::Provider(_) => (),
+///         PullError::Validation(_) => (),
+///         PullError::Cancelled => (),
+///     }
+/// }
+/// ```
+#[non_exhaustive]
 pub enum PullError<E> {
     /// The provider reported a challenge or operational inability.
     Provider(PullFailure<E>),
@@ -79,6 +123,24 @@ pub enum PullError<E> {
     Validation(PullValidationError),
     /// Local or provider cancellation; the original document remains unchanged.
     Cancelled,
+}
+impl<E> PullError<E> {
+    /// Transform only the native provider error, preserving all local failures.
+    /// The closure is not called for context challenges or cancellation.
+    #[inline]
+    pub fn map_error<F>(self, map: impl FnOnce(E) -> F) -> PullError<F> {
+        match self {
+            Self::Provider(PullFailure::Operational(error)) => {
+                PullError::Provider(PullFailure::Operational(map(error)))
+            }
+            Self::Provider(PullFailure::ContextRequired(challenge)) => {
+                PullError::Provider(PullFailure::ContextRequired(challenge))
+            }
+            Self::Provider(PullFailure::Cancelled) => PullError::Provider(PullFailure::Cancelled),
+            Self::Validation(error) => PullError::Validation(error),
+            Self::Cancelled => PullError::Cancelled,
+        }
+    }
 }
 impl<E> fmt::Debug for PullError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -124,7 +186,7 @@ async fn checked_pull<E, F: Future<Output = Result<PullResult, PullFailure<E>>>>
     request: PullRequest,
     control: CancellationToken,
     start: impl FnOnce(PullRequest, CancellationToken) -> F,
-) -> Result<PullResult, PullError<E>> {
+) -> Result<(PullResult, ConformantDocument), PullError<E>> {
     let mut attempt = Attempt::new(limits, &control);
     attempt.request(&request)?;
     let original = request.clone();
@@ -143,9 +205,9 @@ async fn checked_pull<E, F: Future<Output = Result<PullResult, PullFailure<E>>>>
         }
         Err(error) => return Err(PullError::Provider(error)),
     };
-    validation::validate(&result, &original, &mut attempt)?;
+    let prospective = validation::validate(&result, &original, &mut attempt)?;
     attempt.check()?;
-    Ok(result)
+    Ok((result, prospective))
 }
 
 /// Checked source pulling. Import this trait to call a [`SourcePuller`].
@@ -153,25 +215,28 @@ async fn checked_pull<E, F: Future<Output = Result<PullResult, PullFailure<E>>>>
 /// explicit `handle_pull_source` calls bypass those checks.
 pub trait SourcePullerExt: SourcePuller {
     /// Lazily pull and validate the result against the original request.
+    /// Returns the exact result and the conformant snapshot containing all additions.
+    /// Stale proposals are not applied; the caller still chooses what to adopt.
     fn pull_source(
         &self,
         request: PullRequest,
         control: CancellationToken,
-    ) -> impl Future<Output = Result<PullResult, PullError<Self::Error>>>;
+    ) -> impl Future<Output = Result<(PullResult, ConformantDocument), PullError<Self::Error>>>;
     /// Pull with caller-selected limits; all checks remain lazy.
+    /// Returns the same result and all-additions snapshot as [`Self::pull_source`].
     fn pull_source_with_limits(
         &self,
         request: PullRequest,
         control: CancellationToken,
         limits: PullLimits,
-    ) -> impl Future<Output = Result<PullResult, PullError<Self::Error>>>;
+    ) -> impl Future<Output = Result<(PullResult, ConformantDocument), PullError<Self::Error>>>;
 }
 impl<P: SourcePuller + ?Sized> SourcePullerExt for P {
     fn pull_source<'a>(
         &'a self,
         request: PullRequest,
         control: CancellationToken,
-    ) -> impl Future<Output = Result<PullResult, PullError<P::Error>>> {
+    ) -> impl Future<Output = Result<(PullResult, ConformantDocument), PullError<P::Error>>> {
         checked_pull(
             PullLimits::default(),
             request,
@@ -184,7 +249,7 @@ impl<P: SourcePuller + ?Sized> SourcePullerExt for P {
         request: PullRequest,
         control: CancellationToken,
         limits: PullLimits,
-    ) -> impl Future<Output = Result<PullResult, PullError<P::Error>>> {
+    ) -> impl Future<Output = Result<(PullResult, ConformantDocument), PullError<P::Error>>> {
         checked_pull(limits, request, control, |request, local| -> P::Pull<'a> {
             self.handle_pull_source(request, local)
         })

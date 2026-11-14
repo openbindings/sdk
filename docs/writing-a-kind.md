@@ -1040,7 +1040,9 @@ turn. Follow those references to understand which changes reach the binding.
 limits, new keys, source attribution, added coverage, existing binding coverage,
 primary operation keys, reuse placement and uses labels. It also
 builds a prospective document with every addition and validates core conformance.
-It never applies stale proposals or changes the original document.
+It returns `(result, prospective)`, retaining that proof and the original JSON
+limits. The caller chooses whether to adopt it. The original remains unchanged
+and stale proposals are not applied.
 
 It does not prove source exhaustiveness, faithful projection, schema identity
 behind reuse, change judgments or needs hidden in binding data. It does not
@@ -1070,7 +1072,7 @@ async fn pull_then_invoke() -> Result<(), Box<dyn std::error::Error>> {
     use openbindings_invocation::{
         BindingInvokerExt, BindingRequest, CancellationToken, InvocationError, OutputEvent,
     };
-    use openbindings_source_pull::{PullLimits, PullRequest, SourcePullerExt};
+    use openbindings_source_pull::{PullRequest, SourcePullerExt};
 
     let original = Document::parse(
         r#"{
@@ -1083,13 +1085,11 @@ async fn pull_then_invoke() -> Result<(), Box<dyn std::error::Error>> {
     .ok_or("nonconformant document")?;
     let adapter = Memory;
     let request = PullRequest::new(original, "s");
-    let result = adapter
+    let (result, interface) = adapter
         .pull_source(request.clone(), CancellationToken::new())
         .await?;
     assert!(result.report().is_complete());
     // This application chooses every addition. No stale proposal is applied.
-    let interface =
-        result.validate_for(&request, &PullLimits::default(), &CancellationToken::new())?;
     let call = adapter.invoke(
         BindingRequest::new(interface, "echo.s"),
         CancellationToken::new(),

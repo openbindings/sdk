@@ -347,6 +347,7 @@ path
 per-operation
 perform
 performed
+pointer
 preference
 presence
 present

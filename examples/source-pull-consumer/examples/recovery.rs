@@ -16,7 +16,7 @@ fn main() {
     ));
     let mut context = Context::from_waker(Waker::noop());
     assert!(work.as_mut().poll(&mut context).is_pending());
-    let Poll::Ready(Ok(result)) = work.as_mut().poll(&mut context) else {
+    let Poll::Ready(Ok((result, _))) = work.as_mut().poll(&mut context) else {
         panic!("local observation")
     };
     assert!(result.report().is_complete());

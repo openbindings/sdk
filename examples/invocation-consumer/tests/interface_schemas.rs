@@ -2,7 +2,7 @@ use invocation_consumer::Catalog;
 use openbindings::{ConformantDocument, Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use openbindings_source_pull::{PullLimits, PullRequest, SourcePullerExt};
+use openbindings_source_pull::{PullRequest, SourcePullerExt};
 use source_pull_consumer::{Embedded, Fixed};
 use std::{
     future::{Future, Ready},
@@ -30,13 +30,11 @@ async fn fixed() -> ConformantDocument {
         ),
         "fixed",
     );
-    let result = (Fixed)
+    let (_, prospective) = (Fixed)
         .pull_source(request.clone(), CancellationToken::new())
         .await
         .unwrap();
-    result
-        .validate_for(&request, &PullLimits::default(), &CancellationToken::new())
-        .unwrap()
+    prospective
 }
 async fn exchange<F: Future<Output = Result<(), InvocationError>>>(
     call: Invocation<F>,
@@ -262,12 +260,9 @@ async fn embedded_kind_pull_adopt_and_binding_echo_keeps_exact_payload() {
         r#"{"openbindings":"0.2.0","operations":{},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"copy","operation":{"input":true,"output":true},"data":{"item":"copy","opaque":1e99999}}]}}}}"#,
     );
     let request = PullRequest::new(original.clone(), "catalog");
-    let result = (Embedded)
+    let (_, adopted) = (Embedded)
         .pull_source(request.clone(), CancellationToken::new())
         .await
-        .unwrap();
-    let adopted = result
-        .validate_for(&request, &PullLimits::default(), &CancellationToken::new())
         .unwrap();
     assert!(original.value().get("bindings").is_none());
     assert_eq!(

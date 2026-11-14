@@ -102,7 +102,10 @@ fn independent_74_design_controls_match_the_current_rules() {
         // The reviewed carrier already rejects duplicate uses, before document
         // relationships. Keep the independent case unchanged and name this earlier gate.
         if name == "uses-labels-distinct" {
-            assert!(matches!(result, Err(CarrierError::DuplicateUse)), "{name}");
+            assert!(
+                matches!(result, Err(error) if error.kind() == CarrierErrorKind::DuplicateUse),
+                "{name}"
+            );
             continue;
         }
         let result = result.unwrap_or_else(|e| panic!("{name}: {e:?}"));
@@ -420,7 +423,7 @@ fn binding_data_uses_are_checked_for_added_entries_and_proposals() {
             serde_json::json!(["schemas/ApiError", "schemas/ApiError"]);
         assert!(matches!(
             PullResult::from_json(json(&value.to_string())),
-            Err(CarrierError::DuplicateUse)
+            Err(error) if error.kind() == CarrierErrorKind::DuplicateUse
         ));
     }
 }

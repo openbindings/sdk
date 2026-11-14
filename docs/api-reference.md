@@ -37,6 +37,24 @@ entries by primary key, with operation slots required to exist. A caller keeping
 of a pull follows schema references and each reached added binding's operation
 and `uses`, as the [adapter guide](writing-a-kind.md#what-goes-in-uses) explains.
 
+Both `SourcePullerExt::pull_source` and `pull_source_with_limits` return
+`Result<(PullResult, ConformantDocument), PullError<Self::Error>>` through their
+futures. The prospective document contains all additions, retains the original
+JSON admission limits and leaves stale proposals unapplied. Adopting a selected
+subset or applying a proposal still requires validation of that edited document.
+`PullReport::from_json` and `PullResult::from_json` return a struct `CarrierError`:
+`kind()` gives a Copy `CarrierErrorKind` and `pointer()` borrows an optional
+failing row, such as `/existing/1` or `/report/existing/1`. Nested failures identify
+the enclosing row; unrelated top-level failures need not have a pointer.
+
+`CheckFailure<E>`, `KindError<E>`, `PullFailure<E>` and `PullError<E>` each expose
+`map_error<F>(self, map: impl FnOnce(E) -> F)` returning the same family with `F`.
+Only the generic error payload is transformed. Other variants and payloads pass
+through unchanged, and their closures are not called. Checked source checks use
+`error.map_error(|failure| failure.map_error(convert_native))` for the two layers.
+The pull errors `RequestError`, `PullValidationError`, `PullFailure` and `PullError`
+are non-exhaustive. Handle unknown failures by refusal or propagation.
+
 ## Exact documents and conformance
 
 Rust `JsonValue::semantic_eq(&other)` compares exact JSON values without

@@ -2,7 +2,7 @@ use super::Catalog;
 use openbindings::{Document, ExternalSchemas, JsonValue};
 use openbindings_invocation::*;
 use openbindings_json_schema_evaluator::DefaultEvaluator;
-use openbindings_source_pull::{PullLimits, PullRequest, SourcePullerExt};
+use openbindings_source_pull::{PullRequest, SourcePullerExt};
 use source_pull_consumer::Fixed;
 use std::future::Future;
 use wasm_bindgen::prelude::*;
@@ -75,12 +75,9 @@ async fn exchange<F: Future<Output = Result<(), InvocationError>>>(
 pub async fn pull_adopt_and_echo(text: String, operation: bool) -> Result<String, JsValue> {
     let original = Document::parse(r#"{"openbindings":"0.2.0","operations":{},"sources":{"fixed":{"kind":"example.fixed@1"}}}"#).map_err(failure)?.validate().map_err(failure)?.conformant().unwrap();
     let request = PullRequest::new(original, "fixed");
-    let result = (Fixed)
+    let (_, adopted) = (Fixed)
         .pull_source(request.clone(), CancellationToken::new())
         .await
-        .map_err(failure)?;
-    let adopted = result
-        .validate_for(&request, &PullLimits::default(), &CancellationToken::new())
         .map_err(failure)?;
     let value = JsonValue::parse(&text).map_err(failure)?;
     if operation {

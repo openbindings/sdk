@@ -42,13 +42,10 @@ fn default_checked_pull_completes_a_ten_thousand_item_catalog() {
         r#"{{"openbindings":"0.2.0","operations":{{}},"sources":{{"catalog":{{"kind":"example.embedded@1","data":{{"items":[{items}]}}}}}}}}"#
     ));
     let request = PullRequest::new(original.clone(), "catalog");
-    let result =
+    let (result, adopted) =
         complete((Embedded).pull_source(request.clone(), CancellationToken::new())).unwrap();
     assert_eq!(result.report().added().len(), 10_000);
     assert!(result.report().is_complete());
-    let adopted = result
-        .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
-        .unwrap();
     assert_eq!(adopted.operations().len(), 10_000);
     assert_eq!(adopted.value().get("bindings").unwrap().len(), Some(10_000));
     assert!(original.operations().is_empty());
@@ -90,7 +87,7 @@ fn schema_annotations_remain_the_authors_under_profile_identity() {
         let original = document(&format!(
             r#"{{"openbindings":"0.2.0","operations":{{"a":{{"input":{current}}}}},"sources":{{"catalog":{{"kind":"example.embedded@1","data":{{"items":[{{"key":"a","operation":{{"input":{offered}}},"data":{{"item":"a"}}}}]}}}}}},"bindings":{{"a":{{"operation":"a","source":"catalog","data":{{"item":"a"}}}}}}}}"#
         ));
-        let result = complete((Embedded).pull_source(
+        let (result, _) = complete((Embedded).pull_source(
             PullRequest::new(original, "catalog"),
             CancellationToken::new(),
         ))
@@ -134,7 +131,7 @@ fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_confl
         let original = document(&format!(
             r#"{{"openbindings":"0.2.0","operations":{operations},"sources":{{"fixed":{{"kind":"example.fixed@1"}}}}}}"#
         ));
-        let result = complete(client.pull_source(
+        let (result, _) = complete(client.pull_source(
             PullRequest::new(original.clone(), "fixed"),
             CancellationToken::new(),
         ))
@@ -159,7 +156,7 @@ fn no_data_kind_projects_before_destination_identity_and_does_not_adapt_to_confl
                         &AtomicBool::new(false),
                     )
                     .unwrap();
-                let repeated = complete(
+                let (repeated, _) = complete(
                     client
                         .pull_source(PullRequest::new(adopted, "fixed"), CancellationToken::new()),
                 )
@@ -246,7 +243,7 @@ fn offered_aliases_reuse_one_operation_and_report_multiple_matches_as_conflicts(
             r#"{{"openbindings":"0.2.0","operations":{{"localEcho":{{"aliases":["echo"],"input":true}},"second":{{"aliases":["other"],"input":true}}}},"sources":{{"catalog":{{"kind":"example.embedded@1","data":{{"items":[{{"key":"remote","operation":{{"aliases":{aliases},"input":true}},"data":{{"item":"remote"}}}}]}}}}}}}}"#
         ));
         let request = PullRequest::new(original, "catalog");
-        let result =
+        let (result, _) =
             complete(Embedded.pull_source(request.clone(), CancellationToken::new())).unwrap();
         if let Some(also) = also {
             assert_eq!(result.report().added().len(), 0);
@@ -294,7 +291,7 @@ fn embedded_kind_reports_stale_current_unmatched_and_partial_without_overwriting
         r#"{"openbindings":"0.2.0","operations":{"a":{"input":{"type":"integer"},"description":"keep"},"b":{"input":true},"c":{}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"partial":true,"items":[{"key":"a","operation":{"input":{"type":"string"}},"data":{"item":"a","revision":"v2"}},{"key":"b","operation":{"input":true},"data":{"item":"b"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","preference":2,"idempotent":true,"data":{"item":"a","revision":"v1"}},"b":{"operation":"b","source":"catalog","data":{"item":"b"}},"c":{"operation":"c","source":"catalog","data":{"item":"gone"}}}}"#,
     );
     let request = PullRequest::new(original.clone(), "catalog");
-    let result =
+    let (result, _) =
         complete((Embedded).pull_source(request.clone(), CancellationToken::new())).unwrap();
     assert!(!result.report().is_complete());
     let entries = result.report().existing().unwrap().collect::<Vec<_>>();
@@ -430,7 +427,7 @@ fn comparison_gaps_and_removal_proposals_are_reported() {
     let comparison = document(
         r##"{"openbindings":"0.2.0","operations":{"a":{"input":true}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{"input":{"$ref":"#/missing"}},"data":{"item":"a"}}]}}}}"##,
     );
-    let result = complete(client.pull_source(
+    let (result, _) = complete(client.pull_source(
         PullRequest::new(comparison, "catalog"),
         CancellationToken::new(),
     ))
@@ -443,7 +440,7 @@ fn comparison_gaps_and_removal_proposals_are_reported() {
     let removal = document(
         r#"{"openbindings":"0.2.0","operations":{"a":{"input":true}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{},"data":{"item":"a"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"#,
     );
-    let result = complete(client.pull_source(
+    let (result, _) = complete(client.pull_source(
         PullRequest::new(removal.clone(), "catalog"),
         CancellationToken::new(),
     ))
@@ -466,7 +463,7 @@ fn comparison_gaps_and_removal_proposals_are_reported() {
         .edit(&[Edit::remove(&["operations", "a", "input"])])
         .unwrap();
     let edited = edited.validate().unwrap().conformant().unwrap();
-    let next = complete(client.pull_source(
+    let (next, _) = complete(client.pull_source(
         PullRequest::new(edited, "catalog"),
         CancellationToken::new(),
     ))
@@ -482,7 +479,7 @@ fn unchanged_reference_with_unaccounted_target_drift_is_unassessed() {
     let original = document(
         r##"{"openbindings":"0.2.0","operations":{"a":{"input":{"$ref":"#/schemas/S"}}},"schemas":{"S":{"type":"string","minLength":1}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"schemas":{"S":{"type":"string","minLength":2}},"items":[{"key":"a","operation":{"input":{"$ref":"#/schemas/S"}},"data":{"item":"a"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"##,
     );
-    let result = complete(Embedded.pull_source(
+    let (result, _) = complete(Embedded.pull_source(
         PullRequest::new(original, "catalog"),
         CancellationToken::new(),
     ))
@@ -501,7 +498,7 @@ fn annotation_only_schema_edits_leave_existing_bindings_current() {
     let original = document(
         r#"{"openbindings":"0.2.0","operations":{"a":{"input":{"type":"string","description":"author","default":"old","format":"email"}}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{"input":{"type":"string","description":"source","default":"new"}},"data":{"item":"a"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"#,
     );
-    let result = complete(Embedded.pull_source(
+    let (result, _) = complete(Embedded.pull_source(
         PullRequest::new(original, "catalog"),
         CancellationToken::new(),
     ))
@@ -517,7 +514,7 @@ fn accounted_operation_target_drift_is_reported_at_the_target_binding() {
     let original = document(
         r##"{"openbindings":"0.2.0","operations":{"a":{"input":{"$ref":"#/operations/b/input"}},"b":{"input":{"type":"string","minLength":1}}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"operations":{"b":{"input":{"type":"string","minLength":2}}},"items":[{"key":"a","operation":{"input":{"$ref":"#/operations/b/input"}},"data":{"item":"a"}},{"key":"b","operation":{"input":{"type":"string","minLength":2}},"data":{"item":"b"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}},"b":{"operation":"b","source":"catalog","data":{"item":"b"}}}}"##,
     );
-    let result = complete(Embedded.pull_source(
+    let (result, _) = complete(Embedded.pull_source(
         PullRequest::new(original, "catalog"),
         CancellationToken::new(),
     ))

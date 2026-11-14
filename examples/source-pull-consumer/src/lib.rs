@@ -434,7 +434,7 @@ provider!(Embedded, embedded);
 pub async fn pull_catalog(text: String) -> Result<String, wasm_bindgen::JsValue> {
     let value = JsonValue::parse(&text).map_err(|e| report(&e))?;
     let request = PullRequest::from_json(&value).map_err(|e| report(&e))?;
-    let result = (Embedded)
+    let (result, _) = (Embedded)
         .pull_source(request, CancellationToken::new())
         .await
         .map_err(|e| report(&e))?;

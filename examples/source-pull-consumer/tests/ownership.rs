@@ -48,7 +48,7 @@ fn borrowed_provider_suspends_and_retained_result_outlives_every_originating_own
         send(&future);
         assert!(poll(future.as_mut()).is_pending());
         assert_eq!(calls.load(Ordering::Relaxed), 1);
-        let Poll::Ready(Ok(result)) = poll(future.as_mut()) else {
+        let Poll::Ready(Ok((result, _))) = poll(future.as_mut()) else {
             panic!("finite local observation")
         };
         result

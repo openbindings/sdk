@@ -13,6 +13,21 @@
   from `origin()`, and established operand from `side()`. Match the kind instead
   of error variants; whole-error equality includes provenance. Automatic
   formatting remains redacted and retained locations stay within the allowance.
+- Breaking: checked `pull_source` and `pull_source_with_limits` now return
+  `(PullResult, ConformantDocument)`, preserving the already proved snapshot with
+  all additions and no stale proposals applied.
+- Breaking: source-pull `CarrierError` is now a struct with a Copy
+  `CarrierErrorKind` from `kind()` and an optional report-row `pointer()`. It
+  retains Clone, PartialEq and Eq but no longer implements Copy. Nested result
+  errors prefix known report rows with `/report`.
+- Breaking: `RequestError`, `PullValidationError`, `PullFailure` and `PullError`
+  are now non-exhaustive. Downstream matches must handle unknown failures.
+
+### Added
+
+- Consuming `map_error` methods on `CheckFailure`, `KindError`, `PullFailure` and
+  `PullError` convert their generic error parameter while preserving every other
+  variant and payload, without adding bounds on the error or allocating.
 
 ## 2026-11-13 experiment repairs (unreleased)
 

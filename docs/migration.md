@@ -18,7 +18,7 @@ Build integrations around the current responsibilities:
 | Check caller-facing values | Select the original `Schema`, an evaluator and explicit external resources; retain `PreparedSchema` and distinguish preparation failure from value outcomes. |
 | Discover or publish an OBI | The optional HTTP discovery companion, with explicit transport/acquisition policy. |
 | Discover kind capabilities or check a proposed source | The kind-description companion's separate description and explicit checking operations. |
-| Pull source-derived authoring changes | `SourcePuller::handle_pull_source` and checked `pull_source`, report inspection, prospective conformance and explicit caller adoption. Proposals do not apply themselves. |
+| Pull source-derived authoring changes | `SourcePuller::handle_pull_source` and checked `pull_source`, returning `(PullResult, ConformantDocument)` for report inspection and explicit caller adoption of all additions. Proposals do not apply themselves. |
 | Compare schemas for authoring | The optional comparison companion: normalized identity, directional compatibility and per-operation interface checking, with reusable document contexts. |
 | Invoke a binding or operation | `BindingInvoker` with checked `invoke` or `DefaultOperationInvoker` with a caller-selected provider; operation invocation adds declared schema gates. |
 
