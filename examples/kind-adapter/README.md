@@ -34,3 +34,20 @@ a native test dependency.
 
 The Wasm check builds the library; it does not instantiate it in a browser or
 Workers host. Host transport and host imports need separate integration tests.
+
+Additional compiled guide recipes live in the native tests:
+
+- [transport.rs](tests/transport.rs): a transport with a borrowed associated future,
+  a callback with a separate `Fut: 'static`, and Send/local checks.
+- [cleanup.rs](tests/cleanup.rs): host-owned asynchronous close work and token-aware
+  transport input, tested with caller input still open and committed output pending.
+- [exact_data.rs](tests/exact_data.rs): exact JSON navigation, retained cache handles,
+  and references using OBI positions or absolute schema resource identities.
+- [two_kinds.rs](tests/two_kinds.rs): two different adapters held through object-safe
+  role twins, a kind-string router, registration checks, native error source chains
+  and context keyed by the exact source entry. This host deliberately uses local
+  futures; it adds no SDK registry.
+
+For a worked source checker with accepted and rejected entries, see
+[KindCatalog](../source-pull-consumer/src/kinds.rs) and its
+[checked-call test](../source-pull-consumer/tests/checker.rs).

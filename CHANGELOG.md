@@ -15,6 +15,19 @@
   schema. A standalone schema that kept definitions under a member such as
   `schemas` or `components` must keep them at a schema position such as `$defs`.
 
+### Added
+
+- The kind guide covers what eight independent adapter authors had to find in
+  the source: a worked source checker, reading exact JSON, placing schemas taken
+  from a protocol artifact, what an adapter caches, depth bounds for a recursive
+  decoder, matching existing entries by a stable identity, cleanup that outlives a
+  cancelled call, and the two shapes of a transport-generic adapter with what each
+  does to `Send`.
+- Compiled examples back each of those, and one shows a host that holds two kinds:
+  object-safe twins of the role traits, an error type that keeps the adapter's own
+  error behind `source()`, a registration check against published support, and a
+  context store keyed by the exact source entry.
+
 ### Fixed
 
 - Directional enum, const and required membership uses an ordered lookup in place
@@ -31,6 +44,9 @@
   peer that sends one message and waits for the reply; retrying on every read
   reparses from the start each time. A protocol with its own delimiter should find
   the delimiter and parse once.
+
+- The recorded Wasm asset size and the development loop's opening paragraph are
+  current.
 
 ## 2026-11-13 panel decisions (unreleased)
 

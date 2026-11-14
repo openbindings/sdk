@@ -1,9 +1,8 @@
 # Current 0.2 alignment development loop
 
-The working branch is `codex/sdk-02-foundation`. The initial foundation checkpoint
-is committed and pushed. Continue the migration on this branch; existing APIs have
-no compatibility protection. Package publication and integration into main remain
-separate from feature-branch development.
+SDK work lands on `main` through pull requests. Continue the migration with
+reviewed, qualified changes; existing APIs have no compatibility protection.
+Package publication remains a separate step.
 
 The normative target is specification
 `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` and adopted interfaces

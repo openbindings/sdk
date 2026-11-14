@@ -1089,10 +1089,11 @@ print('sha256', hashlib.sha256(b).hexdigest())
 PY
 ```
 
-The 2026-10-24 implementation asset is **6,060,275 bytes**, or **1,699,844 bytes**
-with gzip level 9 (`8be7fe3`: 6,010,809 and 1,681,221; `94b6991`: 7,445,434 and
-1,951,593). Its SHA-256 is
-`cd28e5d8cd3f44d05bfb3215316f3a7ff2888b1dbe33c2d57ba8cc05190d50df`.
+The built asset checked in the 2026-11-14 review is **6,809,646 bytes**.
+The earlier 2026-10-24 measurement was 6,060,275 bytes, or 1,699,844 bytes with
+gzip level 9 (`8be7fe3`: 6,010,809 and 1,681,221; `94b6991`: 7,445,434 and
+1,951,593). Those compressed lengths describe the earlier assets; rerun the
+commands above for the current compressed length and SHA-256.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.

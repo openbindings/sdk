@@ -47,6 +47,8 @@ and checks, not protocol work, transport buffering or all memory held by a call.
 Choose separate bounds for those in the adapter and host. Parse incoming JSON
 with explicit `JsonLimits` when the default admission policy is unsuitable;
 limits on an already constructed request cannot undo its parsing allocations.
+Default JSON admission allows 10,000 container levels; a recursive adapter decoder
+or schema walker needs its own depth bound (or an iterative traversal).
 
 `DescriptionLimits` bounds request and response bytes and the listed-kind count.
 `PullLimits` also bounds indexed entries and uses labels, relationship work and
@@ -222,9 +224,12 @@ answers for you; the test after the descriptor below checks them.
 
 The listing and description below share their support list. `pull` and `invoke`
 disclosures are present exactly when their operation keys are supported.
-Disclosures describe what happens and whether it executes something the source
-or binding data names. The application decides whether to authorize execution.
-Listing and describing perform no operation under the kind.
+Disclosures describe what happens and whether it runs something on the host that
+source or binding data names. Starting a command to list MCP tools has
+`pull.executes: true`; making an HTTP request to an already running service has
+`invoke.executes: false`. Network access alone is not execution in this disclosure.
+The application decides whether to authorize execution. Listing and describing
+perform no operation under the kind.
 
 <!-- guide:describe -->
 ```rust
@@ -337,7 +342,9 @@ preserves its `#/$defs/...` and `{"$ref":"#"}` meaning. Handle preparation failu
 separately from data value outcomes. This does not construct a core `Schema` or
 require a synthetic OBI.
 
-`SourceChecker` is optional and is not implemented here. Its hook accepts a
+`SourceChecker` is optional. The compiled
+[KindCatalog checker](../examples/source-pull-consumer/src/kinds.rs)
+implements it for two local kinds. Its hook accepts a
 `CheckSourceRequest` containing `{kind, data?, context?}` and returns a
 `CheckedSource`, or `CheckFailure`. A successful checked source is the source
 entry the kind stands behind, possibly completed or normalized as its rules
@@ -346,6 +353,19 @@ of the source's operations. Disclose any execution needed to check it before
 the application calls `check_source`. The SDK checks carrier size and matching
 request/response kinds; availability, trust and kind-specific validity remain
 the kind's and application's responsibilities.
+
+For example, checking `{"kind":"example.fixed@1"}` accepts
+`{"kind":"example.fixed@1","description":"Checked local fixture source."}`.
+Invalid embedded catalog data returns `CheckFailure::Rejected` with the fixed
+code `example.invalid-source` and fixed message
+"The proposed source does not have this local kind's catalog carriage."
+The checker constructs the entry from `kind`, optional `data` and its own
+`description`; request `context` remains separate and is never copied back.
+Its description says `check.executes: false` because it only reads supplied data.
+A check that starts a source-named command must instead disclose `true`, even
+though checking still must not perform the source's operations. The example's
+[checker tests](../examples/source-pull-consumer/tests/checker.rs) exercise these
+accepted and rejected entries through `check_source`.
 
 ## Stage 3: pull the source
 
@@ -549,6 +569,76 @@ separate limits. Avoid converting exact values through `serde_json::Value` or
 `serde_json::json!`, which can lose wide-number precision. When working with
 already encoded JSON, parse those bytes directly.
 
+Anything derived from kind data is the adapter's to cache: parsed protocol
+artifacts, descriptor pools, operation lookup tables and projection plans.
+`Source::data()` clones a `JsonValue` handle, not its text. Retain that handle
+and use `data.text()` as a cache key without a `String` copy. Shared snapshots
+can first compare retained byte slices with `std::ptr::eq`; separately parsed
+snapshots need content comparison. Keep the owning handle alive while using
+that identity. Bound cache retention, include relevant configuration in the key,
+and honor current limits on hits as well as misses. The
+[cache-handle test](../examples/kind-adapter/tests/exact_data.rs) shows the
+shared text through the public API.
+
+### Reading exact JSON
+
+`JsonValue::view()` gives a borrowed, cheap `JsonRef`. Use `get("field")` for
+an object member and `at("/items/0")` for a JSON Pointer. `members()` iterates
+`JsonMember { name, value }`; `elements()` iterates array values. Both return
+`None` for the wrong container type. `number_text()` and `text()` borrow exact
+number tokens and JSON spelling without floating-point conversion.
+`as_str()` returns scalar text only: it is `None` for a non-string or a string
+with unpaired UTF-16. Use `as_string()` to distinguish those cases and
+`JsonStringRef::utf16_units()` when the protocol can preserve unpaired units;
+otherwise reject them with fixed diagnostics. Member names follow the same rule.
+
+`JsonRef::to_owned()` retains a `JsonValue` without reparsing, keeping the whole
+source arena alive even for a small subtree. It does not detach that subtree's
+storage. For a scalar `String`, use `as_str().map(str::to_owned)` after deciding
+how the protocol treats unpaired units. The
+[navigation example](../examples/kind-adapter/tests/exact_data.rs) compiles these
+calls, including a wide number and an unpaired string.
+
+These types are publicly re-exported. `cargo doc --no-deps -p openbindings -p <role crate>`
+renders their full rustdoc pages, including `JsonRef`, `JsonMember` and
+`JsonStringRef`; for example, use `openbindings-kind-description` as the role
+crate. Open `target/doc/openbindings/index.html` and follow the type links.
+See also the [API reference](api-reference.md).
+
+### Schemas extracted from protocol artifacts
+
+An OpenAPI, AsyncAPI or MCP artifact is not itself a JSON Schema resource.
+A reference such as `https://example.test/openapi.json#/components/schemas/Node`
+has undefined results under
+[specification section 7.5](https://github.com/openbindings/spec/blob/c1419c9fc3ae5a00c2b83da710c11bf67dab7934/openbindings.md#75-notes-and-examples-informative).
+Extract and translate the schema before the SDK evaluates or references it.
+Two routes are shown in the compiled
+[schema placement example](../examples/kind-adapter/tests/exact_data.rs):
+
+- **Use its OBI position.** Put the definition at `schemas.Node`; change the
+  operation's reference to `{"$ref":"#/schemas/Node"}`. A standalone self-reference
+  `{"$ref":"#"}` becomes `{"$ref":"#/schemas/Node"}`; `#/$defs/Part` becomes
+  `#/schemas/Node/$defs/Part` when that definition stays inside Node.
+- **Give it an absolute resource identity.** Put
+  `{"$id":"https://example.test/schemas/node", ...}` at `schemas.Node` and use
+  `{"$ref":"https://example.test/schemas/node"}` from the operation. Its local
+  `{"$ref":"#"}` and `#/$defs/Part` still resolve within that resource. A
+  standalone schema can also be registered as `ExternalSchema { uri, document }`
+  in `ExternalSchemas` and prepared by that resource URI.
+
+Preserve existing resource identities and reference scope, and make referenced
+resources available. Adding an `$id` alone does not repair an artifact-relative
+`#/components/schemas/...` reference. Rewrite only schema positions, including
+schemas of properties named `const`; never rewrite instance data inside `const`,
+`enum` or examples just because it contains a member named `$ref`.
+
+Hoist a recursive definition to a document-level `schemas` entry and include
+that entry in the pull report, so existing-entry comparison can account for its
+references as leaves. A target inside an operation's own `$defs` is not the
+operation's input/output slot and has no separate report entry. This accounting
+rule is for existing entries; it does not make ordinary identical-mode comparison
+for cross-source reuse succeed on recursive schemas.
+
 Secrets never go in documents or diagnostics. Keep credentials and approvals
 in separately supplied runtime `Context`, or host configuration with a clear
 lifetime. Do not copy context into source data, binding data, reports,
@@ -667,6 +757,29 @@ code, undo effects or guarantee remote cancellation. If a protocol requires an
 async cancellation exchange, arrange host-owned work whose lifetime outlives
 the dropped attempt and define its own cleanup policy.
 
+The compiled [cleanup recipe](../examples/kind-adapter/tests/cleanup.rs) keeps a
+synchronous guard in the provider future. Before work starts, the host supplies
+an executor handle and ownership for cleanup. On drop, the guard moves the close
+handle or connection into that owner's work: send a WebSocket close frame, reset
+an HTTP/2 stream, or send an MCP cancellation notice. Disarm such a guard after
+normal protocol completion. Cleanup has its own bounds and may fail; cancellation
+does not certify that the peer received it.
+
+If a transport task takes `ProviderInput`, dropping the invocation future no
+longer drops that input. Pass the hook's cancellation token to the independently
+polled task and stop it when the token is revoked; this token exists for exactly
+that ownership split. The recipe tests cancellation while caller input stays
+open. Its native cleanup uses a runtime task. A Worker uses host-owned local
+work instead, such as a cleanup queue polled outside the attempt and kept alive
+by the event context's `waitUntil` facility where available. An abort handle may
+also signal the host transport synchronously. Dropping a local future alone
+cannot keep an async close alive.
+
+A caller ending a subscription by cancellation receives `ERR_CANCELLED` as the
+normal ending of that choice. Outputs already committed still arrive before the
+terminal when the caller continues draining output. Dropping output abandons that
+drain; cancellation does not turn into `Complete`.
+
 ## Send and Wasm hosts
 
 The interface traits impose no `Send` or `Sync` requirement on adapters, errors
@@ -682,7 +795,29 @@ particular native transport happens to be thread-safe. There are three useful
 choices: always box with `Send` when supported; always use a local box; or expose
 a named concrete future type that retains conditional `Send` from its fields.
 The associated future slot cannot use unstable `impl Trait` in an associated
-type on this SDK's stable Rust baseline.
+type on this SDK's stable Rust baseline. One local box in an erased multi-kind
+host forces that host's shared future type to be local as well.
+
+The compiled [generic transport example](../examples/kind-adapter/tests/transport.rs)
+shows both shapes:
+
+- `Transport::Exchange<'a>` borrows its transport under `Self: 'a`. The adapter's
+  named `Exchange<T::Exchange<'a>>` future preserves conditional `Send` from its
+  fields, with no `T: 'static` or separate `Fut: 'static` requirement.
+- `Callback<S>` with `S: Fn(ProviderIo, CancellationToken) -> Fut` needs
+  `Fut: 'static` for its borrowed boxed invocation future: `Self: 'a` constrains
+  `S`, but cannot imply `Fut: 'a` for that separate parameter. This example uses
+  `S: Sync`, `Fut: Send + 'static` and a `+ Send` box. Removing `Send` from the box
+  loses it permanently, even if that particular callback returns a Send future.
+
+For a host that spawns across threads, choose the named future with Send
+transport state, or require Send at the boxed transport boundary and throughout
+the adapter. Pass owned providers (often `Arc`) into spawned work to satisfy the
+executor's lifetime requirements. For a Worker with local host handles, use the
+same lifetime-generic seam with a local transport future, or a local box when
+conditional Send is unnecessary. A target-specific alias that adds `Send` on
+native targets and omits it on `wasm32` is another explicit policy; neither the
+SDK nor the Wasm target chooses that policy for you.
 
 `wasm32-unknown-unknown` does not itself require a `!Send` adapter. The plain
 in-memory example keeps its `+ Send` future there. A browser or Workers transport
@@ -697,6 +832,37 @@ particular host. Dependencies can introduce wasm-bindgen imports. A browser
 integration should supply its generated glue; a Workers integration needs a
 compatible module and host imports. Inspect imports and test the actual host.
 This example's check builds Wasm but does not run browser or Workers transport.
+
+## A host with two kinds
+
+The [two-kind host](../examples/kind-adapter/tests/two_kinds.rs) registers the
+memory adapter and a second local notice kind, then describes, checks, pulls,
+preflights and invokes through public checked APIs. It includes:
+
+- [Object-safe twins](../examples/kind-adapter/tests/host/erased.rs) for all four
+  role traits. The SDK traits' lifetime-generic associated futures prevent trait
+  objects. The twins box futures under one local-host policy; a statically linked
+  host can instead dispatch through its own enum.
+- A `KindFault` newtype implementing `Error` with fixed formatting and `source()`
+  pointing to the native error. `Box<dyn Error>` itself does not implement `Error`
+  for these generic wrapper bounds. `map_error` handles the error half only;
+  it does not erase the role or its future type. The test follows the source chain
+  back to the adapter's error.
+- A [registry and router](../examples/kind-adapter/tests/host/registry.rs) keyed
+  by exact kind string. Registration compares listing and description `supports`
+  with the registered roles and `can_invoke` before inserting. Invocation forwards
+  the selected hook with the existing `ProviderIo`.
+- A [context store](../examples/kind-adapter/tests/host/context.rs) keyed by
+  `(source key, kind, exact source data)`, retaining the data handle and
+  distinguishing absent data from null. Changing a source's destination under
+  the same key must not release previously stored context to it. The host does
+  not interpret the data. When the host deliberately adopts a checked entry
+  completed using that context, it can explicitly carry the context to the new
+  entry; arbitrary document edits must not do so.
+
+This is example host policy, not an SDK registry. Its local future type accepts
+local adapters; a host that spawns across threads needs Send twins and bounds on
+each forwarded associated future, as described above.
 
 ## Pull reports beyond the example
 
@@ -721,6 +887,14 @@ new offering as `implementation-unsupported` and a corresponding existing entry
 as `unassessed` when you cannot judge it. Do not add a duplicate binding for a
 current, stale or unassessed one. Schema and identifier conflicts belong in
 `omitted` as `conflict`, carrying `existing` and `offered` evidence.
+
+Match an existing binding to an offering by stable protocol identity, such as
+an operation id or a fully qualified method name, never by array or iteration
+position. Inserting an offering ahead of another must not create a second binding
+for an operation already bound. The source-puller contract forbids that duplicate;
+the SDK cannot detect it because it does not interpret binding data. The
+[reordering test](../examples/source-pull-consumer/tests/identity.rs) inserts a new
+offering before two existing ones and adds only the new identity.
 
 Account for every existing binding naming the source, every schema the source
 offers under an existing key, and the source itself when there is something to
