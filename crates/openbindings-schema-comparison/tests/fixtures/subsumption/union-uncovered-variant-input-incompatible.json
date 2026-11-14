@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "description": "Input: a target variant no candidate variant covers decides incompatible, whether it is written before or after a variant the profile cannot decide.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "uncoveredFirst": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "pattern": "^a"
+            }
+          ]
+        }
+      },
+      "uncoveredLast": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^a"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "uncoveredFirst": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "uncoveredLast": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}
