@@ -36,29 +36,15 @@ pub trait IndexedDocument {
     /// The revision's value with its schema index.
     fn indexed(&self) -> crate::RawDocument;
 }
-struct NoRetrieval;
-impl jsonschema::Retrieve for NoRetrieval {
-    fn retrieve(
-        &self,
-        _: &jsonschema::Uri<String>,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
-        Err("resource acquisition is disabled".into())
-    }
-}
 pub(crate) fn canonical_uri(name: &str) -> Option<String> {
     resolve_identifier(None, name.strip_suffix('#').unwrap_or(name))
 }
 pub(crate) fn resolve_identifier(parent: Option<&str>, reference: &str) -> Option<String> {
-    static EMPTY: OnceLock<jsonschema::Registry<'static>> = OnceLock::new();
-    let registry = EMPTY.get_or_init(|| {
-        jsonschema::Registry::new()
-            .retriever(NoRetrieval)
-            .prepare()
-            .expect("empty registry")
-    });
     let base = parent.or_else(|| uri::absolute(reference).then_some(reference))?;
-    registry
-        .resolve_uri(&jsonschema::Uri::parse(base).ok()?, reference)
+    // The evaluator's own resolution, called directly. A registry caches every
+    // base and reference it resolves, so a process-wide one would keep each
+    // caller's identifiers for the life of the process.
+    jsonschema::uri::resolve_against(&jsonschema::Uri::parse(base).ok()?, reference)
         .ok()
         .map(|uri| uri.as_str().trim_end_matches('#').to_owned())
 }
@@ -334,5 +320,43 @@ mod profile_tests {
                 .names
                 .contains_key("https://profiles.test/child")
         );
+    }
+}
+
+#[cfg(test)]
+mod identifier_resolution_tests {
+    use super::*;
+    #[test]
+    fn direct_resolution_agrees_with_a_registry() {
+        let registry = jsonschema::Registry::new().prepare().unwrap();
+        for base in [
+            "https://EXAMPLE.test/a/b",
+            "https://test.invalid/a/%7e/b?x#old",
+            "urn:example:item#frag",
+        ] {
+            for reference in [
+                "",
+                "a/",
+                "../c",
+                "/a/./b/../c",
+                "?q",
+                "#frag",
+                "#old",
+                "#",
+                "%2e%2e/x",
+                "https://OTHER.test/%7e/a",
+                "not a URI",
+            ] {
+                let expected = registry
+                    .resolve_uri(&jsonschema::Uri::parse(base).unwrap(), reference)
+                    .ok()
+                    .map(|uri| uri.as_str().trim_end_matches('#').to_owned());
+                assert_eq!(
+                    resolve_identifier(Some(base), reference),
+                    expected,
+                    "{base} {reference}"
+                );
+            }
+        }
     }
 }

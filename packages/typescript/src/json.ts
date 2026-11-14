@@ -109,8 +109,9 @@ const hostWellFormed = (
 // Whether text holds no unpaired UTF-16 unit, so it crosses the bridge exactly as UTF-8.
 /** @internal */
 export function wellFormed(text: string): boolean {
-  if (hostWellFormed && typeof text === "string")
-    return hostWellFormed.call(text);
+  // A non-string would otherwise reach the bindings and trap inside the module.
+  if (typeof text !== "string") throw new TypeError("Expected a string.");
+  if (hostWellFormed) return hostWellFormed.call(text);
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
     if (c >= 0xd800 && c <= 0xdbff) {
@@ -140,15 +141,21 @@ export function exact(input: ExactInput, limits?: Uint32Array): ExactInput {
   else if (!(input instanceof Uint8Array))
     throw new TypeError("Expected JSON text or Uint8Array.");
   const maxBytes = limits?.[0] ?? (defaultMaxBytes ??= jsonDefaults()[0]);
-  if (input.length <= maxBytes) return input;
-  if (typeof input !== "string") return input.subarray(0, maxBytes + 1);
-  // UTF-8 has at least as many bytes as scalar text has UTF-16 units. Keep
-  // enough units to exceed the byte limit and preserve its entire byte prefix.
+  if (typeof input === "string") return boundedText(input, maxBytes);
+  return input.length <= maxBytes ? input : input.subarray(0, maxBytes + 1);
+}
+
+// Scalar text certainly past a byte limit, cut to the prefix that establishes
+// the same refusal. UTF-8 has at least as many bytes as the text has UTF-16
+// units, so one unit past the limit exceeds it and keeps its whole byte prefix.
+/** @internal */
+export function boundedText(text: string, maxBytes: number): string {
+  if (text.length <= maxBytes) return text;
   // Include the low surrogate when the cut would split a scalar character.
   let end = maxBytes + 1;
-  const last = input.charCodeAt(end - 1);
+  const last = text.charCodeAt(end - 1);
   if (last >= 0xd800 && last <= 0xdbff) end++;
-  return input.slice(0, end);
+  return text.slice(0, end);
 }
 
 const exactOwners = new WeakSet<object>();

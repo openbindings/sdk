@@ -390,6 +390,7 @@ name = "openbindings-retained-size-qualification"
 version = "0.0.0"
 dependencies = [
  "openbindings",
+ "openbindings-internal-json",
 ]
 
 [[package]]
