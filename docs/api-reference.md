@@ -68,9 +68,15 @@ or obtain the ordinary refusal. Complete strings, containers and literals need
 no lookahead. Only the value and constant lookahead are inspected; following
 bytes, including invalid UTF-8, remain with the host. The byte allowance covers
 the prefix through `end`; depth and node limits are unchanged.
-After `Incomplete`, append at least the current buffer length before retrying,
-unless EOF or a limit is reached first, so repeated parsing stays linear in the
-value's size. The host owns separators, buffering and I/O. See the tested
+An impossible prefix returns `Invalid` immediately. After `Incomplete`, retain
+the buffer. For files or batches whose producers keep writing, append at least
+the current buffer length before retrying, unless EOF or a limit is reached
+first, to keep cumulative work linear. Waiting for that growth can stall a peer
+that sends one message and waits for a reply. Retrying on every read avoids that
+wait but reparses from the start each time and can make cumulative work quadratic.
+For newline-delimited JSON or MCP over stdio, find the protocol delimiter and
+parse the complete message once. The host owns separators, buffering and I/O.
+See the tested
 [whitespace-separated host example](../crates/openbindings/examples/json_sequence.rs).
 The TypeScript facade does not yet expose this primitive.
 

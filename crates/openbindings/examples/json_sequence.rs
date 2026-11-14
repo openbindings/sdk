@@ -1,4 +1,7 @@
 //! A host-owned whitespace-separated sequence with bounded input buffering.
+//! Geometric retries suit files or batches whose producer keeps writing. A
+//! request/reply peer can stall while this reader waits for more bytes; protocols
+//! with a delimiter should find it and parse each complete message once.
 use openbindings::{JsonLimits, JsonPrefixError, JsonValue};
 use std::io::{self, Read};
 

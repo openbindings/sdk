@@ -13,7 +13,7 @@
   target that is instance data (under `const`, `enum`, `default`, `examples`, or
   an unknown keyword) fails as `MissingReference` and is no longer compared as a
   schema. A standalone schema that kept definitions under a member such as
-  `schemas` or `components` must keep them under `$defs`.
+  `schemas` or `components` must keep them at a schema position such as `$defs`.
 
 ### Fixed
 
@@ -22,6 +22,15 @@
   to about 36 ms. Verdicts and reasons are unchanged. A union walk stops at its
   first incompatible variant.
 - The documented count of ordinary directional fixture groups is 65.
+
+- `JsonValue::parse_prefix` reports an invalid string escape or a malformed literal
+  as `Invalid` at once, at the defective byte. Before, an invalid escape inside an
+  unfinished string was reported as `Incomplete` until the closing quote arrived.
+- The guidance for `parse_prefix` now says what the retry rule assumes. Waiting
+  for the buffer to double keeps work linear for a file or a batch and stalls a
+  peer that sends one message and waits for the reply; retrying on every read
+  reparses from the start each time. A protocol with its own delimiter should find
+  the delimiter and parse once.
 
 ## 2026-11-13 panel decisions (unreleased)
 

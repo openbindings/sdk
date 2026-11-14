@@ -142,10 +142,16 @@ embedded number tokens and string units, and refuses duplicate object members.
 For a buffer that may contain several values, use
 `JsonValue::parse_prefix(&buffer)`. It returns the first value and its exclusive
 token-end byte offset, leaving trailing whitespace and subsequent bytes to the
-host. After `JsonPrefixError::Incomplete`, retain the buffer and append at least
-as many bytes as it already holds before retrying, unless EOF or a limit is
-reached first. This geometric rule keeps cumulative parsing work linear. At
-known EOF pass an incomplete remainder to `JsonValue::parse_with_limits`, which
+host. A prefix no continuation can make valid returns `Invalid` immediately.
+After `JsonPrefixError::Incomplete`, retain the buffer. For files or batches
+whose producers keep writing, append at least the current buffer length before
+retrying, unless EOF or a limit is reached first. This geometric rule keeps
+cumulative parsing work linear. Waiting for that growth can stall a peer that
+sends one message and waits for a reply. Retrying on every read avoids that wait
+but reparses from the start each time, so cumulative work can become quadratic.
+For a protocol with its own delimiter, such as newline-delimited JSON or MCP over
+stdio, find the delimiter and parse the complete message once. At known EOF pass
+an incomplete remainder to `JsonValue::parse_with_limits`, which
 accepts a final number or returns the usual refusal. Use
 `parse_prefix_with_limits` for explicit `JsonLimits`. The
 [sequence example](../crates/openbindings/examples/json_sequence.rs) owns bounded
