@@ -5,6 +5,7 @@ use crate::{ComparisonFailure as Failure, budget::Attempt};
 use openbindings::{JsonKind, JsonRef, JsonValue};
 use openbindings_internal_json::decimal::Decimal;
 use std::{cmp::Ordering, collections::BTreeMap};
+pub(crate) mod membership;
 
 pub(crate) type Name = Vec<u16>;
 pub(crate) type Object = BTreeMap<Name, Value>;

@@ -67,12 +67,12 @@ fn many_reference_comparisons_reuse_a_large_original_at_default_limits() {
         .map(|i| format!(r#""s{i}":{{"type":"string"}}"#))
         .collect::<Vec<_>>()
         .join(",");
-    let original = ComparisonContext::new(json(&format!(r#"{{"schemas":{{{entries}}}}}"#)));
+    let original = ComparisonContext::new(json(&format!(r#"{{"$defs":{{{entries}}}}}"#)));
     for i in 0..1000 {
-        let schema = json(&format!(r##"{{"$ref":"#/schemas/s{i}"}}"##));
+        let schema = json(&format!(r##"{{"$ref":"#/$defs/s{i}"}}"##));
         let left = original.schema(schema.clone());
         let offered = ComparisonContext::new(json(&format!(
-            r#"{{"schemas":{{"s{i}":{{"type":"number"}}}}}}"#
+            r#"{{"$defs":{{"s{i}":{{"type":"number"}}}}}}"#
         )));
         let right = offered.schema(schema);
         assert_eq!(
@@ -194,33 +194,32 @@ fn cancelled_and_refused_indexing_leave_contexts_usable() {
 #[test]
 fn retained_applicators_compare_normalized_targets_and_preserve_authored_data() {
     for content in [
-        r##""not":{"$ref":"#/schemas/S"}"##,
-        r##""if":{"$ref":"#/schemas/S"}"##,
-        r##""then":{"$ref":"#/schemas/S"}"##,
-        r##""else":{"$ref":"#/schemas/S"}"##,
-        r##""dependentSchemas":{"p":{"$ref":"#/schemas/S"}}"##,
-        r##""prefixItems":[{"$ref":"#/schemas/S"}]"##,
-        r##""contains":{"$ref":"#/schemas/S"}"##,
-        r##""patternProperties":{"p":{"$ref":"#/schemas/S"}}"##,
-        r##""propertyNames":{"$ref":"#/schemas/S"}"##,
-        r##""unevaluatedItems":{"$ref":"#/schemas/S"}"##,
-        r##""unevaluatedProperties":{"$ref":"#/schemas/S"}"##,
-        r##""$dynamicRef":"#/schemas/S""##,
+        r##""not":{"$ref":"#/$defs/S"}"##,
+        r##""if":{"$ref":"#/$defs/S"}"##,
+        r##""then":{"$ref":"#/$defs/S"}"##,
+        r##""else":{"$ref":"#/$defs/S"}"##,
+        r##""dependentSchemas":{"p":{"$ref":"#/$defs/S"}}"##,
+        r##""prefixItems":[{"$ref":"#/$defs/S"}]"##,
+        r##""contains":{"$ref":"#/$defs/S"}"##,
+        r##""patternProperties":{"p":{"$ref":"#/$defs/S"}}"##,
+        r##""propertyNames":{"$ref":"#/$defs/S"}"##,
+        r##""unevaluatedItems":{"$ref":"#/$defs/S"}"##,
+        r##""unevaluatedProperties":{"$ref":"#/$defs/S"}"##,
+        r##""$dynamicRef":"#/$defs/S""##,
     ] {
         let schema = json(&format!("{{{content}}}"));
         let a = ComparisonContext::new(json(
-            r#"{"schemas":{"S":{"type":"string","description":"a"}}}"#,
+            r#"{"$defs":{"S":{"type":"string","description":"a"}}}"#,
         ))
         .schema(schema.clone());
-        let b = ComparisonContext::new(json(r#"{"schemas":{"S":{"type":["string"]}}}"#))
+        let b = ComparisonContext::new(json(r#"{"$defs":{"S":{"type":["string"]}}}"#))
             .schema(schema.clone());
-        let c = ComparisonContext::new(json(r#"{"schemas":{"S":{"type":"number"}}}"#))
+        let c = ComparisonContext::new(json(r#"{"$defs":{"S":{"type":"number"}}}"#))
             .schema(schema.clone());
         let missing = ComparisonContext::new(json("{}")).schema(schema.clone());
-        let cycle = ComparisonContext::new(json(
-            r##"{"schemas":{"S":{"not":{"$ref":"#/schemas/S"}}}}"##,
-        ))
-        .schema(schema);
+        let cycle =
+            ComparisonContext::new(json(r##"{"$defs":{"S":{"not":{"$ref":"#/$defs/S"}}}}"##))
+                .schema(schema);
         assert_eq!(
             identical(Some(&a), Some(&b), &ComparisonLimits::default()),
             Ok(true),
@@ -336,7 +335,7 @@ fn carrier_selections_resolve_private_declarations_and_document_pointers() {
             Ok(true),
         ),
         (
-            r##"{"components":{"P":{"$ref":"#/components/Q"},"Q":{"type":"string"}}}"##,
+            r##"{"components":{"P":{"$ref":"#/$defs/Q"}},"$defs":{"Q":{"type":"string"}}}"##,
             Err(ComparisonFailureKind::MissingReference),
         ),
     ] {

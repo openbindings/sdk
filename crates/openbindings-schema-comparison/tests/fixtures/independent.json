@@ -85,8 +85,8 @@
     {
       "id": "ref-replaces-assertion-sibling",
       "left": {
-        "schema_json": "{\"$ref\":\"#/Target\",\"type\":\"string\"}",
-        "document_root_json": "{\"Target\":{\"type\":\"integer\"}}"
+        "schema_json": "{\"$ref\":\"#/$defs/Target\",\"type\":\"string\"}",
+        "document_root_json": "{\"$defs\":{\"Target\":{\"type\":\"integer\"}}}"
       },
       "right": {
         "schema_json": "{\"type\":\"integer\"}"
@@ -97,8 +97,8 @@
     {
       "id": "ref-replaces-outside-sibling",
       "left": {
-        "schema_json": "{\"$ref\":\"#/Target\",\"pattern\":\"x\"}",
-        "document_root_json": "{\"Target\":{\"type\":\"integer\"}}"
+        "schema_json": "{\"$ref\":\"#/$defs/Target\",\"pattern\":\"x\"}",
+        "document_root_json": "{\"$defs\":{\"Target\":{\"type\":\"integer\"}}}"
       },
       "right": {
         "schema_json": "{\"type\":[\"integer\"]}"
@@ -109,8 +109,8 @@
     {
       "id": "ref-discards-unreached-sibling-work",
       "left": {
-        "schema_json": "{\"$ref\":\"#/Target\",\"properties\":{\"x\":{\"$ref\":\"https://absent.invalid/s\"}}}",
-        "document_root_json": "{\"Target\":{\"type\":\"integer\"}}"
+        "schema_json": "{\"$ref\":\"#/$defs/Target\",\"properties\":{\"x\":{\"$ref\":\"https://absent.invalid/s\"}}}",
+        "document_root_json": "{\"$defs\":{\"Target\":{\"type\":\"integer\"}}}"
       },
       "right": {
         "schema_json": "{\"type\":\"integer\"}"
@@ -251,12 +251,12 @@
     {
       "id": "same-handle-different-root",
       "left": {
-        "schema_json": "{\"$ref\":\"#/T\"}",
-        "document_root_json": "{\"T\":{\"type\":\"string\"}}"
+        "schema_json": "{\"$ref\":\"#/$defs/T\"}",
+        "document_root_json": "{\"$defs\":{\"T\":{\"type\":\"string\"}}}"
       },
       "right": {
-        "schema_json": "{\"$ref\":\"#/T\"}",
-        "document_root_json": "{\"T\":{\"type\":\"integer\"}}"
+        "schema_json": "{\"$ref\":\"#/$defs/T\"}",
+        "document_root_json": "{\"$defs\":{\"T\":{\"type\":\"integer\"}}}"
       },
       "expected": "Different",
       "reason": "Memoization must include root context even if selected JsonValue handle is shared.",
@@ -486,8 +486,8 @@
     {
       "id": "ref-union-merge-refuses",
       "left": {
-        "schema_json": "{\"allOf\":[{\"$ref\":\"#/T\"},{\"type\":\"string\"}]}",
-        "document_root_json": "{\"T\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}}"
+        "schema_json": "{\"allOf\":[{\"$ref\":\"#/$defs/T\"},{\"type\":\"string\"}]}",
+        "document_root_json": "{\"$defs\":{\"T\":{\"oneOf\":[{\"type\":\"string\"},{\"type\":\"integer\"}]}}}"
       },
       "right": {
         "schema_json": "{\"type\":\"string\"}"
@@ -498,8 +498,8 @@
     {
       "id": "ref-outside-retains-allof",
       "left": {
-        "schema_json": "{\"allOf\":[{\"$ref\":\"#/T\"},{\"minLength\":1}]}",
-        "document_root_json": "{\"T\":{\"pattern\":\"x\"}}"
+        "schema_json": "{\"allOf\":[{\"$ref\":\"#/$defs/T\"},{\"minLength\":1}]}",
+        "document_root_json": "{\"$defs\":{\"T\":{\"pattern\":\"x\"}}}"
       },
       "right": {
         "schema_json": "{\"allOf\":[{\"pattern\":\"x\"},{\"minLength\":1}]}"
@@ -708,8 +708,8 @@
     {
       "id": "additional-ref-true-vs-object",
       "left": {
-        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/T\"}}",
-        "document_root_json": "{\"T\":true}"
+        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/$defs/T\"}}",
+        "document_root_json": "{\"$defs\":{\"T\":true}}"
       },
       "right": {
         "schema_json": "{\"additionalProperties\":{}}"
@@ -720,8 +720,8 @@
     {
       "id": "additional-ref-true-vs-literal",
       "left": {
-        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/T\"}}",
-        "document_root_json": "{\"T\":true}"
+        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/$defs/T\"}}",
+        "document_root_json": "{\"$defs\":{\"T\":true}}"
       },
       "right": {
         "schema_json": "{\"additionalProperties\":true}"
@@ -732,8 +732,8 @@
     {
       "id": "additional-ref-false-vs-object",
       "left": {
-        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/T\"}}",
-        "document_root_json": "{\"T\":false}"
+        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/$defs/T\"}}",
+        "document_root_json": "{\"$defs\":{\"T\":false}}"
       },
       "right": {
         "schema_json": "{\"additionalProperties\":{\"not\":{}}}"
@@ -744,8 +744,8 @@
     {
       "id": "additional-ref-false-vs-literal",
       "left": {
-        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/T\"}}",
-        "document_root_json": "{\"T\":false}"
+        "schema_json": "{\"additionalProperties\":{\"$ref\":\"#/$defs/T\"}}",
+        "document_root_json": "{\"$defs\":{\"T\":false}}"
       },
       "right": {
         "schema_json": "{\"additionalProperties\":false}"

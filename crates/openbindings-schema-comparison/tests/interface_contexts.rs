@@ -58,6 +58,69 @@ fn interface_uses_each_callers_base_resources_and_relative_references_in_both_en
         assert_eq!(operations.len(), 2);
         assert_eq!(operations[0].role(), Some(OperationRole::Realized));
         assert_eq!(
+            operations[0].input().unwrap().as_ref().unwrap_err().kind(),
+            ComparisonFailureKind::MissingReference
+        );
+        assert_eq!(
+            operations[0].output().unwrap().as_ref().unwrap_err().kind(),
+            ComparisonFailureKind::MissingReference
+        );
+        assert_eq!(operations[1].role(), Some(OperationRole::Consumed));
+        assert_eq!(
+            operations[1].input().unwrap().as_ref().unwrap_err().kind(),
+            ComparisonFailureKind::MissingReference
+        );
+        assert_eq!(
+            operations[1].output().unwrap().as_ref().unwrap_err().kind(),
+            ComparisonFailureKind::MissingReference
+        );
+    }
+}
+
+#[test]
+fn interface_uses_each_callers_supplied_resources_and_relative_references_in_both_entry_points() {
+    let document = doc(
+        r#"{"openbindings":"0.2.0","operations":{"op":{"input":{"$ref":"https://schema.test/start"},"output":{"$ref":"https://schema.test/start"}}},"schemas":{"Narrow":{"type":"integer"},"Wide":{"type":"number"}}}"#,
+    );
+    let required = context(&document)
+        .with_base("https://required.test/root")
+        .with_resource(
+            "https://schema.test/start",
+            JsonValue::parse(r#"{"$ref":"row"}"#).unwrap(),
+        )
+        .with_resource(
+            "https://schema.test/row",
+            JsonValue::parse(r#"{"type":"integer"}"#).unwrap(),
+        );
+    let provided = context(&document)
+        .with_base("https://provided.test/root")
+        .with_resource(
+            "https://schema.test/start",
+            JsonValue::parse(r#"{"$ref":"row"}"#).unwrap(),
+        )
+        .with_resource(
+            "https://schema.test/row",
+            JsonValue::parse(r#"{"type":"number"}"#).unwrap(),
+        );
+    let role = |_: &_, _: Option<&_>| Some(OperationRole::Both);
+    let limits = ComparisonLimits::default();
+    for report in [
+        check_interface(&document, &document, &required, &provided, &role, &limits).unwrap(),
+        check_interface_with_control(
+            &document,
+            &document,
+            &required,
+            &provided,
+            &role,
+            &limits,
+            &AtomicBool::new(false),
+        )
+        .unwrap(),
+    ] {
+        let operations = report.operations();
+        assert_eq!(operations.len(), 2);
+        assert_eq!(operations[0].role(), Some(OperationRole::Realized));
+        assert_eq!(
             operations[0].input().unwrap().as_ref().unwrap().verdict(),
             Verdict::Compatible
         );

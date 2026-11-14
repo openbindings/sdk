@@ -420,6 +420,10 @@ present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `finding()` accessors. `ComparisonContext::new(root)` retains a reusable document;
 `with_base` and `with_resource` configure it, and `schema(exact_value)` selects a
 `SchemaInput`. `SchemaInput::new` remains a convenience for single comparisons;
+`with_base` sets the initial base of a standalone schema root and is ignored for
+an OBI root. Its document resource cannot be named by a caller URI. Followed
+references must reach schema positions; pointers into instance or carrier data
+fail with `MissingReference` in every comparison mode.
 `context()` exposes its retained context. Indexing is lazy, shared within each
 call and reusable across calls. Failed and cancelled work leaves contexts usable.
 `check_interface` and `check_interface_with_control` take required/provided
@@ -428,7 +432,8 @@ conformant documents, their respective `&ComparisonContext`s, and a callback
 required operation and each distinct provided match, or `None` when missing.
 Each context must retain the exact root of its paired proof; an equal but
 separately parsed root fails with `ContextMismatch` before callbacks. Initial
-cancellation takes precedence. Bases and external resources come from the caller.
+cancellation takes precedence. External resources come from the caller and use
+their supplied URIs as bases, including for relative references between resources.
 The callback selects realized, consumed, both, or excluded for that match. Every distinct
 provided match is retained, independent of alias order, with output then input
 results including failures. `operations()`, `issues()` and each issue's

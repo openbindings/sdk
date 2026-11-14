@@ -37,7 +37,9 @@ impl ComparisonContext {
         }
     }
 
-    /// Set an absolute initial base. Changing configuration starts a fresh index.
+    /// Set an absolute initial base for a standalone schema root. Ignored for
+    /// an OpenBindings document root: its document resource cannot be named by
+    /// a caller-supplied URI. Changing configuration starts a fresh index.
     #[must_use]
     pub fn with_base(mut self, base: impl Into<String>) -> Self {
         Arc::make_mut(&mut self.data).base = Some(base.into());
@@ -86,7 +88,8 @@ impl SchemaInput {
     pub fn new(schema: JsonValue, document: JsonValue) -> Self {
         ComparisonContext::new(document).schema(schema)
     }
-    /// Set the absolute starting base for this input.
+    /// Set the absolute starting base for a standalone schema root. Ignored for
+    /// an OpenBindings document root, as in [`ComparisonContext::with_base`].
     #[must_use]
     pub fn with_base(mut self, base: impl Into<String>) -> Self {
         self.context = self.context.with_base(base);

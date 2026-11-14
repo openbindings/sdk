@@ -71,6 +71,36 @@ The decision receipt records all release boundaries, conservative sites left
 cumulative, commands and raw samples. These observations are not a release or
 hosted-platform performance qualification.
 
+## Schema comparison membership (2026-11-14)
+
+Directional enum membership uses a sorted vector of borrowed exact instance
+values, built by fallible heapsort, and binary searches. Required names use the
+order normalization already supplies. For combined set sizes N this needs at
+most O(N log N) comparisons; value sizes still determine each exact comparison's
+work. Single lookups and sets of at most eight values use linear scans. No
+input-value hashing or lossy serialization participates in equality. Authored
+enum order and first-failure reasons are retained. Union search stops at its
+first authored incompatible variant.
+
+The review witness compares N strings against 2N strings, with all matching
+values after a disjoint prefix. On Darwin arm64, Rust 1.99.0, release thin LTO,
+one codegen unit, the unchanged `2351ac2` code and repaired code measured:
+
+| N | Before ms | After ms | Verdict |
+| ---: | ---: | ---: | --- |
+| 2,000 | 75.082 | 1.568 | Compatible |
+| 8,000 | 891.613 | 6.757 | Compatible |
+| 32,000 | 13,792.196 | 30.785 | Compatible |
+
+These are single fresh-process samples, with inputs parsed before timing and no
+concurrent build or test. Small sets, required names, const against enum and
+reference paths were measured the same way: ten alternating baseline and
+candidate pairs showed small-case median ratios from 0.992 to 1.022, with pair
+ranges crossing 1.0 for each; the 8,000-name required case improved from
+324.091 ms to 4.672 ms. These are local observations, not a
+portable timing guarantee. At this pin, `tools/evaluator-bench` has no
+schema-comparison dependency or directional-comparison workloads.
+
 ## Prepared value contracts
 
 Retain a `PreparedSchema` for repeated validation. Reusing a conformant

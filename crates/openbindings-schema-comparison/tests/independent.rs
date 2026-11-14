@@ -125,7 +125,7 @@ fn source_projection_and_owned_core_schema_consumers_keep_their_own_roots() {
         SchemaInput::new(source.get("offered").unwrap().to_owned(), source.clone())
     }
     let offered = project(&json(
-        r##"{"offered":{"$ref":"#/defs/Input"},"defs":{"Input":{"type":"integer"}}}"##,
+        r##"{"offered":{"$ref":"#/$defs/Input"},"$defs":{"Input":{"type":"integer"}}}"##,
     ));
     let existing = {
         let document=openbindings::validate_document(br##"{"openbindings":"0.2.0","operations":{"read":{"input":{"$ref":"#/schemas/Input"}}},"schemas":{"Input":{"type":"integer"}}}"##).unwrap();

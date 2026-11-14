@@ -126,7 +126,7 @@ and does not reuse core `$id` interpretation or value evaluation. Its identity a
 is profile identity, not general schema equivalence or a verified reuse claim.
 
 The comparison fixture harness passes 30 ordinary and 10 exact identity groups,
-plus all 62 ordinary and 29 exact directional groups (including expected schema
+plus all 65 ordinary and 29 exact directional groups (including expected schema
 errors), with no skipped groups. Directional verdicts distinguish compatible,
 incompatible and indeterminate; interface checking retains every operation,
 every distinct alias match, realization/consumption selected by a callback on

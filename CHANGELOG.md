@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-14 review repairs (unreleased)
+
+### Changed
+
+- A comparison context whose root is an OpenBindings document ignores a caller-set
+  base. The document's own resource cannot be named by any reference
+  (specification section 7.2), so a reference to it through a retrieval address is
+  a missing reference, as it is without the base. A base on a standalone schema
+  root keeps its meaning.
+- Comparison follows a reference only to a schema position of its resource. A
+  target that is instance data (under `const`, `enum`, `default`, `examples`, or
+  an unknown keyword) fails as `MissingReference` and is no longer compared as a
+  schema. A standalone schema that kept definitions under a member such as
+  `schemas` or `components` must keep them under `$defs`.
+
+### Fixed
+
+- Directional enum, const and required membership uses an ordered lookup in place
+  of a linear search for each value: 32,000 strings against 64,000 fell from 13.4 s
+  to about 36 ms. Verdicts and reasons are unchanged. A union walk stops at its
+  first incompatible variant.
+- The documented count of ordinary directional fixture groups is 65.
+
 ## 2026-11-13 panel decisions (unreleased)
 
 ### Changed

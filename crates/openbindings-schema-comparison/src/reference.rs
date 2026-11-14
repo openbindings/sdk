@@ -240,6 +240,9 @@ fn context_roots(context: &ComparisonContext) -> impl Iterator<Item = &JsonValue
     std::iter::once(&context.data.document)
         .chain(context.data.resources.iter().map(|(_, value)| value))
 }
+fn is_obi(root: JsonRef<'_>) -> bool {
+    root.get("openbindings").is_some() && root.get("operations").is_some()
+}
 // Only a recognized schema edge can make an enclosing value a schema. In
 // particular /schemas/X and /operations/X/input stop before their carrier root.
 fn enclosing(schema: JsonRef<'_>) -> Option<JsonRef<'_>> {
@@ -269,7 +272,7 @@ fn enclosing(schema: JsonRef<'_>) -> Option<JsonRef<'_>> {
 }
 fn configured_top(root: JsonRef<'_>, top: JsonRef<'_>, obi: bool) -> bool {
     let same = |a, b| backend::occurrence(a) == backend::occurrence(b);
-    if !obi || root.get("openbindings").is_none() || root.get("operations").is_none() {
+    if !obi || !is_obi(root) {
         return same(root, top);
     }
     let Some(parent) = backend::parent(top) else {
@@ -346,6 +349,7 @@ impl Index {
                 .data
                 .base
                 .as_deref()
+                .filter(|_| !is_obi(context.data.document.view()))
                 .map(|s| identity(s, attempt))
                 .transpose()?,
             document: context.data.document.clone(),
@@ -516,10 +520,7 @@ impl Index {
         let mut roots = attempt.vector(1)?;
         if scope == 0 && self.parent.is_some() {
             roots.push(self.local_root.as_ref().expect("detached root").clone());
-        } else if scope == 0
-            && root.get("openbindings").is_some()
-            && root.get("operations").is_some()
-        {
+        } else if scope == 0 && is_obi(root.view()) {
             if let Some(schemas) = root.get("schemas").and_then(|v| v.members()) {
                 for schema in schemas {
                     attempt.allocate(2 * std::mem::size_of::<JsonValue>())?;
@@ -731,7 +732,7 @@ impl Index {
             }
         }
         let target = if decoded.is_empty() || decoded.starts_with('/') {
-            fragment_target(&self.entries[scope].document, fragment, attempt)?
+            fragment_target(&self.entries[scope].document, &decoded, scope == 0, attempt)?
         } else {
             self.anchors(scope, attempt)?;
             attempt.work(
@@ -832,20 +833,16 @@ impl Index {
 }
 fn fragment_target(
     root: &JsonValue,
-    fragment: &str,
+    pointer: &str,
+    obi: bool,
     attempt: &mut Attempt<'_>,
 ) -> Result<JsonValue, Failure> {
-    attempt.work(fragment.len().saturating_mul(4).saturating_add(1))?;
-    attempt.allocate(fragment.len())?;
-    let pointer = uri::decode_fragment(fragment).ok_or(FailureKind::InvalidReference)?;
-    if pointer.is_empty() {
-        return Ok(root.clone());
-    }
-    let path = pointer
-        .strip_prefix('/')
-        .ok_or(FailureKind::UnsupportedReference)?;
+    attempt.work(pointer.len().saturating_mul(4).saturating_add(1))?;
+    let obi = obi && is_obi(root.view());
+    let mut position = (!obi).then_some(SchemaSelector::Direct);
     let mut node = root.view();
-    for segment in path.split('/') {
+    let path = pointer.strip_prefix('/').unwrap_or(pointer);
+    for segment in path.split('/').filter(|_| !pointer.is_empty()) {
         attempt.work(segment.len().saturating_mul(4).saturating_add(1))?;
         let mut decoded = attempt.vector::<u16>(segment.len())?;
         let mut units = segment.encode_utf16();
@@ -860,7 +857,7 @@ fn fragment_target(
                 unit
             });
         }
-        node = match node.kind() {
+        let child = match node.kind() {
             JsonKind::Object => {
                 let mut found = None;
                 attempt.allocate(decoded.len().saturating_mul(8))?;
@@ -914,6 +911,35 @@ fn fragment_target(
             }
             _ => return Err(Failure::from(FailureKind::MissingReference)),
         };
+        // Track schema placement during the pointer walk, reusing the core and
+        // evaluator's normative selectors. Map/array containers are not schemas.
+        position = match position {
+            Some(SchemaSelector::Direct) if node.kind() == JsonKind::Object => {
+                attempt.work(SCHEMA_SELECTORS.len())?;
+                let name = backend::member_name(child).and_then(|n| n.as_str());
+                SCHEMA_SELECTORS
+                    .iter()
+                    .find_map(|(key, selector)| (Some(*key) == name).then_some(*selector))
+            }
+            Some(SchemaSelector::Map | SchemaSelector::MapOrStringArray)
+                if node.kind() == JsonKind::Object =>
+            {
+                Some(SchemaSelector::Direct)
+            }
+            Some(SchemaSelector::Array) if node.kind() == JsonKind::Array => {
+                Some(SchemaSelector::Direct)
+            }
+            _ => None,
+        };
+        if position.is_none() && obi && configured_top(root.view(), child, true) {
+            position = Some(SchemaSelector::Direct);
+        }
+        node = child;
+    }
+    if position != Some(SchemaSelector::Direct)
+        || !matches!(node.kind(), JsonKind::Object | JsonKind::Boolean)
+    {
+        return Err(FailureKind::MissingReference.into());
     }
     Ok(node.to_owned())
 }
@@ -928,10 +954,10 @@ mod tests {
     }
     #[test]
     fn references_use_each_supplied_root_base_and_external_context() {
-        let selected = json(r##"{"$ref":"#/schemas/A"}"##);
+        let selected = json(r##"{"$ref":"#/$defs/A"}"##);
         let input = SchemaInput::new(
             selected.clone(),
-            json(r##"{"schemas":{"A":{"type":"string"}}}"##),
+            json(r##"{"$defs":{"A":{"type":"string"}}}"##),
         )
         .with_base("https://example.test/root")
         .with_resource(
@@ -942,7 +968,7 @@ mod tests {
         let control = AtomicBool::new(false);
         let mut attempt = Attempt::new(ComparisonLimits::default(), &control);
         let resources = Resources::new(&input, crate::ComparisonSide::Left, &mut attempt).unwrap();
-        let reference = json(r##""#/schemas/A""##);
+        let reference = json(r##""#/$defs/A""##);
         assert_eq!(
             resources
                 .resolve(0, reference.view(), &mut attempt)
@@ -957,7 +983,7 @@ mod tests {
             .resolve(scope, a.get("$ref").unwrap(), &mut attempt)
             .unwrap();
         assert_eq!(b.text(), "false");
-        let other = SchemaInput::new(selected, json(r##"{"schemas":{"A":true}}"##));
+        let other = SchemaInput::new(selected, json(r##"{"$defs":{"A":true}}"##));
         assert_eq!(
             Resources::new(&other, crate::ComparisonSide::Left, &mut attempt)
                 .unwrap()
@@ -973,11 +999,13 @@ mod tests {
         let control = AtomicBool::new(false);
         let mut attempt = Attempt::new(ComparisonLimits::default(), &control);
         let input = {
-            let schema = json(r##"{"a/b":[true,false],"duplicate":true,"duplicate":false}"##);
+            let schema = json(
+                r##"{"$defs":{"a/b":{"prefixItems":[true,false]}},"duplicate":true,"duplicate":false}"##,
+            );
             SchemaInput::new(schema.clone(), schema)
         };
         let resources = Resources::new(&input, crate::ComparisonSide::Left, &mut attempt).unwrap();
-        let reference = json(r##""#/a~1b/1""##);
+        let reference = json(r##""#/$defs/a~1b/prefixItems/1""##);
         assert_eq!(
             resources
                 .resolve(0, reference.view(), &mut attempt)

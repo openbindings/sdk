@@ -11,7 +11,8 @@ pub enum ComparisonFailureKind {
     DuplicateMember,
     /// Reference syntax or the supplied reference context is invalid.
     InvalidReference,
-    /// Explicitly supplied content does not provide the requested target.
+    /// Explicitly supplied content does not provide the requested schema target,
+    /// including when a pointer reaches a non-schema position.
     MissingReference,
     /// The reference form is valid but this profile resolver does not implement it.
     UnsupportedReference,
