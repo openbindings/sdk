@@ -3,6 +3,19 @@
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 pub(crate) const URI: &str = "urn:openbindings:bundle";
+#[cfg(test)]
+thread_local! {static COMPACTION:std::cell::Cell<bool>=const{std::cell::Cell::new(true)};}
+#[cfg(test)]
+pub(super) fn without_compaction<T>(run: impl FnOnce() -> T) -> T {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            COMPACTION.set(self.0);
+        }
+    }
+    let _restore = Restore(COMPACTION.replace(false));
+    run()
+}
 pub(crate) struct Resource {
     pub(crate) definitions: Map<String, Value>,
 }
@@ -134,7 +147,18 @@ fn rewrite(
     Ok(())
 }
 impl Bundle {
-    pub(crate) fn document(self) -> Value {
+    pub(crate) fn document(
+        mut self,
+        control: &dyn openbindings::WorkControl,
+    ) -> Result<Value, openbindings::Cancelled> {
+        #[cfg(not(test))]
+        let removed = self.inline_leaves(control)?;
+        #[cfg(test)]
+        let removed = if COMPACTION.get() {
+            self.inline_leaves(control)?
+        } else {
+            vec![false; self.names.len()]
+        };
         let mut root = Map::new();
         root.insert("$id".into(), Value::String(URI.into()));
         root.insert(
@@ -147,15 +171,222 @@ impl Bundle {
         );
         root.insert(
             "$defs".into(),
-            Value::Object(self.names.into_iter().zip(self.schemas).collect()),
+            Value::Object(
+                self.names
+                    .into_iter()
+                    .zip(self.schemas)
+                    .zip(removed)
+                    .filter_map(|(definition, removed)| (!removed).then_some(definition))
+                    .collect(),
+            ),
         );
-        Value::Object(root)
+        Ok(Value::Object(root))
+    }
+
+    // Projection gives every schema position a definition. Leaving a separate
+    // reference for each scalar property makes the backend retain a resolver,
+    // placeholder and target for each one. Move shallow, single-use leaves into
+    // their sole use instead. Two rounds cover scalar properties and array items
+    // without turning long chains into deeply nested compiler input. The original
+    // graph remains the conservative evaluation-depth proof, computed beforehand.
+    fn inline_leaves(
+        &mut self,
+        control: &dyn openbindings::WorkControl,
+    ) -> Result<Vec<bool>, openbindings::Cancelled> {
+        let indices: HashMap<_, _> = self
+            .names
+            .iter()
+            .enumerate()
+            .map(|(index, name)| (name.as_str(), index))
+            .collect();
+        let mut incoming = vec![0usize; self.names.len()];
+        incoming[self.entry as usize] = 1;
+        for definition in &self.definitions {
+            control.check()?;
+            for edge in &definition.edges {
+                incoming[edge.to as usize] += 1;
+            }
+        }
+        let mut removed = vec![false; self.names.len()];
+        for _ in 0..2 {
+            let mut leaves = vec![false; self.names.len()];
+            for (index, definition) in self.definitions.iter().enumerate() {
+                control.check()?;
+                leaves[index] = index != self.entry as usize
+                    && !removed[index]
+                    && incoming[index] == 1
+                    && definition
+                        .edges
+                        .iter()
+                        .all(|edge| removed[edge.to as usize])
+                    && shallow(&self.schemas[index], 4);
+            }
+            for index in 0..self.schemas.len() {
+                control.check()?;
+                if removed[index] || leaves[index] {
+                    continue;
+                }
+                let mut schema = std::mem::take(&mut self.schemas[index]);
+                inline_schema(
+                    &mut schema,
+                    &indices,
+                    &leaves,
+                    &mut removed,
+                    &mut self.schemas,
+                );
+                self.schemas[index] = schema;
+            }
+        }
+        Ok(removed)
+    }
+}
+
+fn shallow(value: &Value, remaining: usize) -> bool {
+    match value {
+        Value::Object(fields) => {
+            remaining > 0 && fields.values().all(|v| shallow(v, remaining - 1))
+        }
+        Value::Array(items) => remaining > 0 && items.iter().all(|v| shallow(v, remaining - 1)),
+        _ => true,
+    }
+}
+
+fn inline_schema(
+    value: &mut Value,
+    indices: &HashMap<&str, usize>,
+    leaves: &[bool],
+    removed: &mut [bool],
+    definitions: &mut [Value],
+) {
+    let Value::Object(schema) = value else { return };
+    let target = schema
+        .get("$ref")
+        .and_then(Value::as_str)
+        .and_then(|reference| reference.strip_prefix("#/$defs/"))
+        .and_then(|name| indices.get(name))
+        .copied();
+    if schema.len() == 1
+        && let Some(target) = target.filter(|&target| leaves[target])
+    {
+        *value = std::mem::take(&mut definitions[target]);
+        removed[target] = true;
+        return;
+    }
+    // Visit schema positions only; a reference-looking object in a literal or
+    // annotation is data, and must retain its exact value.
+    for (keyword, operand) in schema {
+        match (keyword.as_str(), operand) {
+            ("properties" | "patternProperties" | "dependentSchemas", Value::Object(children)) => {
+                for child in children.values_mut() {
+                    inline_schema(child, indices, leaves, removed, definitions);
+                }
+            }
+            ("allOf" | "anyOf" | "oneOf" | "prefixItems", Value::Array(children)) => {
+                for child in children {
+                    inline_schema(child, indices, leaves, removed, definitions);
+                }
+            }
+            (
+                "additionalProperties"
+                | "propertyNames"
+                | "items"
+                | "contains"
+                | "not"
+                | "if"
+                | "then"
+                | "else",
+                child,
+            ) => {
+                inline_schema(child, indices, leaves, removed, definitions);
+            }
+            _ => {}
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn inlining_keeps_long_chains_flat_and_observes_cancellation() {
+        let definitions: Map<String, Value> = (0..128)
+            .map(|index| {
+                let schema = if index == 127 {
+                    Value::Bool(true)
+                } else {
+                    serde_json::json!({"$ref":format!("urn:test#/$defs/n{}", index + 1)})
+                };
+                (format!("n{index}"), schema)
+            })
+            .collect();
+        let make = || {
+            bundle(
+                vec![Resource {
+                    definitions: definitions.clone(),
+                }],
+                "urn:test#/$defs/n0",
+            )
+            .unwrap()
+        };
+        assert!(
+            make()
+                .document(&std::sync::atomic::AtomicBool::new(true))
+                .is_err()
+        );
+        let document = make()
+            .document(&std::sync::atomic::AtomicBool::new(false))
+            .unwrap();
+        assert_eq!(document["$defs"].as_object().unwrap().len(), 126);
+        assert!(
+            jsonschema::validator_for(&document)
+                .unwrap()
+                .is_valid(&Value::Null)
+        );
+    }
+
+    #[test]
+    fn inlining_preserves_shared_targets_cycles_ref_siblings_and_literals() {
+        let definitions = serde_json::json!({
+            "n0":{"type":"object","properties":{
+                "single":{"$ref":"urn:test#/$defs/n1"},
+                "sharedA":{"$ref":"urn:test#/$defs/n2"},
+                "sharedB":{"$ref":"urn:test#/$defs/n2"},
+                "recursive":{"$ref":"urn:test#/$defs/n3"},
+                "withSibling":{"$ref":"urn:test#/$defs/n4","maxLength":3},
+                "literal":{"const":{"$ref":"#/$defs/n1"}}
+            }},
+            "n1":{"type":"string","minLength":2},
+            "n2":{"type":"boolean"},
+            "n3":{"type":"object","properties":{"next":{"$ref":"urn:test#/$defs/n3"}}},
+            "n4":{"type":"string"}
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let bundle = bundle(vec![Resource { definitions }], "urn:test#/$defs/n0").unwrap();
+        let document = bundle
+            .document(&std::sync::atomic::AtomicBool::new(false))
+            .unwrap();
+        let defs = document["$defs"].as_object().unwrap();
+        assert!(!defs.contains_key("n1"));
+        for retained in ["n0", "n2", "n3", "n4"] {
+            assert!(defs.contains_key(retained));
+        }
+        let properties = &defs["n0"]["properties"];
+        assert_eq!(
+            properties["single"],
+            serde_json::json!({"type":"string","minLength":2})
+        );
+        assert_eq!(properties["literal"]["const"]["$ref"], "#/$defs/n1");
+        let validator = jsonschema::validator_for(&document).unwrap();
+        assert!(
+            validator.is_valid(
+                &serde_json::json!({"single":"ok","sharedA":true,"recursive":{"next":{}}})
+            )
+        );
+        assert!(!validator.is_valid(&serde_json::json!({"single":"x"})));
+        assert!(!validator.is_valid(&serde_json::json!({"withSibling":"long"})));
+    }
     #[test]
     fn static_edges_keep_same_instance_and_advancing_weights_without_reading_literals() {
         let fixtures = [

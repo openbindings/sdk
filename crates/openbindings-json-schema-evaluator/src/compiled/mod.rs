@@ -8,6 +8,10 @@ mod operands;
 mod pass;
 mod pattern;
 mod recursion;
+#[cfg(test)]
+pub(super) fn without_projection_compaction<T>(run: impl FnOnce() -> T) -> T {
+    bundle::without_compaction(run)
+}
 pub(super) const MAXIMUM_NODES: usize = 100_000;
 // A pre-entry work estimate, independent of scratch and caller work controls.
 // 10 million lost a valid source-puller verdict. 40 million keeps the corpus
@@ -502,7 +506,7 @@ impl Compiler {
             .map_err(|_| program_failure())?
             .deepest(1024);
         control.check()?;
-        let document = bundle.document();
+        let document = bundle.document(control)?;
         let first = memory.first();
         let keywords = operands.keywords(memory);
         keywords.patterns().complete(control)?;

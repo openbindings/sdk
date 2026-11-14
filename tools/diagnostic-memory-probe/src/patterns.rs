@@ -194,16 +194,17 @@ pub fn run() {
 // which the pattern memory did not count; each now holds the 10,128 bytes it
 // counts.
 // Preparing them must keep no more than the same document with the patterns
-// as annotations, those bytes and 512 bytes for each `pattern` keyword's
-// compiled node and site (about 400 measured), and peak within that and the
-// forms preparation keeps while it reads them, the default
-// total_pattern_bytes.
+// as annotations, those bytes and 576 bytes for each `pattern` keyword's
+// compiled node and site (about 530 measured against a control whose
+// annotation-only properties are folded into their parent and so keep no
+// definition of their own), and peak within that and the forms preparation
+// keeps while it reads them, the default total_pattern_bytes.
 fn run_matchers() {
     let count = 380;
     let literal = |i: usize| format!("^t{i:03}x{}$", "a".repeat(9_995));
     let input = properties((0..count).map(literal));
     let matchers = count * (104 + 24 + 10_000);
-    let keywords = count * 512;
+    let keywords = count * 576;
     let value = JsonValue::parse(format!(r#"{{"p7":"t007x{}"}}"#, "a".repeat(9_995))).unwrap();
     let proof = conformant(&input);
     let control = conformant(&input.replace(r#""pattern""#, r#""description""#));
