@@ -704,6 +704,8 @@ fn unions(
     } else {
         (cv, tv, ck, "candidate", "target")
     };
+    let mut incompatible = None;
+    let mut indeterminate = None;
     for (index, variant) in flow.iter().enumerate() {
         attempt.work(1)?;
         let mut uncertain = None;
@@ -729,23 +731,32 @@ fn unions(
         }
         if !found {
             if let Some(result) = uncertain {
-                return nested(
-                    &report!(attempt, "{key}: {side} variant {index}"),
-                    result,
-                    attempt,
-                );
+                if indeterminate.is_none() {
+                    indeterminate = Some(nested(
+                        &report!(attempt, "{key}: {side} variant {index}"),
+                        result,
+                        attempt,
+                    )?);
+                }
+                continue;
             }
-            return answer(
-                Verdict::Incompatible,
-                report!(
+            if incompatible.is_none() {
+                incompatible = Some(answer(
+                    Verdict::Incompatible,
+                    report!(
+                        attempt,
+                        "{key}: {side} variant {index} has no compatible {other} variant"
+                    ),
                     attempt,
-                    "{key}: {side} variant {index} has no compatible {other} variant"
-                ),
-                attempt,
-            );
+                )?);
+            }
         }
     }
-    Ok(Comparison::compatible())
+    // Flow is universal: a definite failure dominates uncertainty. Retain
+    // the first authored index within the deciding class for diagnostics.
+    Ok(incompatible
+        .or(indeterminate)
+        .unwrap_or_else(Comparison::compatible))
 }
 // Exact JSON diagnostics. Non-scalar UTF-16 units are escaped, never replaced.
 fn quote(name: &[u16], attempt: &mut Attempt<'_>) -> Result<String, Failure> {

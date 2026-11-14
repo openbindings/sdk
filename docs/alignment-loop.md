@@ -7,7 +7,7 @@ separate from feature-branch development.
 
 The normative target is specification
 `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` and adopted interfaces
-`484c9399207de99bd56921cead5f44a7b5740d9e`. A newer remote revision does not silently
+`a3c19658fc89815d7a417eae29ba31fd4e930daf`. A newer remote revision does not silently
 change the target. Any deliberate re-pin needs its own delta and qualification.
 
 ## Repeat for each implementation slice

@@ -1,7 +1,7 @@
 {
   "format": "openbindings.sdk-evaluator-alignment@1",
   "spec_revision": "c1419c9fc3ae5a00c2b83da710c11bf67dab7934",
-  "interfaces_revision": "484c9399207de99bd56921cead5f44a7b5740d9e",
+  "interfaces_revision": "a3c19658fc89815d7a417eae29ba31fd4e930daf",
   "historical_cases": 1566,
   "value_cases": 1546,
   "value_groups": 486,

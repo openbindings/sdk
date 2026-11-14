@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "description": "Input: with every other target variant covered, a variant the profile cannot decide makes the union indeterminate, wherever it is written.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "undecidedFirst": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^a"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "undecidedLast": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string",
+              "pattern": "^a"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "undecidedFirst": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "undecidedLast": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

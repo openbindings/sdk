@@ -42,7 +42,7 @@ fn document_identity(left: &JsonValue, right: &JsonValue) -> Result<bool, Compar
     Ok(answer)
 }
 #[test]
-fn all_30_identity_and_62_directional_groups_preserve_the_published_verdicts() {
+fn all_30_identity_and_65_directional_groups_preserve_the_published_verdicts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let manifest: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/manifest.json")).unwrap();
@@ -150,7 +150,7 @@ fn all_30_identity_and_62_directional_groups_preserve_the_published_verdicts() {
     }
     assert_eq!(
         (identity, directional),
-        (30, 62),
+        (30, 65),
         "every identity and directional group ran"
     );
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));

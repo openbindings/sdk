@@ -1,7 +1,7 @@
 # Pinned schema-comparison test inputs
 
 Interface-derived inputs target revision
-`484c9399207de99bd56921cead5f44a7b5740d9e`. The crate's tests and guide state the
+`a3c19658fc89815d7a417eae29ba31fd4e930daf`. The crate's tests and guide state the
 supported interface/profile scope. All copied inputs retain the publication's bytes.
 Additional SDK controls are identified below;
 they are test evidence, not replacements for the pinned publication.
@@ -10,7 +10,7 @@ they are test evidence, not replacements for the pinned publication.
 | --- | --- | --- |
 | `exact-values.json` | Pinned interfaces | `90b3271bf73af691ec0ae8817308b07e1b1c59868809333350c420b4b84170bf` |
 | `independent.json` | SDK controls | `297c0bf62453449b9ad6b5910d49d9f4b540e7ad09ce8c6e04dfe343495cd3f9` |
-| `manifest.json` | Pinned interfaces | `befd3fbb87023655773588031f8ab5c281ff42511513e01c01bd98cdfdfe58f1` |
+| `manifest.json` | Pinned interfaces | `674ad51fcd6a1ea84aca1136e4f3d5171341f2aac988db156f84afe5e879d816` |
 | `profile/allof-ref-pattern-indeterminate.json` | Pinned interfaces | `0861640e3213333d5f5c18c3dc67324a381d7e3de89213fb63f99becfc679b19` |
 | `profile/allof-ref-union-indeterminate.json` | Pinned interfaces | `28a8bdda62e767ba9016aa0551e7ed369cbc3af342bb02e76a0cf75908328e98` |
 | `profile/annotations-ignored-compatible.json` | Pinned interfaces | `55750dd9e5630ac7977e049821fcf1f498aa5e5503301099bc1ebb4c5f6f4281` |
@@ -95,6 +95,9 @@ they are test evidence, not replacements for the pinned publication.
 | `subsumption/type-sets-input-incompatible.json` | Pinned interfaces | `5658eed19dd5ab9eefdfcf033ad1f0bf3d6f49bd7203e92981936c686c83119c` |
 | `subsumption/type-sets-output-compatible.json` | Pinned interfaces | `5770818c7d408ca0c7e4b55c276cc18f38cf036fc3db801f08945bfffadf7d80` |
 | `subsumption/type-sets-output-incompatible.json` | Pinned interfaces | `469dd7a9f58915034c8b94b1fc89d2c29e5070d47d7eac18d048018ae815642d` |
+| `subsumption/union-uncovered-variant-input-incompatible.json` | Pinned interfaces | `3302a90085ab00cd453d240a129b0e3f97349052b4dc1e371e03b61399781c0a` |
+| `subsumption/union-uncovered-variant-output-incompatible.json` | Pinned interfaces | `8615018ece2cbeace04959b6b71c9bedef842aa43a87fe7625ad43d25f669a9a` |
+| `subsumption/union-undecided-variant-input-indeterminate.json` | Pinned interfaces | `a19c615379deb32b7a689398c4789330ab50cb2fe023a3bc19fa46f39abf7479` |
 | `subsumption/union-variants-input-compatible.json` | Pinned interfaces | `5f308fb6b0df7dde8c7c7a4e3a713a34b037709138fdfdb615c47d2a978678b9` |
 | `subsumption/union-variants-input-incompatible.json` | Pinned interfaces | `e96e34f63440e6e5ab2b7b96b2ec8f62e379da3678d65c608fddf1fe62b9941c` |
 | `subsumption/union-variants-output-compatible.json` | Pinned interfaces | `4d1f5acdb63d60beb8d620068acb453bc5cdf99adc25f9c6823b44a83966206a` |

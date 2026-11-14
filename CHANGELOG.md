@@ -57,6 +57,8 @@
 - Under default limits, a resource set that retains more than 512 MiB of parsed
   external schema roots is refused at registration. `ExternalSchemas` now charges
   each distinct root it retains, once; clones share the charge.
+- The interfaces pin moves to `a3c19658fc89815d7a417eae29ba31fd4e930daf`, which
+  states the comparison profile's union precedence and adds three fixtures.
 
 ### Fixed
 
@@ -71,6 +73,9 @@
 - Preparation folds single-use shallow leaf definitions into the compiled
   bundle, which lowers peak memory on definition-heavy schemas. No result
   changes.
+- A union comparison no longer depends on the order its variants were written
+  in. A variant that nothing covers decides incompatible before an undecided
+  variant decides indeterminate; before, whichever came first decided.
 
 ## Limits principle (unreleased)
 

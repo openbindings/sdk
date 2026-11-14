@@ -2,7 +2,7 @@
 
 Compare schemas by normalized identity or directional compatibility under profile
 `OB-2020-12` version `0.1`, pinned at interfaces revision
-`484c9399207de99bd56921cead5f44a7b5740d9e`. This unpublished companion is independent
+`a3c19658fc89815d7a417eae29ba31fd4e930daf`. This unpublished companion is independent
 of core document conformance and the value evaluator. It implements the profile's
 directional rules and interface-level fold, plus the source puller's reference
 rule for existing-entry identity.
@@ -160,6 +160,9 @@ positions. A non-identical position carrying both `oneOf` and `anyOf` is
 indeterminate before any other directional rule runs. Retained conjunctions with no directional merge rule fail closed when
 they differ. Union search accepts a definitive matching variant; if no variant
 matches and some comparisons are indeterminate, that variant remains indeterminate.
+A variant with no match decides incompatible before an indeterminate variant
+decides indeterminate, whatever order the variants were written in; the reason
+names the first authored variant of the deciding kind.
 Reasons retain nested paths, exact JSON values, exclusive markers, actual union
 keys and authored indexes. Types, properties and required names choose the first
 lexical failure; enum and union traversal retain authored order.
