@@ -194,6 +194,12 @@ reject with `SdkError`, as does a WebAssembly module that is not this package's,
 which is refused before it is instantiated; retry after correcting the host
 condition.
 
+For Cloudflare Workers, follow the
+[Workers guide](https://github.com/openbindings/sdk/blob/main/docs/workers.md)
+for admission, `preparationLimits`, evaluation work, disposal and fatal Wasm
+traps. The defaults can exceed the isolate's memory ceiling; local workerd
+does not enforce the platform's memory or CPU limits.
+
 ## Exact values and editing
 
 Use JSON text or UTF-8 bytes for exact numbers such as `9007199254740993`.
@@ -325,9 +331,11 @@ The original schema environment also has preparation footprint, work and
 allocation bounds, exposed by `PrepareOptions.preparationLimits` with Rust's
 `PreparationLimits` defaults.
 Preparation work is uncapped by default and memory keeps a 512 MiB conservative
-allowance for storage held at once, releasing completed scratch. A time bound is
-the application's choice; use a Worker to enforce an elapsed-time policy for this
-synchronous facade. `preparationLimits()` returns a fresh frozen default snapshot:
+allowance for storage held at once, releasing completed scratch. It is not a
+Wasm memory ceiling. A time bound is the application's choice; a parent can
+terminate a browser Worker or Node worker thread running this synchronous
+facade. A timer in the same Cloudflare isolate cannot interrupt it.
+`preparationLimits()` returns a fresh frozen default snapshot:
 `maxSchemaNodes: 100_000`, `maxIdentityBytes: 8_388_608`,
 `maxSdkWorkUnits: null`, `maxSdkReservationBytes: 536_870_912`.
 Pass partial overrides to `Schema.prepare` or `ExternalSchemas.prepare` under

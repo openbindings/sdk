@@ -10,7 +10,7 @@ replacing an existing dependency.
 | Rust | MSRV 1.88, edition 2024; independent native/Wasm MSRV CI. Development toolchain 1.99; Linux, macOS, and Windows native CI. Core has no mandatory async runtime. |
 | Node | ESM on Node 22.23.0 or later in the 22 line, 24.17.0 or later in the 24 line, or 26.2.0 or later (`engines`: `^22.23.0 || ^24.17.0 || >=26.2.0`), the first releases whose bundled undici rejects a chunked body cut short as its connection closes ([nodejs/undici#5273](https://github.com/nodejs/undici/pull/5273)) instead of handing `discover` the prefix as a complete body. CI pins 22.23.0 and runs the TypeScript tests at the 24 and 26 floors too. Await `initialize()`; Node loads the packaged asset automatically. |
 | Browser | Desktop Chromium and WebKit with explicit initialization; use a Worker for potentially expensive work. Firefox, mobile devices, and particular framework/bundler versions require their own qualification. |
-| Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context. Validate and prepare inside request handling too: the schema library seeds its hash maps from the platform's random source, which Workers allow only inside a request, so validating at global scope or in a start hook stops the Worker from starting. This is not evidence of deployed Cloudflare latency, quotas, or service availability. |
+| Worker service | Local workerd with a compiled Wasm module and initialization in an allowed request context: `initialize()` checks host entropy before seeding the engine's shared tables. The package's service example also validates and prepares inside the handler. Local workerd enforces neither isolate memory nor CPU limits; this is not evidence of deployed Cloudflare latency, quotas, or service availability. Set admission, preparation and evaluation limits using the [Workers guide](workers.md). |
 
 The current evaluator has Original and compiled execution paths. Non-default
 limits and all Explain calls use Original; eligible default Outcome checks may
@@ -53,8 +53,13 @@ Preparing a schema from an untrusted party can take more memory than a host
 may want, as with any JSON Schema library: the evaluator bounds what the SDK
 itself reads and writes, not the library's compiled program (see the
 [evaluator limits](../crates/openbindings-json-schema-evaluator/README.md#limits-and-cancellation)).
-Prepare such schemas in an isolated worker or process with an operating-system
-memory limit. Value evaluation uses static compiled admission or Original heap frames and
+On native hosts, prepare such schemas in a separate process with an
+operating-system memory limit. Cloudflare Workers need explicit SDK allowances
+and deployment qualification; local workerd has no such process limit. An
+allocation failure can throw a bare `RuntimeError: unreachable`, with no SDK
+code, and leave subsequent preparations failing in that instance. Treat it as
+fatal for the isolate; see [Workers recovery](workers.md#memory-exhaustion).
+Value evaluation uses static compiled admission or Original heap frames and
 sampled stack checks. A caller-selected work cap selects Original. SDK limits
 are not a hard CPU deadline or a whole-process memory ceiling. Comparison,
 preparation and pull relationship work budgets are optional and off by default.
@@ -64,3 +69,7 @@ A time bound is the caller's choice through cancellation or the corresponding
 storage held at once. Scratch releases its reservations when dropped; retained
 programs, indexes and reports stay charged. See the dated
 [host-specific 250 ms preparation suggestion](performance-boundaries.md#limits-principle-november-2026).
+The 512 MiB preparation default exceeds a Worker's 128 MB isolate ceiling.
+TypeScript sets a smaller reservation through `preparationLimits` on either
+prepare method, and through `{ limits }` on `ExternalSchemas` registration.
+These reservations do not cap Wasm linear memory or dependency allocations.
