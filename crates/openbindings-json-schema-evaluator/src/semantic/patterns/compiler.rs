@@ -51,14 +51,26 @@ pub(crate) fn prepare(
     maximum_bytes: usize,
     budget: &profile::Budget,
     control: &dyn Control,
-) -> Result<PikeVM, Error> {
+) -> Result<(PikeVM, usize), Error> {
     budget.check(control)?;
     if maximum_bytes == 0 {
         return Err(Error::Size);
     }
     let result = (|| {
         let hir = hir::prepare(form, budget, control)?;
-        let result = nfa::prepare(&hir, maximum_bytes, budget, control).map_err(Error::from);
+        // PikeVM starts only once for a start-anchored NFA. Its active set is
+        // empty after the longest consuming path and one delayed match step.
+        let maximum = hir.properties().maximum_len();
+        let result = nfa::prepare(&hir, maximum_bytes, budget, control)
+            .map(|engine| {
+                let bytes = if engine.get_nfa().is_always_start_anchored() {
+                    maximum.map_or(usize::MAX, |n| n.saturating_add(1))
+                } else {
+                    usize::MAX
+                };
+                (engine, bytes)
+            })
+            .map_err(Error::from);
         drop(hir);
         result
     })();

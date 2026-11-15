@@ -395,13 +395,15 @@ impl Programs {
             .filter(|n| *n <= limits.total_pattern_bytes)
             .ok_or_else(|| self.refuse("pattern-total-byte-limit"))?;
         let program = if let Some(matcher) = linear.simple {
+            control.charge_work(linear.form.len().saturating_add(1))?;
             Program::Simple {
+                bytes: matcher.search_bytes(),
                 matcher,
                 work: linear.form.len().saturating_add(1),
             }
         } else {
             match compiler::prepare(&linear.form, compiler::profile::NFA_BYTES, budget, control) {
-                Ok(engine) => {
+                Ok((engine, bytes)) => {
                     control.charge_work(engine.get_nfa().states().len())?;
                     let work = engine
                         .get_nfa()
@@ -410,16 +412,35 @@ impl Programs {
                         .try_fold(1usize, |total, state| {
                             use regex_automata::nfa::thompson::State;
                             let edges = match state {
-                                State::Sparse(transitions) => transitions.transitions.len(),
+                                State::Sparse(transitions) => {
+                                    // matches_byte scans disjoint ranges with at
+                                    // most three comparisons each. Six units
+                                    // cover the state and its one followed edge
+                                    // (the byte-range state's eight minus its
+                                    // two range comparisons).
+                                    let n = transitions.transitions.len();
+                                    let cost = n.checked_mul(3)?.checked_add(6)?;
+                                    return total.checked_add(cost.min(4 * (n + 1)));
+                                }
                                 State::Union { alternates } => alternates.len(),
                                 State::BinaryUnion { .. } => 2,
-                                State::Look { .. } => 32,
+                                State::Look { look, .. } => {
+                                    use regex_automata::util::look::Look;
+                                    match look {
+                                        Look::Start | Look::End => 1,
+                                        _ => 32,
+                                    }
+                                }
                                 _ => 1,
                             };
                             total.checked_add(edges.checked_add(1)?.checked_mul(4)?)
                         });
                     match work {
-                        Some(work) => Program::Vm { engine, work },
+                        Some(work) => Program::Vm {
+                            engine,
+                            work,
+                            bytes,
+                        },
                         None => Program::Limited("pattern-size-limit"),
                     }
                 }

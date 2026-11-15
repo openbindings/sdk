@@ -56,8 +56,9 @@ Duplicate instance member names produce `NoVerdict` after parsing.
 
 Every prepared validator retains an Original semantic plan. At default evaluator
 and `PreparationLimits` settings, an eligible subset also gets a projected schema
-compiled by jsonschema. `evaluate` tries that compiled lane; `explain` always uses
-Original, including for satisfying values. Changing any limit from its default
+compiled by jsonschema. `evaluate` and `explain` first try that compiled lane;
+diagnostics use Original after failure. Exhausted diagnostic work leaves the established failure
+intact with incomplete problems. Changing any limit from its default
 selects Original, even when the new limit is larger. Route selection is private.
 
 Compiled admission requires established static references, standard 2020-12
@@ -213,14 +214,18 @@ unknown matches reserve their exact text-key allowance before constructing it.
 
 Original pattern search checks cancellation before and after the matcher, never
 inside it. `pattern_search_work_units` refuses a search before entry when its
-charge, `(UTF-8 input bytes + 1) * prepared program weight`, exceeds the ceiling.
+conservative charge exceeds the ceiling. Finite anchored searches charge only
+the bytes the matcher can inspect. Unanchored searches may prove a match in a
+bounded prefix, keeping the complete haystack for assertions; an inconclusive
+prefix returns the same limit code. See the [engine bound](PATTERN-WORK.md).
 The result is `NoVerdict` with reason `LimitExceeded` and code
 `pattern-search-work-limit`, distinct from the caller's cumulative
 `evaluation-work-limit`. Diagnostics contain no pattern or instance text.
 Raise the field or use `None` to remove the ceiling; either selects Original.
 Explicitly supplying the default keeps existing lane selection. Compiled work
-retains its own admission policy. This default treats uncancellable work like
-storage: the caller cannot stop it during the call. It is a work bound, not an
+retains its own admission policy. Explanation preserves its established verdict
+when Original diagnostic work is exhausted. This default treats uncancellable
+work like storage: the caller cannot stop it during the call. It is a work bound, not an
 elapsed-time ceiling; see the [measurements](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#uncancellable-pattern-searches-november-2026).
 
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning.

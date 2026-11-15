@@ -1,0 +1,83 @@
+[
+  {
+    "name": "words",
+    "pattern": "^(?:\\w+\\s?){1,1000}$",
+    "unit": "lorem ipsum dolor sit amet ",
+    "bytes": 1500,
+    "satisfies": true,
+    "ceiling": 250000000,
+    "largest_bytes": 1523
+  },
+  {
+    "name": "base64",
+    "pattern": "^[A-Za-z0-9+/]*={0,2}$",
+    "unit": "QUJD",
+    "bytes": 724637,
+    "satisfies": true,
+    "ceiling": 250000000,
+    "largest_bytes": 2631577
+  },
+  {
+    "name": "hex",
+    "pattern": "[a-f0-9]{64}",
+    "unit": "a",
+    "bytes": 1000000,
+    "satisfies": true,
+    "ceiling": 250000000,
+    "largest_bytes": 33554430
+  },
+  {
+    "name": "bounded-email",
+    "pattern": "^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,255}\\.[A-Za-z]{2,63}$",
+    "unit": "a",
+    "bytes": 100000,
+    "satisfies": false,
+    "ceiling": 250000000,
+    "largest_bytes": 33554430
+  },
+  {
+    "name": "unicode-name",
+    "pattern": "^[\\p{L}\\p{N} ]{1,500}$",
+    "unit": "a",
+    "bytes": 100000,
+    "satisfies": false,
+    "ceiling": 250000000,
+    "largest_bytes": 33554430
+  },
+  {
+    "name": "date",
+    "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+    "unit": "1",
+    "bytes": 100000,
+    "satisfies": false,
+    "ceiling": 250000000,
+    "largest_bytes": 33554430
+  },
+  {
+    "name": "domain",
+    "pattern": "^(?:[a-z]{1,10}\\.){1,20}[a-z]{1,10}$",
+    "unit": "a",
+    "bytes": 1000,
+    "satisfies": false,
+    "ceiling": 250000000,
+    "largest_bytes": 33554430
+  },
+  {
+    "name": "letters",
+    "pattern": "^[a-z]+$",
+    "unit": "a",
+    "bytes": 1000000,
+    "satisfies": true,
+    "ceiling": 250000000,
+    "largest_bytes": 27777776
+  },
+  {
+    "name": "bounded-dot",
+    "pattern": "^.{0,1000}$",
+    "unit": "a",
+    "bytes": 2941176,
+    "satisfies": false,
+    "ceiling": 250000000,
+    "largest_bytes": 33554430
+  }
+]

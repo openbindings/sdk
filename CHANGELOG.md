@@ -4,6 +4,18 @@
 
 ### Fixed
 
+- The default ceiling on one uncancellable pattern search no longer refuses ordinary patterns on ordinary input.
+  The charge was the cost of every automaton state at every position; it now bounds what the engine actually does: a
+  start-anchored pattern with a finite longest match is charged for at most that many bytes, an unanchored pattern
+  searches a bounded prefix and answers a match found there, and sparse transitions and the start and end assertions
+  are charged at their real cost. A 64-character hex, a bounded email, a bounded Unicode name and a bounded `.`
+  pattern now decide inputs up to the JSON limit at defaults, base64 up to 2.6 MB (was 725 KB). The hostile patterns
+  are refused as before, and the longest search the default ceiling admits still takes about 120 ms natively. The
+  limit's name, default and code are unchanged. `PATTERN-WORK.md` in the evaluator crate derives the bound.
+- `explain` returns the verdict `evaluate` returns at every limit setting. At defaults the faster lane could
+  establish a failure that the explaining lane then could not, because only the explaining lane has the pattern
+  ceiling; an explanation now keeps the established failure and reports its problems as incomplete when it cannot
+  finish them.
 - TypeScript `initialize()` stays retryable when the caller's input or the host's loading rejects with a
   `WebAssembly.RuntimeError`. Only a trap raised while SDK Wasm runs marks the instance unusable.
 - `KindError::LimitExceeded` no longer prints its label in `Display` or `Debug`, and `RequestError::Shape`,

@@ -968,6 +968,26 @@ const TEXT: u32 = u32::MAX;
 // The most characters a run matcher's fixed part is tabled for.
 const TABLE: usize = 64;
 impl Simple {
+    /// Maximum bytes inspected, including the character that exceeds a finite
+    /// last run. The table's characters are ASCII bytes; fixed literal steps
+    /// compare bytes, other steps consume scalars.
+    pub(crate) fn search_bytes(&self) -> usize {
+        let fixed = self.steps.iter().fold(self.table.len(), |bytes, step| {
+            bytes.saturating_add((step.count as usize).saturating_mul(if step.wide == TEXT {
+                1
+            } else {
+                4
+            }))
+        });
+        let tail = match self.last {
+            None => 0,
+            Some(last) if !self.end => (last.min as usize).saturating_mul(4),
+            Some(last) => last.max.map_or(usize::MAX, |max| {
+                (max as usize).saturating_add(1).saturating_mul(4)
+            }),
+        };
+        fixed.saturating_add(tail)
+    }
     /// The heap bytes the matcher holds, which a schema's pattern
     /// memory counts: 16 for each character of its table, 24 for each step,
     /// 8 for each range of members past ASCII and a byte for each byte of
@@ -1389,6 +1409,18 @@ mod tests {
                 assert_eq!(holds(c), member, "{set:?} {c:?}");
             }
         }
+    }
+
+    #[test]
+    fn a_tabled_fixed_part_counts_in_the_bytes_a_search_inspects() {
+        let mut shape = Shape::default();
+        shape.start().unwrap();
+        shape.run(vec![(0x61, 0x7a)], 3, Some(3)).unwrap();
+        shape.run(vec![(0x30, 0x39)], 2, Some(2)).unwrap();
+        let simple = shape.finish().unwrap();
+        assert!(!simple.table.is_empty() && simple.steps.is_empty());
+        assert!(simple.search_bytes() >= simple.table.len());
+        assert!(simple.is_match("abc12"));
     }
 
     // A small deterministic generator, so the differential needs no crate.

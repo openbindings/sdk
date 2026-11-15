@@ -1,0 +1,23 @@
+[
+  {
+    "name": "nested-alternation",
+    "pattern": "^(?:(?:a{1,200}){1,200}|a)*$",
+    "bytes": 50001,
+    "ceiling": 250000000,
+    "search_work_units": 40003850090
+  },
+  {
+    "name": "nested-short",
+    "pattern": "^(?:a{1,200}){1,200}$",
+    "bytes": 2001,
+    "ceiling": 250000000,
+    "search_work_units": 1601626026
+  },
+  {
+    "name": "nested-long",
+    "pattern": "^(?:a{1,200}){1,200}$",
+    "bytes": 20001,
+    "ceiling": 250000000,
+    "search_work_units": 16001860026
+  }
+]

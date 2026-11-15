@@ -19,9 +19,13 @@ separate runs. The performance workflow's timing remains advisory.
 
 ## Uncancellable pattern searches (November 2026)
 
-Original charges a pattern search as `(UTF-8 input bytes + 1) * prepared program
-weight`, then calls the unmodified matcher. Cancellation is observed before and
-after that call, never during it. The default `pattern_search_work_units`
+Original charges a conservative bound on the work of its unmodified matcher.
+Finite anchored searches charge only the positions they can inspect. Unanchored
+searches may prove a match in a bounded prefix; an inconclusive prefix returns
+the search-limit code. Assertions retain the complete input. The
+[bound derivation](../crates/openbindings-json-schema-evaluator/PATTERN-WORK.md)
+describes the pinned engine and the public ordinary and hostile corpora.
+Cancellation is observed before and after the matcher call, never during it. The default `pattern_search_work_units`
 (`patternSearchWorkUnits` in TypeScript) is 250,000,000. A larger charge returns
 `no-verdict`, reason `limit-exceeded`, code `pattern-search-work-limit`, before
 searching. The separate code identifies this safety ceiling even when the caller
@@ -50,7 +54,8 @@ receives the entire charge, split into pointer-sized chunks on wasm32. Remaining
 allowances clamp before conversion. Public cumulative cap types stay unchanged;
 TypeScript numeric limits remain nonnegative 32-bit integers.
 
-Calibration on 2026-11-14 used macOS 26.6.2 arm64, Rust 1.99.0 release,
+The following historical calibration predates the refined state weights and
+finite inspection bounds. Calibration on 2026-11-14 used macOS 26.6.2 arm64, Rust 1.99.0 release,
 wasm-bindgen 0.2.129 and Node 22.19.0. For each pattern, the public ceiling
 located its exact program weight with an empty input; the measured late-mismatch
 input then spent almost 250,000,000 units. The Wasm run used a 50,331,647-byte
@@ -554,7 +559,7 @@ on each host and build.
 Original evaluates with heap frames. It samples stack addresses against
 `SAMPLED_STACK_BYTES` (256 KiB) and can return `evaluation-stack-limit`.
 Samples are an additional observation, not a bound on helper peaks or on an
-engine's native call stack. Explain always uses Original. The internal JSON
+engine's native call stack. Explanation uses Original diagnostics after the selected lane establishes failure. The internal JSON
 `work::guard` currently has no production caller, so the compiled
 `Stop::Stack` to `evaluation-depth-limit` mapping is unreachable through the
 SDK's current production paths. There is no public stack-byte setting.
@@ -786,7 +791,8 @@ survival qualification at those thread sizes, not a measurement of unused bytes.
 | Additional | 340 | 340 |
 | Union | 203 | 102 |
 
-Explain always runs on Original, so it has no compiled admission boundary.
+Explain uses the same compiled admission for its verdict and Original for
+failure diagnostics. Diagnostic exhaustion does not undo an established verdict.
 The native tests compute these bounds with `qualified_depth()`; the Wasm
 walk uses only public TypeScript APIs at default limits. Its shared module is
 [`compiled-depth.mjs`](../packages/typescript/test/compiled-depth.mjs), used by

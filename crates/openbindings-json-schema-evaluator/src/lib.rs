@@ -34,8 +34,8 @@ pub struct Limits {
     /// uncapped evaluation never reports exhaustion from counter overflow.
     pub evaluation_sdk_work_units: Option<usize>,
     /// Maximum SDK work charged to one uncancellable Original pattern search;
-    /// default 250,000,000. A larger charge returns `pattern-search-work-limit`
-    /// before searching. `None` removes this ceiling. This is not a deadline.
+    /// default 250,000,000. An inconclusive bounded search returns `pattern-search-work-limit`
+    /// without exceeding it. `None` removes this ceiling. This is not a deadline.
     /// Changing this from its default selects Original evaluation.
     pub pattern_search_work_units: Option<usize>,
     /// Maximum UTF-8 bytes in one pattern and its expanded form; default 1 MiB.
@@ -177,7 +177,22 @@ impl SchemaValidator for DefaultValidator {
         {
             return outcome;
         }
+        if detail == Detail::Explain {
+            return self.explain(value, control);
+        }
         self.plan.evaluate(value, detail, control)
+    }
+}
+impl DefaultValidator {
+    #[inline(never)]
+    fn explain(&self, value: &JsonValue, control: &dyn WorkControl) -> ValueOutcome {
+        match self.compiled.outcome(value, control) {
+            Some(failure @ ValueOutcome::Fails { .. }) => {
+                self.plan.explain_failure(value, control, failure)
+            }
+            Some(outcome) => outcome,
+            None => self.plan.evaluate(value, Detail::Explain, control),
+        }
     }
 }
 impl SchemaEvaluator for DefaultEvaluator {

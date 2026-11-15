@@ -653,15 +653,20 @@ values use the same nonnegative integer range as other evaluator limits,
 
 A charge above the ceiling returns `NoVerdict` / `no-verdict`, reason
 `LimitExceeded` / `limit-exceeded`, code `pattern-search-work-limit`, before
-searching. The charge is `(UTF-8 input bytes + 1) * prepared program weight`,
-in the existing evaluation work units. It contains no document values.
+an oversized search. The charge bounds the actual matcher's state and transition
+work over the positions it can inspect. Finite anchored searches need not inspect
+the whole input. An unanchored search may prove a match in a bounded prefix; an
+inconclusive prefix returns the same limit code. Assertions still see the complete
+input. The charge contains no document values.
 `evaluation_sdk_work_units` / `evaluationSdkWorkUnits` remains the separate
 optional cumulative work cap. Internal fixed-width accounting cannot invent an
 uncapped work-limit refusal by overflowing on Wasm.
 
 Changing the search ceiling from its default selects Original, as other changed
 evaluator limits do. Explicitly supplying the default preserves lane selection.
-The compiled lane retains its separate admission bounds. Neither policy is a
+The compiled lane retains its separate admission bounds. Explanation preserves
+that lane's established verdict if Original diagnostics exhaust their allowance,
+returning an incomplete problem list for failure. Neither policy is a
 deadline; cancellation is observed around an engine call, never inside it.
 
 ## TypeScript preparation and registration limits

@@ -351,9 +351,11 @@ for supported semantics and remaining limitations.
 | `totalPatternMemory` | 64 MiB | Immutable pattern-program representation |
 | `evaluationSdkReservationBytes` | 48 MiB | Original cumulative SDK storage reservations; compiled peak scratch admission at defaults |
 
-At default limits, Outcome checks may use a compiled jsonschema lane. Changing
-any evaluator limit selects Original; `explain` always uses Original. Compiled
-checks observe cancellation before and after the synchronous backend call.
+At default limits, evaluation and explanation may establish a verdict through
+the compiled jsonschema lane. Explanation uses Original diagnostics after
+failure and preserves that verdict if diagnostics exhaust their allowance.
+Changing any evaluator limit selects Original. Compiled checks observe
+cancellation before and after the synchronous backend call.
 See the [execution policy](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/README.md#execution-paths).
 
 Each Original value invocation starts a fresh evaluation allowance. Verdict and diagnostic
@@ -389,8 +391,10 @@ can express. With `evaluationSdkWorkUnits: null`, counter overflow cannot report
 a work limit. Numeric limit options retain their existing 32-bit range.
 `patternSearchWorkUnits` defaults to 250,000,000 SDK work units per Original
 pattern search. A larger charge returns `no-verdict` with
-`pattern-search-work-limit` before the uncancellable matcher runs. Raise it or
-set it to `null` to remove the ceiling. Changing it from the Wasm-provided
+`pattern-search-work-limit`. Finite anchored searches charge only the positions
+they can inspect. Unanchored searches may establish a match in a bounded prefix;
+an inconclusive prefix returns the same limit code. Assertions still see the
+complete input. Raise the ceiling or set it to `null` to remove it. Changing it from the Wasm-provided
 default selects Original; explicitly supplying the default preserves routing.
 The cumulative `evaluationSdkWorkUnits` cap remains `null` by default.
 Budgets are not deadlines or process-memory measurements. Original uses

@@ -10,7 +10,7 @@ fn joined_factory_owns_one_program_after_source_budget_and_control_drop() {
     let source = r"^(ab|\x{E9}\x{1F600}){1,2}$".to_owned();
     let control = Arc::new(AtomicUsize::new(0));
     let weak = Arc::downgrade(&control);
-    let vm = {
+    let (vm, _) = {
         let budget = profile::Budget::default();
         prepare(&source, 1 << 20, &budget, &|| {
             control.fetch_add(1, Relaxed);
