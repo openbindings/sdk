@@ -17,6 +17,10 @@ processes on Darwin arm64 on 2026-11-15, using the registration repair based on
 Run `node tools/workers-memory/run.mjs` from the repository root against the
 built package to regenerate the tables; see the [runner instructions](../tools/workers-memory/README.md).
 The runner completed 363 fresh-process observations, including the full recipe.
+A rerun on the combined 2026-11-15 repairs (Wasm SHA-256
+`ecfbb26e4056caa8b65a55a359665cb4d85b1f042aed544ad5f07d0de9bfeee7`, after the pattern and evaluator repairs) reproduced every
+linear-memory figure within 0.063 MiB; the default 49,000-link chain varies by
+0.5 MiB between runs (73.625 or 74.125 MiB of growth) on either build.
 Timings are single cold observations, separate from the repeated registration
 performance comparison. The instrument is the SDK Wasm instance's `memory.buffer.byteLength`, with a
 fresh process per row and per preparation-allowance search trial.
