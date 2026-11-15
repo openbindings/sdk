@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "description": "The empty flowing length domain ends the position before the receiving enum can leave an unresolved obligation.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 3
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "x"
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

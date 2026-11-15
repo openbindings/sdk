@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Input: every target variant must have a compatible candidate variant; extra candidate variants and variant order are fine. oneOf and anyOf compare alike.",
+  "description": "anyOf branch coverage proves inclusion; identical oneOf is compatible only through identity.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"

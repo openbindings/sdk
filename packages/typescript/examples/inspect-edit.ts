@@ -14,20 +14,15 @@ export function inspectBindings(text: string, operationName: string) {
   const checked = document.validate();
   if (checked.status !== "conformant") return checked;
   using proof = checked.document;
-  using operation = proof.resolveOperation(operationName);
+  const operation = proof.resolveOperation(operationName);
   if (!operation) return { status: "missing" as const };
   const rows = [];
-  const bindings = operation.bindings();
-  try {
-    for (const binding of bindings) {
-      using source = binding.source();
-      rows.push({
-        binding: { key: binding.key, preference: binding.preference },
-        source: { key: source.key, kind: source.kind },
-      });
-    }
-  } finally {
-    for (const binding of bindings) binding.dispose();
+  for (const binding of proof.operationBindings(operation.key)!) {
+    const source = proof.source(binding.sourceKey)!;
+    rows.push({
+      binding: { key: binding.key, preference: binding.preference },
+      source: { key: source.key, kind: source.kind },
+    });
   }
   return {
     status: "inspected" as const,
@@ -47,7 +42,7 @@ export function addTag(
   const checked = document.validate();
   if (checked.status !== "conformant") return undefined;
   using proof = checked.document;
-  using operation = proof.operation(primaryKey);
+  const operation = proof.operation(primaryKey);
   if (!operation) return undefined;
   return document.set(`/operations/${pointer(primaryKey)}/tags`, [
     ...new Set([...(operation.tags ?? []), tag]),
@@ -77,7 +72,7 @@ export function editMetadata(
     const checked = document.validate();
     if (checked.status !== "conformant") return checked;
     using proof = checked.document;
-    using operation = proof.operation(primaryKey);
+    const operation = proof.operation(primaryKey);
     if (!operation) return { status: "operation-missing" as const };
     using changed = document.edit([
       { op: "set", pointer: "/description", value: description },

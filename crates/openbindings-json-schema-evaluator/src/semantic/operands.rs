@@ -59,7 +59,13 @@ impl Preparation {
         // Choose the optional reading before charging. Actual exhaustion is
         // terminal; neither this method nor its caller catches it to defer.
         control.charge_work(text.len().saturating_mul(8).saturating_add(1))?;
-        control.charge_allocation(text.len().saturating_mul(16).saturating_add(256))?;
+        // Decimal's signed-integer path stores coefficient/exponent inline.
+        // Other spellings retain room for the boxed wide form and limbs.
+        control.charge_allocation(if text.parse::<i64>().is_ok() {
+            0
+        } else {
+            text.len().saturating_mul(8).saturating_add(128)
+        })?;
         self.bytes += text.len();
         Ok(parse(text))
     }
@@ -92,12 +98,10 @@ impl Preparation {
         // Reserve the map record and both exactly-sized vectors before they
         // allocate. The map allowance covers growth/old+new buckets as in the
         // original preparation indexes; no authored numeric text is copied here.
-        control.charge_allocation(
-            (std::mem::size_of::<(usize, Prepared)>() + 64)
-                .saturating_mul(8)
-                .saturating_add(number_count * std::mem::size_of::<Number>())
-                .saturating_add(size_count * std::mem::size_of::<Size>())
-                .saturating_add(128),
+        preparation::memory::map(
+            &mut self.records,
+            number_count * size_of::<Number>() + size_count * size_of::<Size>(),
+            control,
         )?;
         let mut prepared = Prepared {
             numbers: Vec::with_capacity(number_count),

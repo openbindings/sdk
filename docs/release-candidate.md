@@ -35,7 +35,9 @@ holds only the pages of this build. Keep the environment and any offline
 limitation in the release evidence.
 
 The packager verifies original source bytes in every Cargo archive, rejects stale
-or dirty Wasm build identity, installs the npm tarball in a fresh project, and
+or dirty Wasm build identity, checks every recorded runtime module (including
+nested snippets) against the source build and packaged paths and hashes, installs
+the npm tarball in a fresh project, and
 runs Rust examples and the ordinary-Serde compatibility matrix exclusively from
 extracted Cargo archives. Local Cargo patches resolve unpublished siblings; they
 are temporary qualification infrastructure, not the eventual public quickstart.

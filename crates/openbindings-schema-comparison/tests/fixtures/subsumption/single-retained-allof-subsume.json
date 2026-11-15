@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "description": "A sole allOf branch without siblings or identity context unwraps even when it contains uniqueItems.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "uniqueItems": true
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "allOf": [
+            {
+              "uniqueItems": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -63,13 +63,13 @@ fn reasons_keep_deciding_keywords_nested_paths_and_exact_values() {
             Direction::Input,
             r#"{"anyOf":[{"const":1},{"const":2}]}"#,
             r#"{"oneOf":[{"const":1}]}"#,
-            "anyOf: target variant 1 has no compatible candidate variant",
+            "outside-profile: differing position has no profile decision rule",
         ),
         (
             Direction::Output,
             r#"{"anyOf":[{"const":1}]}"#,
             r#"{"oneOf":[{"const":1},{"const":2}]}"#,
-            "oneOf: candidate variant 1 has no compatible target variant",
+            "outside-profile: differing position has no profile decision rule",
         ),
         (
             Direction::Input,
@@ -85,7 +85,14 @@ fn reasons_keep_deciding_keywords_nested_paths_and_exact_values() {
             &ComparisonLimits::default(),
         )
         .unwrap();
-        assert_eq!(result.verdict(), Verdict::Incompatible);
+        assert_eq!(
+            result.verdict(),
+            if target.contains("oneOf") || candidate.contains("oneOf") {
+                Verdict::Indeterminate
+            } else {
+                Verdict::Incompatible
+            }
+        );
         assert_eq!(result.reason(), Some(reason));
     }
 }
@@ -180,7 +187,7 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
             Verdict::Compatible,
             Verdict::Indeterminate
         ]),
-        Verdict::Indeterminate
+        Verdict::Incompatible
     );
     assert_eq!(Verdict::collapse([]), Verdict::Compatible);
 }

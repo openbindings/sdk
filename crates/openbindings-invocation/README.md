@@ -20,7 +20,7 @@ limits are arguments to `invoke_with_limits` and `preflight_with_limits`.
 Invalid limits return `BoundaryFailureKind::InvalidLimits` before provider work.
 
 This implementation targets the binding-invoker and operation-invoker **0.1.0**
-interfaces at revision `a3c19658fc89815d7a417eae29ba31fd4e930daf`, independently of
+interfaces at revision `eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`, independently of
 OpenBindings core **0.2** and the package version.
 
 ```rust

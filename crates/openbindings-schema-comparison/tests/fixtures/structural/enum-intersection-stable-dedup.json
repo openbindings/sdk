@@ -1,0 +1,53 @@
+{
+  "version": "1.0",
+  "description": "Enum intersection emits each common exact value once in first-occurrence order from the first enum-bearing branch.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "allOf": [
+            {
+              "enum": [
+                2,
+                1,
+                2,
+                3,
+                1
+              ]
+            },
+            {
+              "enum": [
+                1,
+                2,
+                2
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "enum": [
+            2,
+            1
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -670,9 +670,17 @@ impl Layer {
 // The shared catalog holds no caller URI or result. Its normative core initializes
 // once; supplemental bodies/indexes initialize on access. Constant inventory
 // extents preserve numbering and admission independently of initialization.
+static PACKAGED_LAYER: std::sync::OnceLock<catalog::Packaged> = std::sync::OnceLock::new();
 fn packaged() -> &'static catalog::Packaged {
-    static LAYER: std::sync::OnceLock<catalog::Packaged> = std::sync::OnceLock::new();
-    LAYER.get_or_init(catalog::Packaged::new)
+    PACKAGED_LAYER.get_or_init(catalog::Packaged::new)
+}
+fn packaged_controlled(control: &dyn Control) -> Result<&'static catalog::Packaged, Failure> {
+    // The pinned immutable core is allocated once. Existing shared storage is
+    // part of the caller's baseline, rather than another per-call reservation.
+    if PACKAGED_LAYER.get().is_none() {
+        control.charge_allocation(64 * 1024)?;
+    }
+    Ok(packaged())
 }
 // Identity policy needs only the pinned names, never parsed catalog bodies.
 pub(crate) fn standard_identifier(name: &str) -> bool {
@@ -727,7 +735,7 @@ impl SchemaSpace {
         control: &dyn Control,
     ) -> Result<Self, Failure> {
         control.check()?;
-        let packaged = packaged();
+        let packaged = packaged_controlled(control)?;
         let remaining = maximum
             .checked_sub(packaged.node_count())
             .and_then(|count| count.checked_sub(document.schema_index().nodes.len()))
@@ -747,7 +755,12 @@ impl SchemaSpace {
             .ok_or_else(crate::identity_budget::exceeded)?;
         // Per-node layer/index/maps overhead, including temporary base-length
         // analysis. Shared packaged/source bytes are not newly allocated here.
-        control.charge_allocation(local_nodes.saturating_add(1).saturating_mul(2048))?;
+        control.charge_allocation(
+            local_nodes
+                .saturating_add(1)
+                .saturating_mul(128)
+                .saturating_add(2048),
+        )?;
         let packaged_bytes = packaged.identity_bytes();
         let reserved = supplied
             .policy
@@ -762,7 +775,7 @@ impl SchemaSpace {
             control,
         )?;
         let identity_bytes = reserved + document_bytes;
-        crate::preparation::identities(identity_bytes, control)?;
+        crate::preparation::identities(identity_bytes - packaged_bytes, control)?;
         let mut local = Layer::default();
         let protected = &supplied.policy.protected;
         local.add_source_controlled(

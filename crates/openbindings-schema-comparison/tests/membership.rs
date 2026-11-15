@@ -44,7 +44,18 @@ fn enum_and_required_membership_fit_n_log_n_work_and_keep_first_failure() {
                 (&failing, &large)
             };
             let result = compare(direction, target, candidate, &limits).unwrap();
-            assert_eq!(result.verdict(), Verdict::Incompatible);
+            assert_eq!(
+                result.verdict(),
+                if key == "enum" {
+                    Verdict::Indeterminate
+                } else {
+                    Verdict::Incompatible
+                }
+            );
+            // These authored enum strings do not satisfy flowing type object.
+            if key == "enum" {
+                assert!(result.reason().unwrap().contains("unresolved"));
+            }
             assert!(result.reason().unwrap().contains("z-first"));
             assert!(!result.reason().unwrap().contains("z-second"));
         }

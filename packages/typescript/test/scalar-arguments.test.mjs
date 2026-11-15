@@ -9,7 +9,7 @@ test("wrong scalar argument types never reach Wasm string marshalling", () => {
   ).value;
   const proof = d.validate().document,
     operation = proof.operation("run"),
-    schema = operation.input();
+    schema = proof.inputSchema(operation.key);
   const prepared = schema.prepare().schema,
     value = sdk.parseJson('{"a":1}').value;
   const resources = new sdk.ExternalSchemas();
@@ -20,7 +20,24 @@ test("wrong scalar argument types never reach Wasm string marshalling", () => {
     (x) => proof.binding(x),
     (x) => proof.dependency(x),
     (x) => proof.schema(x),
-    (x) => operation.example(x),
+    ...[
+      "inputSchema",
+      "outputSchema",
+      "operationBindings",
+      "examples",
+      "operationValue",
+      "bindingValue",
+      "sourceValue",
+      "dependencyValue",
+      "sourceData",
+      "bindingData",
+    ].map((method) => (x) => proof[method](x)),
+    ...["example", "exampleValue", "exampleInput", "exampleOutput"].flatMap(
+      (method) => [
+        (x) => proof[method](x, "e"),
+        (x) => proof[method]("run", x),
+      ],
+    ),
     (x) => value.get(x),
     (x) => value.at(x),
     (x) => d.remove(x),
@@ -52,17 +69,8 @@ test("wrong scalar argument types never reach Wasm string marshalling", () => {
     }
     const healthy = proof.operation("run");
     assert.equal(healthy.key, "run");
-    healthy.dispose();
   } finally {
-    for (const owner of [
-      resources,
-      value,
-      prepared,
-      schema,
-      operation,
-      proof,
-      d,
-    ])
+    for (const owner of [resources, value, prepared, schema, proof, d])
       owner.dispose();
   }
 });

@@ -36,6 +36,7 @@ pub(crate) struct Index {
 pub(crate) struct Resources {
     index: Arc<Mutex<Index>>,
     side: crate::ComparisonSide,
+    context: ComparisonContext,
 }
 fn set_bytes<K>(values: &std::collections::BTreeSet<K>) -> usize {
     // Same occupancy estimate as backend::btree_bytes, with no mapped value.
@@ -116,7 +117,11 @@ impl Resources {
             attempt.retain(2 * std::mem::size_of::<ComparisonContext>())?;
             attempt.contexts.push(context.clone());
         }
-        let result = Self { index, side };
+        let result = Self {
+            index,
+            side,
+            context: context.clone(),
+        };
         result
             .index
             .lock()
@@ -144,6 +149,7 @@ impl Resources {
                 return Ok(Self {
                     index: resources.index.clone(),
                     side,
+                    context: context.clone(),
                 });
             }
         }
@@ -162,6 +168,7 @@ impl Resources {
         let result = Self {
             index: Arc::new(Mutex::new(local)),
             side,
+            context: context.clone(),
         };
         attempt.retain(2 * std::mem::size_of::<(usize, (usize, usize), Self)>())?;
         attempt.local_resources.push((key.0, key.1, result.clone()));
@@ -193,6 +200,97 @@ impl Resources {
                 .with_side(self.side)
         })
     }
+    // The origin distinguishes document-contained positions from external ones.
+    // Walk original schema ancestry, so an embedded resource without $schema
+    // inherits its containing dialect even when reached directly by its URI.
+    pub(crate) fn foreign(
+        &self,
+        schema: JsonRef<'_>,
+        scope: usize,
+        depth: usize,
+        attempt: &mut Attempt<'_>,
+    ) -> Result<Option<crate::value::Value>, Failure> {
+        let index = self.index.lock().expect("comparison index");
+        let entry = &index.entries[scope];
+        let root = index.entries[entry.origin].document.view();
+        if entry.origin == 0 && (is_obi(root) || self.context.data.base.is_none()) {
+            return Ok(None);
+        }
+        use openbindings_internal_schema::dialect::Dialect;
+        let mut ancestors = attempt.vector(1)?;
+        let mut node = schema;
+        loop {
+            attempt.depth(ancestors.len())?;
+            attempt.work(1)?;
+            attempt.allocate(2 * std::mem::size_of::<JsonRef<'_>>())?;
+            ancestors.push(node);
+            if backend::occurrence(node) == backend::occurrence(root) {
+                break;
+            }
+            let Some(parent) = enclosing(node) else {
+                break;
+            };
+            node = parent;
+        }
+        let mut dialect = None;
+        let mut assigned = Some(Dialect::Draft202012);
+        for node in ancestors.into_iter().rev() {
+            attempt.work(1)?;
+            let root = backend::occurrence(node) == backend::occurrence(root);
+            let id = node.get("$id");
+            // A declaration changes dialect only at a schema resource root.
+            // Draft-07 reference objects suppress their sibling declarations;
+            // fragment-only draft-07 identifiers do not introduce resources.
+            let resource = root
+                || (id.is_some()
+                    && !assigned.is_some_and(|d| d.reference_object(node))
+                    && !(assigned == Some(Dialect::Draft7)
+                        && id
+                            .and_then(|v| v.as_str())
+                            .is_some_and(|s| s.starts_with('#'))));
+            if resource && let Some(declared) = node.get("$schema") {
+                dialect = Some(declared);
+                assigned = declared.as_str().and_then(Dialect::from_uri);
+            }
+            if assigned.is_none_or(|d| d.reference_object(node)) {
+                break;
+            }
+        }
+        let Some(dialect) = dialect else {
+            return Ok(None);
+        };
+        if dialect.as_str().is_some_and(|s| {
+            s.trim_end_matches('#') == "https://json-schema.org/draft/2020-12/schema"
+        }) {
+            return Ok(None);
+        }
+        let mut context = crate::value::Object::new();
+        for (uri, resource) in &self.context.data.resources {
+            let name = crate::value::literal(uri, attempt)?;
+            let value = crate::value::import(resource.view(), depth + 1, attempt)?;
+            crate::value::insert(&mut context, name, value, attempt)?;
+        }
+        let mut parts = attempt.vector(5)?;
+        parts.push(crate::value::import(schema, depth + 1, attempt)?);
+        parts.push(crate::value::import(dialect, depth + 1, attempt)?);
+        parts.push(crate::value::Value::Object(context));
+        // Local targets and relative references can depend on this frame too.
+        parts.push(crate::value::import(
+            self.context.data.document.view(),
+            depth + 1,
+            attempt,
+        )?);
+        if let Some(base) = &self.context.data.base {
+            parts.push(crate::value::Value::String(crate::value::literal(
+                base, attempt,
+            )?));
+        }
+        attempt.allocate(std::mem::size_of::<crate::value::Value>())?;
+        Ok(Some(crate::value::Value::Foreign(Box::new(
+            crate::value::Value::Array(parts),
+        ))))
+    }
+
     pub(crate) fn locate_failure(
         &self,
         failure: Failure,

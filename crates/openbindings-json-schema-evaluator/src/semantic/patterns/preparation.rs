@@ -174,7 +174,11 @@ impl Programs {
             .and_then(|n| self.footprint.get().checked_add(n))
             .filter(|n| *n <= limits.total_pattern_memory.min(MAXIMUM_FOOTPRINT))
             .ok_or_else(|| self.refuse("pattern-total-memory-limit"))?;
-        control.charge_allocation(Program::owner_bytes())?;
+        control.charge_allocation(
+            program
+                .allocation_bytes()
+                .ok_or_else(|| self.refuse("preparation-sdk-reservation-bytes"))?,
+        )?;
         let owner = Arc::new(program);
         control.check()?;
         self.footprint.set(total);
@@ -235,7 +239,17 @@ impl Programs {
         // might publish a normalized program. No callbacks run under a borrow.
         control.charge_work(height.saturating_mul(24).saturating_add(candidates + 1))?;
         control.charge_allocation(source.len())?;
-        control.charge_allocation(height.saturating_mul(1024))?;
+        let tree_bytes = {
+            let sources = self.sources.borrow();
+            if sources.contains_key(&key) {
+                0
+            } else {
+                let n = sources.len();
+                openbindings_internal_json::allocation::tree(n + 1, 32, 24)
+                    - openbindings_internal_json::allocation::tree(n, 32, 24)
+            }
+        };
+        control.charge_allocation(tree_bytes)?;
         let (length, capacity) = self
             .sources
             .borrow()
@@ -246,7 +260,7 @@ impl Programs {
                 .checked_mul(2)
                 .and_then(|n| n.max(4).checked_mul(size_of::<Form<String>>()))
                 .ok_or_else(|| self.refuse("pattern-index-memory-limit"))?;
-            control.charge_allocation(bytes)?;
+            control.charge_allocation(bytes - capacity * size_of::<Form<String>>())?;
             Some(bytes / size_of::<Form<String>>())
         } else {
             None
@@ -323,7 +337,8 @@ impl Programs {
         let (work, allocation) = pattern::preparation_cost(source)
             .ok_or_else(|| self.refuse("preparation-sdk-reservation-bytes"))?;
         control.charge_work(work)?;
-        control.charge_allocation(allocation)?;
+        let reader_scratch = openbindings_internal_schema::preparation::Scratch::new(control);
+        reader_scratch.charge_allocation(allocation)?;
         let reading = pattern::read(source, limits.pattern_depth, limits.pattern_bytes);
         control.check()?;
         let linear = match reading {
@@ -428,19 +443,29 @@ impl Programs {
                 .saturating_mul(24)
                 .saturating_add(candidates.saturating_add(1)),
         )?;
-        control.charge_allocation(height.saturating_mul(1024))?;
+        let tree_bytes = {
+            let forms = self.forms.borrow();
+            if forms.contains_key(&key) {
+                0
+            } else {
+                let n = forms.len();
+                openbindings_internal_json::allocation::tree(n + 1, 16, 24)
+                    - openbindings_internal_json::allocation::tree(n, 16, 24)
+            }
+        };
+        control.charge_allocation(tree_bytes)?;
         let (length, capacity) = self
             .forms
             .borrow()
             .get(&key)
             .map_or((0, 0), |bucket| (bucket.len(), bucket.capacity()));
         let requested = if length == capacity {
-            let capacity = capacity
+            let next = capacity
                 .checked_mul(2)
-                .and_then(|n| n.max(4).checked_mul(size_of::<Form<String>>()))
+                .map(|n| n.max(4))
                 .ok_or_else(|| self.refuse("pattern-index-memory-limit"))?;
-            control.charge_allocation(capacity)?;
-            Some(capacity / size_of::<Form<String>>())
+            control.charge_allocation((next - capacity) * size_of::<Form>())?;
+            Some(next)
         } else {
             None
         };

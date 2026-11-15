@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "description": "The empty flowing length domain proves inclusion before an unresolved union obligation.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 3,
+          "anyOf": [
+            {
+              "enum": [
+                "x"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -8,7 +8,7 @@ function fixture() {
   ).value;
   const proof = doc.validate().document,
     operation = proof.operation("run"),
-    schema = operation.input(),
+    schema = proof.inputSchema(operation.key),
     prepared = schema.prepare().schema;
   const exact = sdk.parseJson("7").value,
     resources = new sdk.ExternalSchemas([["urn:input", exact]]);
@@ -16,7 +16,7 @@ function fixture() {
   return {
     doc,
     proof,
-    operation,
+
     schema,
     prepared,
     exact,
@@ -29,7 +29,7 @@ function fixture() {
         exact,
         prepared,
         schema,
-        operation,
+
         proof,
         doc,
       ])

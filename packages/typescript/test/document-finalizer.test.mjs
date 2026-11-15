@@ -113,3 +113,36 @@ function replaceDocument(previous, next) {
   previous.dispose();
   return next;
 }
+
+test("forgotten schema and exact owners release their pinned document when finalized", () => {
+  sdk.validateDocument('{"openbindings":"0.2.0","operations":{}}');
+  const baseline = testing.liveStorageOwners();
+  for (const kind of ["schema", "exact"]) {
+    const document = sdk.Document.parse(
+      JSON.stringify({
+        openbindings: "0.2.0",
+        operations: { run: { input: true } },
+        "x-unrelated": "x".repeat(1024 * 1024),
+      }),
+    ).value;
+    const proof = document.validate().document;
+    const record = proof.operation("run");
+    const held =
+      kind === "schema"
+        ? proof.inputSchema(record.key)
+        : proof.operationValue(record.key);
+    const finalization = registrationFor(held);
+    assert.ok(finalization);
+    assert.equal(registrationFor(record), undefined);
+    assert.ok(document.retainedBytes() > 1024 * 1024);
+    proof.dispose();
+    document.dispose();
+    assert.equal(testing.liveStorageOwners(), baseline + 1);
+    // Deliver the registered callback deterministically; this does not claim
+    // that a host will schedule GC or finalizers before the next request.
+    assert.equal(deliver(finalization), true);
+    assert.equal(deliver(finalization), false);
+    assert.equal(testing.liveStorageOwners(), baseline);
+    assert.equal(record.key, "run");
+  }
+});

@@ -66,9 +66,9 @@ function prepared() {
   ).value;
   const proof = document.validate().document;
   const operation = proof.operation("run");
-  const original = operation.input();
+  const original = proof.inputSchema(operation.key);
   const schema = original.prepare().schema;
-  for (const owner of [original, operation, proof, document]) owner.dispose();
+  for (const owner of [original, proof, document]) owner.dispose();
   return schema;
 }
 

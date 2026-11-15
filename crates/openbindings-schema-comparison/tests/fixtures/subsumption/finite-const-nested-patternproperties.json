@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "A flowing object constant with nested patternProperties leaves the nominal string type failure unresolved.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": {
+            "p": {
+              "xa": 1
+            }
+          },
+          "properties": {
+            "p": {
+              "patternProperties": {
+                "^x": {}
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

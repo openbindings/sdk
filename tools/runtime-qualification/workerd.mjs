@@ -3,7 +3,7 @@ import path from "node:path";
 import net from "node:net";
 import { spawn, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { fixtureSet, identity, host, save } from "./common.mjs";
+import { fixtureSet, identity, host, save, runtimeFiles } from "./common.mjs";
 const [packageRoot, fixtureRoot, output, mode = "check"] =
   process.argv.slice(2);
 if (!output || !process.env.WORKERD_BIN || !process.env.WORKERD_CAPNP)
@@ -44,16 +44,13 @@ const modules = [
   `(name="worker",esModule=embed "worker.mjs")`,
   `(name="workloads.mjs",esModule=embed "workloads.mjs")`,
   `(name="asset",wasm=embed ${quote(path.join(packageRoot, "dist/wasm/openbindings_wasm_bg.wasm"))})`,
-  ...[
-    ...(await fs.readdir(path.join(packageRoot, "dist")))
-      .filter((name) => name.endsWith(".js"))
-      .sort(),
-    "wasm/openbindings_wasm.js",
-    "wasm/openbindings_wasm_signature.js",
-  ].map(
-    (name) =>
-      `(name=${JSON.stringify("sdk/" + name)},esModule=embed ${quote(path.join(packageRoot, "dist", name))})`,
-  ),
+  // The binary is the `asset` module above; a second copy would compile at startup.
+  ...(await runtimeFiles(packageRoot))
+    .filter((name) => name.endsWith(".js"))
+    .map(
+      (name) =>
+        `(name=${JSON.stringify("sdk/" + name)},esModule=embed ${quote(path.join(packageRoot, "dist", name))})`,
+    ),
 ];
 await fs.writeFile(
   path.join(runRoot, "config.capnp"),

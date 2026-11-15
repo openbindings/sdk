@@ -278,6 +278,23 @@ pub fn dialect_validity(
     Ok(backend::fixed_strings(|| valid(compiled, value.view())))
 }
 
+/// Internal version-locked estimate of a cold pinned fixed compiler.
+pub fn compiler_reservation(dialect: crate::dialect::Dialect) -> usize {
+    use crate::dialect::Dialect;
+    match dialect {
+        Dialect::Draft7 if DRAFT7.get().is_none() => 448 * 1024,
+        Dialect::Draft201909 if DRAFT2019.get().is_none() => 3584 * 1024,
+        Dialect::Draft202012 if META.get().is_none() => {
+            if DOCUMENT.get().is_some() {
+                640 * 1024
+            } else {
+                1152 * 1024
+            }
+        }
+        _ => 0,
+    }
+}
+
 /// Fixed syntax validators still parse exact original operands and may lazily
 /// initialize their fixed compiler. Reserve both costs before entering either
 /// operation; a warm immutable compiler does not repeat its startup charge.
@@ -289,9 +306,17 @@ pub fn dialect_validity_bounded(
     use crate::dialect::Dialect;
     control.check()?;
     let (cold, allocation, work) = match dialect {
-        Dialect::Draft7 => (DRAFT7.get().is_none(), 1024 * 1024, 100_000),
-        Dialect::Draft201909 => (DRAFT2019.get().is_none(), 8 * 1024 * 1024, 1_000_000),
-        Dialect::Draft202012 => (META.get().is_none(), 16 * 1024 * 1024, 1_000_000),
+        Dialect::Draft7 => (DRAFT7.get().is_none(), 448 * 1024, 100_000),
+        Dialect::Draft201909 => (DRAFT2019.get().is_none(), 3584 * 1024, 1_000_000),
+        Dialect::Draft202012 => (
+            META.get().is_none(),
+            if DOCUMENT.get().is_some() {
+                640 * 1024
+            } else {
+                1152 * 1024
+            },
+            1_000_000,
+        ),
     };
     if cold {
         control.charge_allocation(allocation)?;

@@ -22,4 +22,4 @@ pub use request::PullRequest;
 /// Adopted source-puller interface version, independent of the SDK version.
 pub const INTERFACE_VERSION: &str = "0.1.0";
 /// Exact interface publication used by this companion.
-pub const APPLIED_INTERFACE_REVISION: &str = "a3c19658fc89815d7a417eae29ba31fd4e930daf";
+pub const APPLIED_INTERFACE_REVISION: &str = "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1";

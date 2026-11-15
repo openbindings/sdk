@@ -74,7 +74,9 @@ known undefined result; no-verdict means the implementation could not answer.
 Preparation work is optional and off by default (`max_sdk_work_units: None`);
 a time bound is the caller's choice through `WorkControl` cancellation or
 `Some(work_units)`. The 512 MiB reservation allowance bounds conservative
-estimates of memory held at once. Dropped scratch is released and retained
+estimates of memory held at once. Collection capacities and shared owners are
+charged at their storage lifetimes; fixed dependency construction uses a
+version-bound profile qualified against requested live heap. Dropped scratch is released and retained
 indexes/programs stay charged. See the dated
 [host-specific 250 ms suggestion](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026).
 Each preparation is independent. Ownership and thread-safety follow the concrete

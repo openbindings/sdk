@@ -58,45 +58,11 @@ export abstract class Managed {
 }
 
 /** @internal */
-export function canonicalRaw<R extends Raw>(
-  owner: Managed,
-  type: Function & { prototype: R },
-): R {
-  const raw = handle<R>(owner);
-  if (!(raw instanceof type))
-    throw new SdkError(
-      "invalid-domain-owner",
-      "This method requires the matching canonical domain owner.",
-    );
-  return raw;
-}
-
-/** @internal */
 export function adopt<R extends Raw, T>(raw: R, construct: (raw: R) => T): T {
   try {
     return construct(raw);
   } catch (error) {
     freeRaw(raw);
-    throw error;
-  }
-}
-
-/** @internal */
-export function adoptMany<R extends Raw, T extends Managed>(
-  raws: R[],
-  construct: (raw: R) => T,
-): readonly T[] {
-  const result: T[] = [];
-  let index = 0;
-  try {
-    for (; index < raws.length; index++)
-      result.push(adopt(raws[index]!, construct));
-    return Object.freeze(result);
-  } catch (error) {
-    for (const owner of result) owner.dispose();
-    // adopt frees the current raw owner if construction fails.
-    for (let remaining = index + 1; remaining < raws.length; remaining++)
-      freeRaw(raws[remaining]);
     throw error;
   }
 }

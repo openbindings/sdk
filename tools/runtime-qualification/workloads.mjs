@@ -14,21 +14,20 @@ function conformant(document) {
   check(result.status === "conformant", JSON.stringify(result));
   return result.document;
 }
-// Prepare one operation's input schema; the operation view and unprepared
-// schema are released, and the prepared value schema survives them.
+// Prepare one operation's input schema; release the unprepared owner.
+// The detached operation record needs no disposal.
 function prepareInput(proof, name, options) {
   const operation = proof.resolveOperation(name);
   check(operation, "missing operation " + name);
   let contract;
   try {
-    contract = operation.input();
+    contract = proof.inputSchema(operation.key);
     check(contract, "absent input schema " + name);
     const result = contract.prepare(options);
     check(result.status === "ready", JSON.stringify(result));
     return result.schema;
   } finally {
     contract?.dispose();
-    operation.dispose();
   }
 }
 export function prepare(sdk, source) {
@@ -137,7 +136,7 @@ export function runTier(sdk, testing, fixture, timed = true) {
       proof = assessment.document;
       contract = take("contextAndPrepare", () => {
         operation = proof.resolveOperation("check");
-        input = operation.input();
+        input = proof.inputSchema(operation.key);
         const result = input.prepare();
         check(result.status === "ready", JSON.stringify(result));
         return result.schema;
@@ -164,7 +163,6 @@ export function runTier(sdk, testing, fixture, timed = true) {
         value?.dispose();
         contract?.dispose();
         input?.dispose();
-        operation?.dispose();
         proof?.dispose();
         document?.dispose();
       });

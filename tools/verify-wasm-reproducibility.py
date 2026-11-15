@@ -9,14 +9,13 @@ a module that embeds its builder's paths.
 """
 from pathlib import Path
 import argparse
-import hashlib
 import json
 import os
 import shutil
 import subprocess
+from wasm_artifacts import checked_artifacts
 
 ROOT = Path(__file__).resolve().parents[1]
-ARTIFACTS = ["openbindings_wasm.js", "openbindings_wasm_bg.wasm", "openbindings_wasm_signature.js"]
 
 
 def require(condition, message):
@@ -52,9 +51,7 @@ def main():
         command = ["node", "packages/typescript/scripts/build-wasm.mjs"]
         print(f"+ ({label}: {checkout}, CARGO_HOME={cargo_home}) " + " ".join(command), flush=True)
         subprocess.run(command, cwd=checkout, env=env, check=True)
-        results[label] = {name: hashlib.sha256(
-            (checkout / "packages/typescript/src/wasm" / name).read_bytes()).hexdigest()
-            for name in ARTIFACTS}
+        results[label] = checked_artifacts(checkout / "packages/typescript/src/wasm")
     (out / "RESULTS.json").write_text(json.dumps(results, indent=2) + "\n")
     require(results["first"] == results["second"],
             "The Wasm build depends on where it ran: " + json.dumps(results))

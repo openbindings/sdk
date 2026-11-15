@@ -173,6 +173,18 @@ programs stay charged. Mixed construction estimates remain conservative until
 their owning construction ends. These are SDK estimates, not total process
 memory bounds or allocator accounting.
 
+Preparation now charges held collection capacities and shared program owners
+at their storage lifetimes. Cold fixed compilers and dependency construction
+use version-bound profiles. Native counting-allocator qualification on 43
+record/resource and cold-dialect samples measures charge/peak requested held
+heap at 1.000735-1.690947. A 262,156-byte `const` schema charges 3,920 bytes for
+2,924 held bytes (1.340629 times): its payload is already owned on entry and
+fixed syntax checking does not copy it. Its syntax work extent is unchanged.
+The meter excludes allocator metadata, stack, RSS and reallocation overlap;
+these samples qualify the pinned profiles, not every possible schema. Wasm
+linear-memory growth and allowance/growth ratios are a separate measurement
+in the [Workers guide](workers.md#preparation-memory).
+
 On this host, a starting preparation suggestion is
 `max_sdk_work_units: Some(250_000_000)`. On 2026-11-12 it reached its work cap in
 250.8 ms preparing a large supplied schema with 5,500 eight-property records,
@@ -228,8 +240,9 @@ order normalization already supplies. For combined set sizes N this needs at
 most O(N log N) comparisons; value sizes still determine each exact comparison's
 work. Single lookups and sets of at most eight values use linear scans. No
 input-value hashing or lossy serialization participates in equality. Authored
-enum order and first-failure reasons are retained. Union search stops at its
-first authored incompatible variant.
+enum order and first-failure reasons are retained. The amended profile continues
+past unresolved members and union pairs to find later eligible failures; a
+compatible counterpart may still end that variant's coverage search.
 
 The review witness compares N strings against 2N strings, with all matching
 values after a disjoint prefix. On Darwin arm64, Rust 1.99.0, release thin LTO,
@@ -1313,6 +1326,10 @@ commands above after a source or toolchain change.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.
+Its `artifacts` map records SHA-256 hashes for every generated runtime `.js` and
+`.wasm` file, including nested wasm-bindgen snippets, keyed by sorted relative
+paths. Runtime qualification includes all these files and the facade JavaScript
+in its asset hashes and byte counts.
 
 ## Allocation bounds
 

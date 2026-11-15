@@ -9,17 +9,28 @@ use std::{cmp::Ordering, collections::BTreeMap};
 
 pub(crate) fn all_of(
     mut siblings: Object,
-    branches: Vec<Value>,
+    mut branches: Vec<Value>,
     depth: usize,
     attempt: &mut Attempt<'_>,
 ) -> Result<Value, Failure> {
     attempt.depth(depth)?;
+    if siblings.is_empty() && branches.len() == 1 {
+        let mut branch = branches
+            .pop()
+            .expect("sole branch")
+            .owned(depth + 1, attempt)?;
+        if let Value::Object(map) = &mut branch {
+            deduplicate_enum(map, depth + 1, attempt)?;
+        }
+        return Ok(branch);
+    }
     let mut retain = outside(&siblings, depth, attempt)? || unmergeable(&siblings);
     let mut closed_count = usize::from(constrains_additional(&siblings));
     let mut properties_count = usize::from(has_properties(&siblings));
     for branch in &branches {
         let Value::Object(object) = branch.view() else {
-            return Err(Failure::from(FailureKind::InvalidSchema));
+            retain = true;
+            break;
         };
         if retain {
             break;
@@ -63,6 +74,20 @@ pub(crate) fn all_of(
         value::insert(&mut siblings, key, Value::Array(branches), attempt)?;
         return Ok(Value::Object(siblings));
     }
+    // A singleton still performs the enum intersection step, before unwrapping.
+    deduplicate_enum(&mut siblings, depth, attempt)?;
+    for branch in &mut branches {
+        if let Value::Object(map) = branch.view()
+            && get(map, "enum").is_some()
+        {
+            let mut owned = std::mem::replace(branch, Value::Object(Object::new()))
+                .owned(depth + 1, attempt)?;
+            if let Value::Object(map) = &mut owned {
+                deduplicate_enum(map, depth + 1, attempt)?;
+            }
+            *branch = owned;
+        }
+    }
     let mut result = Value::Object(siblings);
     for branch in branches {
         result = pair(result, branch, depth + 1, attempt)?;
@@ -70,10 +95,7 @@ pub(crate) fn all_of(
     Ok(result)
 }
 fn constrains_additional(object: &Object) -> bool {
-    matches!(
-        get(object, "additionalProperties"),
-        Some(Value::Boolean(false) | Value::Object(_))
-    )
+    matches!(get(object, "additionalProperties"), Some(Value::Object(map)) if !map.is_empty())
 }
 fn has_properties(object: &Object) -> bool {
     matches!(get(object, "properties"), Some(Value::Object(properties)) if !properties.is_empty())
@@ -200,11 +222,13 @@ fn keyword(
         return pair(left, right, depth, attempt);
     }
     if is(key, "additionalProperties") {
-        return match (left, right) {
-            (Value::Boolean(false), _) | (_, Value::Boolean(false)) => Ok(Value::Boolean(false)),
-            (Value::Boolean(true), other) | (other, Value::Boolean(true)) => Ok(other),
-            (left, right) => pair(left, right, depth, attempt),
-        };
+        if crate::normalize::empty_member(&left) {
+            return Ok(left);
+        }
+        if crate::normalize::empty_member(&right) {
+            return Ok(right);
+        }
+        return pair(left, right, depth, attempt);
     }
     if is(key, "const") {
         return if value::equal(&left, &right, depth, attempt)? {
@@ -220,15 +244,6 @@ fn keyword(
         let (Value::Array(left), Value::Array(right)) = (left, right) else {
             return Err(Failure::from(FailureKind::InvalidSchema));
         };
-        // The profile specifies first-branch order, but no canonical treatment
-        // of repeated equal first-branch values in an intersection.
-        for (index, value) in left.iter().enumerate() {
-            for previous in &left[..index] {
-                if value::equal(value, previous, depth + 1, attempt)? {
-                    return Err(Failure::from(FailureKind::UnsupportedNormalization));
-                }
-            }
-        }
         let mut result = attempt.vector(left.len())?;
         for value in left {
             let mut admitted = false;
@@ -342,4 +357,32 @@ fn put_string(
         value::insert(names, name, (), attempt)?;
     }
     Ok(())
+}
+
+fn deduplicate_enum(
+    map: &mut Object,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<(), Failure> {
+    let key = value::literal("enum", attempt)?;
+    let Some(Value::Array(values)) = map.remove(&key) else {
+        return Ok(());
+    };
+    let mut unique = attempt.vector(values.len())?;
+    for value in values {
+        let mut repeated = false;
+        for previous in &unique {
+            if value::equal(&value, previous, depth + 1, attempt)? {
+                repeated = true;
+                break;
+            }
+        }
+        if !repeated {
+            unique.push(value);
+        }
+    }
+    if unique.is_empty() {
+        return Err(FailureKind::UnsatisfiableMerge.into());
+    }
+    value::insert(map, key, Value::Array(unique), attempt)
 }

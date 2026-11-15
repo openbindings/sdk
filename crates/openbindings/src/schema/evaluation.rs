@@ -29,6 +29,9 @@ pub struct PreparationLimits {
     /// Local syntax checks and traversal scratch release reservations when dropped;
     /// retained indexes and programs stay charged. Mixed construction estimates
     /// conservatively stay charged until their owning construction ends.
+    /// Collection capacity, shared ownership and cold fixed compiler storage
+    /// use version-bound models qualified against requested live heap. An
+    /// existing const payload has no source-sized fixed syntax storage charge.
     /// Reservations are estimates, not allocator-wide
     /// accounting or a process memory ceiling. Dependency constructors require
     /// their evaluator's separate structural and representation limits.

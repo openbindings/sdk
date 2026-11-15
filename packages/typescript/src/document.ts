@@ -13,8 +13,6 @@ import type { ParseResult, SourceLocation } from "./diagnostics.js";
 import {
   Managed,
   adopt,
-  adoptMany,
-  canonicalRaw,
   finalizer,
   freeRaw,
   handle,
@@ -169,47 +167,93 @@ export type DocumentReport =
       };
     };
 
-// Private scalar transfers for canonical owners. Exact data never passes through them.
-interface OperationMetadata {
-  key: string;
-  description: string | null;
-  aliases: readonly string[] | null;
-  tags: readonly string[] | null;
-  deprecated: boolean | null;
+/** Detached, runtime-frozen metadata for a canonical operation. Contains only declared scalar fields and string arrays, no methods or document reference. Survives proof disposal and needs no disposal. A key used with another proof selects that proof's revision. */
+export interface Operation {
+  /** Exact primary key in this declaration's namespace. */
+  readonly key: string;
+  /** Optional description; undefined preserves absence. */
+  readonly description?: string;
+  /** Optional declared deprecation flag; absence remains undefined, distinct from false. */
+  readonly deprecated?: boolean;
+  /** Declared aliases in declaration order; frozen, with undefined for absence. */
+  readonly aliases?: readonly string[];
+  /** Declared tags in declaration order; frozen, with undefined for absence. */
+  readonly tags?: readonly string[];
 }
 
-interface BindingMetadata {
-  key: string;
-  operation: string;
-  source: string;
-  description: string | null;
-  preference: number | null;
-  idempotent: boolean | null;
-  deprecated: boolean | null;
+/** Detached, runtime-frozen metadata for a canonical binding. Contains only declared scalar fields and string arrays, no methods or document reference. Survives proof disposal and needs no disposal. A key used with another proof selects that proof's revision. */
+export interface Binding {
+  /** Exact primary key in this declaration's namespace. */
+  readonly key: string;
+  /** Optional description; undefined preserves absence. */
+  readonly description?: string;
+  /** Declared primary operation key; never an alias. */
+  readonly operationKey: string;
+  /** Declared primary source key in the same document. */
+  readonly sourceKey: string;
+  /** Optional interoperable integer preference; reading performs no ranking or binding selection. */
+  readonly preference?: number;
+  /** Optional declared idempotence flag; undefined preserves absence, distinct from false. */
+  readonly idempotent?: boolean;
+  /** Optional declared deprecation flag; undefined preserves absence, distinct from false. */
+  readonly deprecated?: boolean;
 }
 
-interface SourceMetadata {
-  key: string;
-  kind: string;
-  description: string | null;
+/** Detached, runtime-frozen metadata for a canonical source. Contains only declared scalar fields and string arrays, no methods or document reference. Survives proof disposal and needs no disposal. A key used with another proof selects that proof's revision. */
+export interface Source {
+  /** Exact primary key in this declaration's namespace. */
+  readonly key: string;
+  /** Optional description; undefined preserves absence. */
+  readonly description?: string;
+  /** Exact declared kind name, without URI normalization or kind interpretation. */
+  readonly kind: string;
 }
 
-interface DependencyMetadata {
-  key: string;
-  operation: string;
-  description: string | null;
-  kinds: readonly string[] | null;
+/** Detached, runtime-frozen metadata for a canonical dependency. Contains only declared scalar fields and string arrays, no methods or document reference. Survives proof disposal and needs no disposal. A key used with another proof selects that proof's revision. */
+export interface Dependency {
+  /** Exact primary key in this declaration's namespace. */
+  readonly key: string;
+  /** Optional description; undefined preserves absence. */
+  readonly description?: string;
+  /** Declared primary operation key; never an alias. */
+  readonly operationKey: string;
+  /** Optional frozen kind-name filter; absent accepts every kind. Present filters are nonempty. */
+  readonly kinds?: readonly string[];
 }
 
-interface ExampleMetadata {
-  key: string;
-  description: string | null;
+/** Detached, runtime-frozen metadata for a canonical example. Contains only declared scalar fields and string arrays, no methods or document reference. Survives proof disposal and needs no disposal. A key used with another proof selects that proof's revision. */
+export interface Example {
+  /** Exact example key, local to its declaring operation. */
+  readonly key: string;
+  /** Optional description; undefined preserves absence. */
+  readonly description?: string;
+}
+
+/** Compare a detached dependency's kind filter exactly. An absent filter accepts every string, including unpaired UTF-16; no live proof or initialization is required. */
+export function acceptsKind(dependency: Dependency, kind: string): boolean {
+  if (typeof kind !== "string")
+    throw new TypeError("Expected a kind name string.");
+  return dependency.kinds === undefined || dependency.kinds.includes(kind);
 }
 
 function freezeMetadata<T extends object>(row: T): T {
   for (const value of Object.values(row))
     if (Array.isArray(value)) Object.freeze(value);
   return Object.freeze(row);
+}
+
+function metadata<T extends object>(text: string): T | undefined {
+  const row = decode<T | null>(text);
+  return row === null ? undefined : freezeMetadata(row);
+}
+
+function metadataList<T extends object>(
+  text: string,
+): readonly T[] | undefined {
+  const rows = decode<T[] | null>(text);
+  if (rows === null) return undefined;
+  for (const row of rows) freezeMetadata(row);
+  return Object.freeze(rows);
 }
 
 const documentRaw = (owner: DocumentSnapshot) =>
@@ -233,17 +277,6 @@ export function conformantRaw(
   const raw = handle<wasm.WasmConformantDocument>(owner);
   if (!(raw instanceof wasm.WasmConformantDocument))
     throw new SdkError(code, "A conformant document is required.");
-  return raw;
-}
-
-// A JavaScript receiver's class is never authority for a proof-requiring call.
-function operationRaw(owner: Operation): wasm.WasmOperation {
-  const raw = handle<wasm.WasmOperation>(owner);
-  if (!(raw instanceof wasm.WasmOperation))
-    throw new SdkError(
-      "document-conformance",
-      "A conformant operation is required.",
-    );
   return raw;
 }
 
@@ -509,8 +542,6 @@ export type DocumentValidation =
 
 const conformanceToken = Symbol("established conformance");
 
-let adoptConformant: (raw: wasm.WasmConformantDocument) => ConformantDocument;
-
 let assessDocument: (
   document: DocumentSnapshot,
   limits?: ValidationLimits,
@@ -525,7 +556,6 @@ export class ConformantDocument extends DocumentSnapshot {
     super(raw);
   }
   static {
-    adoptConformant = (raw) => new ConformantDocument(raw, conformanceToken);
     assessDocument = (
       document: DocumentSnapshot,
       limits?: ValidationLimits,
@@ -602,57 +632,160 @@ export class ConformantDocument extends DocumentSnapshot {
       undefined
     );
   }
-  /** Retain all operations in lexical key order. Dispose each independently. */
+  /** Read detached frozen operations in lexical primary-key order. */
   operations(): readonly Operation[] {
-    return adoptMany(
+    return metadataList<Operation>(
       sdkCall(() => conformantRaw(this).operations()),
-      Operation.fromRaw,
-    );
+    )!;
   }
-  /** Select by exact primary key; aliases do not match here. */
+  /** Read detached frozen metadata by exact primary key; undefined when absent. Aliases do not match. */
   operation(key: string): Operation | undefined {
     scalar(key);
-    const raw = sdkCall(() => conformantRaw(this).operation(key));
-    return raw ? adopt(raw, Operation.fromRaw) : undefined;
+    return sdkCall(() => conformantRaw(this).operation(key, key));
   }
-  /** Select by primary key or alias in the proved shared namespace. */
-  resolveOperation(name: string): Operation | undefined {
-    scalar(name);
-    const raw = sdkCall(() => conformantRaw(this).resolveOperation(name));
-    return raw ? adopt(raw, Operation.fromRaw) : undefined;
+  /** Retain the exact operation declaration, including extension fields and exact tokens. Undefined for a missing primary key. Dispose the returned owner independently. */
+  operationValue(key: string): ExactJson | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).operationValue(key));
+    return raw ? new ExactJson(raw) : undefined;
   }
-  /** Retain each declared binding; undefined means absent, an empty array means present-empty. */
+  /** Read detached frozen bindings in lexical primary-key order. Undefined means absent; an empty array means present-empty. */
   bindings(): readonly Binding[] | undefined {
-    const rows = sdkCall(() => conformantRaw(this).bindings());
-    return rows ? adoptMany(rows, Binding.fromRaw) : undefined;
+    return metadataList<Binding>(sdkCall(() => conformantRaw(this).bindings()));
   }
-  /** Retain a binding selected by exact key; undefined when absent. */
+  /** Read detached frozen metadata by exact primary key; undefined when absent. Aliases do not match. */
   binding(key: string): Binding | undefined {
     scalar(key);
-    const raw = sdkCall(() => conformantRaw(this).binding(key));
-    return raw ? adopt(raw, Binding.fromRaw) : undefined;
+    return metadata<Binding>(sdkCall(() => conformantRaw(this).binding(key)));
   }
-  /** Retain each declared source; undefined means absent, an empty array means present-empty. */
+  /** Retain the exact binding declaration, including extension fields and exact tokens. Undefined for a missing primary key. Dispose the returned owner independently. */
+  bindingValue(key: string): ExactJson | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).bindingValue(key));
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Read detached frozen sources in lexical primary-key order. Undefined means absent; an empty array means present-empty. */
   sources(): readonly Source[] | undefined {
-    const rows = sdkCall(() => conformantRaw(this).sources());
-    return rows ? adoptMany(rows, Source.fromRaw) : undefined;
+    return metadataList<Source>(sdkCall(() => conformantRaw(this).sources()));
   }
-  /** Retain a source selected by exact key; undefined when absent. */
+  /** Read detached frozen metadata by exact primary key; undefined when absent. Aliases do not match. */
   source(key: string): Source | undefined {
     scalar(key);
-    const raw = sdkCall(() => conformantRaw(this).source(key));
-    return raw ? adopt(raw, Source.fromRaw) : undefined;
+    return metadata<Source>(sdkCall(() => conformantRaw(this).source(key)));
   }
-  /** Retain each declared dependency; undefined means absent, an empty array means present-empty. */
+  /** Retain the exact source declaration, including extension fields and exact tokens. Undefined for a missing primary key. Dispose the returned owner independently. */
+  sourceValue(key: string): ExactJson | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).sourceValue(key));
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Read detached frozen dependencies in lexical primary-key order. Undefined means absent; an empty array means present-empty. */
   dependencies(): readonly Dependency[] | undefined {
-    const rows = sdkCall(() => conformantRaw(this).dependencies());
-    return rows ? adoptMany(rows, Dependency.fromRaw) : undefined;
+    return metadataList<Dependency>(
+      sdkCall(() => conformantRaw(this).dependencies()),
+    );
   }
-  /** Retain a dependency selected by exact key; undefined when absent. */
+  /** Read detached frozen metadata by exact primary key; undefined when absent. Aliases do not match. */
   dependency(key: string): Dependency | undefined {
     scalar(key);
-    const raw = sdkCall(() => conformantRaw(this).dependency(key));
-    return raw ? adopt(raw, Dependency.fromRaw) : undefined;
+    return metadata<Dependency>(
+      sdkCall(() => conformantRaw(this).dependency(key)),
+    );
+  }
+  /** Retain the exact dependency declaration, including extension fields and exact tokens. Undefined for a missing primary key. Dispose the returned owner independently. */
+  dependencyValue(key: string): ExactJson | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).dependencyValue(key));
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Read detached frozen operation metadata by primary key or alias in the proved shared namespace. */
+  resolveOperation(name: string): Operation | undefined {
+    scalar(name);
+    return metadata<Operation>(
+      sdkCall(() => conformantRaw(this).resolveOperation(name)),
+    );
+  }
+  /** Read detached frozen bindings for a primary operation key, in lexical order without ranking. Undefined for a missing operation; an empty array when it has no bindings. */
+  operationBindings(operationKey: string): readonly Binding[] | undefined {
+    scalar(operationKey);
+    return metadataList<Binding>(
+      sdkCall(() => conformantRaw(this).operationBindings(operationKey)),
+    );
+  }
+  /** Read detached frozen examples in lexical operation-local key order, without validating instances. Undefined for a missing operation or absent examples; an empty array means present-empty. */
+  examples(operationKey: string): readonly Example[] | undefined {
+    scalar(operationKey);
+    return metadataList<Example>(
+      sdkCall(() => conformantRaw(this).examples(operationKey)),
+    );
+  }
+  /** Read detached frozen metadata by primary operation key and operation-local example key. Undefined when either is absent. */
+  example(operationKey: string, exampleKey: string): Example | undefined {
+    scalar(operationKey);
+    scalar(exampleKey);
+    return metadata<Example>(
+      sdkCall(() => conformantRaw(this).example(operationKey, exampleKey)),
+    );
+  }
+  /** Retain the exact example declaration by primary operation key and local example key, including extensions. Undefined when either entry is missing. Dispose the owner independently. */
+  exampleValue(
+    operationKey: string,
+    exampleKey: string,
+  ): ExactJson | undefined {
+    scalar(operationKey);
+    scalar(exampleKey);
+    const raw = sdkCall(() =>
+      conformantRaw(this).exampleValue(operationKey, exampleKey),
+    );
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Retain the input schema in its original context by primary operation key, without preparation or evaluation. Undefined for a missing operation or absent input; false remains a schema. Dispose the owner independently. */
+  inputSchema(operationKey: string): Schema | undefined {
+    scalar(operationKey);
+    const raw = sdkCall(() => conformantRaw(this).inputSchema(operationKey));
+    return raw ? adopt(raw, Schema.fromRaw) : undefined;
+  }
+  /** Retain exact example input by primary operation key and local example key, without instance validation. Undefined for missing entries or absent input; JSON null remains an owner. Dispose it independently. */
+  exampleInput(
+    operationKey: string,
+    exampleKey: string,
+  ): ExactJson | undefined {
+    scalar(operationKey);
+    scalar(exampleKey);
+    const raw = sdkCall(() =>
+      conformantRaw(this).exampleInput(operationKey, exampleKey),
+    );
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Retain the output schema in its original context by primary operation key, without preparation or evaluation. Undefined for a missing operation or absent output; false remains a schema. Dispose the owner independently. */
+  outputSchema(operationKey: string): Schema | undefined {
+    scalar(operationKey);
+    const raw = sdkCall(() => conformantRaw(this).outputSchema(operationKey));
+    return raw ? adopt(raw, Schema.fromRaw) : undefined;
+  }
+  /** Retain exact example output by primary operation key and local example key, without instance validation. Undefined for missing entries or absent output; JSON null remains an owner. Dispose it independently. */
+  exampleOutput(
+    operationKey: string,
+    exampleKey: string,
+  ): ExactJson | undefined {
+    scalar(operationKey);
+    scalar(exampleKey);
+    const raw = sdkCall(() =>
+      conformantRaw(this).exampleOutput(operationKey, exampleKey),
+    );
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Retain exact opaque source data by primary key. Undefined for a missing entry or absent data; explicit JSON null remains an owner. Dispose it independently. */
+  sourceData(key: string): ExactJson | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).sourceData(key));
+    return raw ? new ExactJson(raw) : undefined;
+  }
+  /** Retain exact opaque binding data by primary key. Undefined for a missing entry or absent data; explicit JSON null remains an owner. Dispose it independently. */
+  bindingData(key: string): ExactJson | undefined {
+    scalar(key);
+    const raw = sdkCall(() => conformantRaw(this).bindingData(key));
+    return raw ? new ExactJson(raw) : undefined;
   }
   /** Retain a named schema in its original context, without preparation or evaluation. */
   schema(key: string): Schema | undefined {
@@ -685,352 +818,5 @@ export class ConformantDocument extends DocumentSnapshot {
         sdkCall(() => conformantRaw(this).locate(location)),
       ) ?? undefined
     );
-  }
-}
-
-/** A canonical operation in a conformant immutable document. Child owners survive disposal of their parents. */
-export class Operation extends Managed {
-  #metadata?: OperationMetadata;
-  private constructor(raw: wasm.WasmOperation) {
-    super(raw);
-  }
-  /** @internal */ static fromRaw(raw: wasm.WasmOperation): Operation {
-    return new Operation(raw);
-  }
-  /** Retain an independent owner of this same immutable declaration. */
-  retain(): Operation {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmOperation).retain()),
-      Operation.fromRaw,
-    );
-  }
-  /** Retain the same document proof as a separately disposable owner. */
-  document(): ConformantDocument {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmOperation).document()),
-      adoptConformant,
-    );
-  }
-  /** Retain the original declaration, including extension fields and exact tokens. */
-  value(): ExactJson {
-    return new ExactJson(
-      wasmCall(() => canonicalRaw(this, wasm.WasmOperation).value()),
-    );
-  }
-  get #fields(): OperationMetadata {
-    const raw = canonicalRaw(this, wasm.WasmOperation);
-    return (this.#metadata ??= freezeMetadata(
-      decode<OperationMetadata>(wasmCall(() => raw.metadata())),
-    ));
-  }
-  /** Exact primary key in this declaration’s namespace. */
-  get key(): string {
-    return this.#fields.key;
-  }
-  /** Optional description; undefined preserves absence. */
-  get description(): string | undefined {
-    return this.#fields.description ?? undefined;
-  }
-  /** Optional declared deprecation flag; absence remains undefined, distinct from false. */
-  get deprecated(): boolean | undefined {
-    return this.#fields.deprecated ?? undefined;
-  }
-  /** Declared aliases in declaration order; frozen, with undefined for absence. */
-  get aliases(): readonly string[] | undefined {
-    return this.#fields.aliases ?? undefined;
-  }
-  /** Declared tags in declaration order; frozen, with undefined for absence. */
-  get tags(): readonly string[] | undefined {
-    return this.#fields.tags ?? undefined;
-  }
-  /** Retain the input schema in its original context; undefined when absent. Does not prepare or evaluate it. */
-  input(): Schema | undefined {
-    const raw = wasmCall(() => operationRaw(this).input());
-    return raw ? adopt(raw, Schema.fromRaw) : undefined;
-  }
-  /** Retain the output schema in its original context; undefined when absent. Does not prepare or evaluate it. */
-  output(): Schema | undefined {
-    const raw = wasmCall(() => operationRaw(this).output());
-    return raw ? adopt(raw, Schema.fromRaw) : undefined;
-  }
-  /** Retain bindings in lexical order, without ranking or selection. */
-  bindings(): readonly Binding[] {
-    return adoptMany(
-      wasmCall(() => operationRaw(this).bindings()),
-      Binding.fromRaw,
-    );
-  }
-  /** Retain examples in lexical key order; undefined means absent and an empty array means present-empty. Dispose each owner. */
-  examples(): readonly Example[] | undefined {
-    const rows = wasmCall(() => operationRaw(this).examples());
-    return rows ? adoptMany(rows, Example.fromRaw) : undefined;
-  }
-  /** Retain an example by its operation-local key; undefined when absent. */
-  example(key: string): Example | undefined {
-    scalar(key);
-    const raw = wasmCall(() => operationRaw(this).example(key));
-    return raw ? adopt(raw, Example.fromRaw) : undefined;
-  }
-}
-
-/** A canonical binding in a conformant immutable document. Child owners survive disposal of their parents. */
-export class Binding extends Managed {
-  #metadata?: BindingMetadata;
-  private constructor(raw: wasm.WasmBinding) {
-    super(raw);
-  }
-  /** @internal */ static fromRaw(raw: wasm.WasmBinding): Binding {
-    return new Binding(raw);
-  }
-  /** Retain an independent owner of this same immutable declaration. */
-  retain(): Binding {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).retain()),
-      Binding.fromRaw,
-    );
-  }
-  /** Retain the same document proof as a separately disposable owner. */
-  document(): ConformantDocument {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).document()),
-      adoptConformant,
-    );
-  }
-  /** Retain the original declaration, including extension fields and exact tokens. */
-  value(): ExactJson {
-    return new ExactJson(
-      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).value()),
-    );
-  }
-  get #fields(): BindingMetadata {
-    const raw = canonicalRaw(this, wasm.WasmBinding);
-    return (this.#metadata ??= freezeMetadata(
-      decode<BindingMetadata>(wasmCall(() => raw.metadata())),
-    ));
-  }
-  /** Exact primary key in this declaration’s namespace. */
-  get key(): string {
-    return this.#fields.key;
-  }
-  /** Optional description; undefined preserves absence. */
-  get description(): string | undefined {
-    return this.#fields.description ?? undefined;
-  }
-  /** Retain exact opaque data. Undefined means absent; explicit null remains a value. */
-  data(): ExactJson | undefined {
-    const raw = wasmCall(() => canonicalRaw(this, wasm.WasmBinding).data());
-    return raw ? new ExactJson(raw) : undefined;
-  }
-  /** Declared primary operation key; never an alias. */
-  get operationKey(): string {
-    return this.#fields.operation;
-  }
-  /** Declared primary source key in the same document. */
-  get sourceKey(): string {
-    return this.#fields.source;
-  }
-  /** Optional interoperable integer preference. Reading it performs no ranking or binding selection. */
-  get preference(): number | undefined {
-    return this.#fields.preference ?? undefined;
-  }
-  /** Optional declared idempotence flag; undefined preserves absence, distinct from false. */
-  get idempotent(): boolean | undefined {
-    return this.#fields.idempotent ?? undefined;
-  }
-  /** Optional declared deprecation flag; absence remains undefined, distinct from false. */
-  get deprecated(): boolean | undefined {
-    return this.#fields.deprecated ?? undefined;
-  }
-  /** Retain the referenced operation from this same conformant snapshot. */
-  operation(): Operation {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).operation()),
-      Operation.fromRaw,
-    );
-  }
-  /** Retain the referenced source from this same conformant snapshot. */
-  source(): Source {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).source()),
-      Source.fromRaw,
-    );
-  }
-}
-
-/** A canonical source in a conformant immutable document. Child owners survive disposal of their parents. */
-export class Source extends Managed {
-  #metadata?: SourceMetadata;
-  private constructor(raw: wasm.WasmSource) {
-    super(raw);
-  }
-  /** @internal */ static fromRaw(raw: wasm.WasmSource): Source {
-    return new Source(raw);
-  }
-  /** Retain an independent owner of this same immutable declaration. */
-  retain(): Source {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmSource).retain()),
-      Source.fromRaw,
-    );
-  }
-  /** Retain the same document proof as a separately disposable owner. */
-  document(): ConformantDocument {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmSource).document()),
-      adoptConformant,
-    );
-  }
-  /** Retain the original declaration, including extension fields and exact tokens. */
-  value(): ExactJson {
-    return new ExactJson(
-      wasmCall(() => canonicalRaw(this, wasm.WasmSource).value()),
-    );
-  }
-  get #fields(): SourceMetadata {
-    const raw = canonicalRaw(this, wasm.WasmSource);
-    return (this.#metadata ??= freezeMetadata(
-      decode<SourceMetadata>(wasmCall(() => raw.metadata())),
-    ));
-  }
-  /** Exact primary key in this declaration’s namespace. */
-  get key(): string {
-    return this.#fields.key;
-  }
-  /** Optional description; undefined preserves absence. */
-  get description(): string | undefined {
-    return this.#fields.description ?? undefined;
-  }
-  /** Retain exact opaque data. Undefined means absent; explicit null remains a value. */
-  data(): ExactJson | undefined {
-    const raw = wasmCall(() => canonicalRaw(this, wasm.WasmSource).data());
-    return raw ? new ExactJson(raw) : undefined;
-  }
-  /** Exact declared kind name, without URI normalization or kind interpretation. */
-  get kind(): string {
-    return this.#fields.kind;
-  }
-}
-
-/** A canonical dependency in a conformant immutable document. Child owners survive disposal of their parents. */
-export class Dependency extends Managed {
-  #metadata?: DependencyMetadata;
-  private constructor(raw: wasm.WasmDependency) {
-    super(raw);
-  }
-  /** @internal */ static fromRaw(raw: wasm.WasmDependency): Dependency {
-    return new Dependency(raw);
-  }
-  /** Retain an independent owner of this same immutable declaration. */
-  retain(): Dependency {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmDependency).retain()),
-      Dependency.fromRaw,
-    );
-  }
-  /** Retain the same document proof as a separately disposable owner. */
-  document(): ConformantDocument {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmDependency).document()),
-      adoptConformant,
-    );
-  }
-  /** Retain the original declaration, including extension fields and exact tokens. */
-  value(): ExactJson {
-    return new ExactJson(
-      wasmCall(() => canonicalRaw(this, wasm.WasmDependency).value()),
-    );
-  }
-  get #fields(): DependencyMetadata {
-    const raw = canonicalRaw(this, wasm.WasmDependency);
-    return (this.#metadata ??= freezeMetadata(
-      decode<DependencyMetadata>(wasmCall(() => raw.metadata())),
-    ));
-  }
-  /** Exact primary key in this declaration’s namespace. */
-  get key(): string {
-    return this.#fields.key;
-  }
-  /** Optional description; undefined preserves absence. */
-  get description(): string | undefined {
-    return this.#fields.description ?? undefined;
-  }
-  /** Declared primary operation key; never an alias. */
-  get operationKey(): string {
-    return this.#fields.operation;
-  }
-  /** Optional frozen kind-name filter; absent accepts every kind. Present filters are nonempty. */
-  get kinds(): readonly string[] | undefined {
-    return this.#fields.kinds ?? undefined;
-  }
-  /** Retain the referenced operation from this same conformant snapshot. */
-  operation(): Operation {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmDependency).operation()),
-      Operation.fromRaw,
-    );
-  }
-  /** Exact kind-name comparison. An absent filter accepts all names. */
-  acceptsKind(kind: string): boolean {
-    requireUsable();
-    if (typeof kind !== "string")
-      throw new TypeError("Expected a kind name string.");
-    return sdkCall(() =>
-      canonicalRaw(this, wasm.WasmDependency).acceptsKind(JSON.stringify(kind)),
-    );
-  }
-}
-
-/** A canonical example in a conformant immutable document. Child owners survive disposal of their parents. */
-export class Example extends Managed {
-  #metadata?: ExampleMetadata;
-  private constructor(raw: wasm.WasmExample) {
-    super(raw);
-  }
-  /** @internal */ static fromRaw(raw: wasm.WasmExample): Example {
-    return new Example(raw);
-  }
-  /** Retain an independent owner of this same immutable declaration. */
-  retain(): Example {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmExample).retain()),
-      Example.fromRaw,
-    );
-  }
-  /** Retain the same document proof as a separately disposable owner. */
-  document(): ConformantDocument {
-    return adopt(
-      wasmCall(() => canonicalRaw(this, wasm.WasmExample).document()),
-      adoptConformant,
-    );
-  }
-  /** Retain the original declaration, including extension fields and exact tokens. */
-  value(): ExactJson {
-    return new ExactJson(
-      wasmCall(() => canonicalRaw(this, wasm.WasmExample).value()),
-    );
-  }
-  get #fields(): ExampleMetadata {
-    const raw = canonicalRaw(this, wasm.WasmExample);
-    return (this.#metadata ??= freezeMetadata(
-      decode<ExampleMetadata>(wasmCall(() => raw.metadata())),
-    ));
-  }
-  /** Exact example key, local to its declaring operation. */
-  get key(): string {
-    return this.#fields.key;
-  }
-  /** Optional description; undefined preserves absence. */
-  get description(): string | undefined {
-    return this.#fields.description ?? undefined;
-  }
-  /** Retain the exact example input, without validating it against the operation schema. Undefined means absent; null remains a value. */
-  input(): ExactJson | undefined {
-    const raw = wasmCall(() => canonicalRaw(this, wasm.WasmExample).input());
-    return raw ? new ExactJson(raw) : undefined;
-  }
-  /** Retain the exact example output, without validating it against the operation schema. Undefined means absent; null remains a value. */
-  output(): ExactJson | undefined {
-    const raw = wasmCall(() => canonicalRaw(this, wasm.WasmExample).output());
-    return raw ? new ExactJson(raw) : undefined;
   }
 }

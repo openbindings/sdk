@@ -2,7 +2,7 @@
 //! Kind definitions are local to this fixture, not OpenBindings standards.
 use openbindings::{JsonRef, JsonValue};
 use openbindings_schema_comparison::{
-    ComparisonFailure, ComparisonLimits, ReferenceContext, ComparisonContext, identical,
+    ComparisonContext, ComparisonFailure, ComparisonLimits, ReferenceContext,
     identical_with_references,
 };
 use openbindings_source_pull::*;
@@ -136,7 +136,7 @@ fn slots(
     observed: &ComparisonContext,
     existing: JsonRef<'_>,
     original: &ComparisonContext,
-    accounted_for: Option<&dyn Fn(ReferenceContext<'_>) -> bool>,
+    accounted_for: &dyn Fn(ReferenceContext<'_>) -> bool,
 ) -> Result<[SlotComparison; 2], CatalogError> {
     let mut answers = [SlotComparison::Current; 2];
     for (index, name) in ["input", "output"].into_iter().enumerate() {
@@ -144,22 +144,15 @@ fn slots(
             .operation
             .get(name)
             .map(|s| observed.schema(s.to_owned()));
-        let right = existing
-            .get(name)
-            .map(|s| original.schema(s.to_owned()));
+        let right = existing.get(name).map(|s| original.schema(s.to_owned()));
         let limits = ComparisonLimits::default();
-        let equal = match accounted_for {
-            Some(accounted_for) => {
-                identical_with_references(left.as_ref(), right.as_ref(), accounted_for, &limits)
-            }
-            None => identical(left.as_ref(), right.as_ref(), &limits),
-        }
-        .map_err(CatalogError::Comparison)?;
+        let equal =
+            identical_with_references(left.as_ref(), right.as_ref(), accounted_for, &limits)
+                .map_err(CatalogError::Comparison)?;
         answers[index] = if equal {
             SlotComparison::Current
-        } else if accounted_for.is_some()
-            && identical_with_references(left.as_ref(), right.as_ref(), &|_| true, &limits)
-                .map_err(CatalogError::Comparison)?
+        } else if identical_with_references(left.as_ref(), right.as_ref(), &|_| true, &limits)
+            .map_err(CatalogError::Comparison)?
         {
             SlotComparison::Unassessed
         } else {
@@ -180,6 +173,42 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
     let mut added = Vec::new();
     let mut existing = Vec::new();
     let mut omitted = Vec::new();
+    // This illustrative catalog accounts for operation slots through existing
+    // bindings of this source. It offers no named-schema report entries.
+    let accounted_slots: Vec<_> = bindings
+        .into_iter()
+        .flat_map(|v| v.members().unwrap())
+        .filter(|b| b.value.get("source").and_then(|s| s.as_str()) == Some(request.source()))
+        .filter(|b| {
+            observed.offers.iter().any(|o| {
+                b.value
+                    .get("data")
+                    .and_then(|d| d.get("item"))
+                    .and_then(|v| v.as_str())
+                    == Some(o.key.as_str())
+            })
+        })
+        .flat_map(|b| {
+            let operation = b
+                .value
+                .get("operation")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .replace('~', "~0")
+                .replace('/', "~1");
+            [
+                format!("#/operations/{operation}/input"),
+                format!("#/operations/{operation}/output"),
+            ]
+        })
+        .collect();
+    let accounted_for = |context: ReferenceContext<'_>| {
+        context.base().is_none()
+            && accounted_slots
+                .iter()
+                .any(|slot| context.spelling() == slot)
+    };
     for offer in &observed.offers {
         // Existing paths are accounted below, rather than added a second time.
         let accounted = bindings
@@ -222,7 +251,13 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         }
         let operation_key = identified.first().unwrap_or(&offer.key);
         let reused = if let Some(operation) = operations.get(operation_key) {
-            let compared = match slots(offer, &offered_context, operation, &original_context, None) {
+            let compared = match slots(
+                offer,
+                &offered_context,
+                operation,
+                &original_context,
+                &accounted_for,
+            ) {
                 Ok(compared) => compared,
                 Err(CatalogError::Comparison(_)) => {
                     omitted.push(json(&format!(r#"{{"status":"implementation-unsupported","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared.","item":{},"existing":{}}}"#, quote(&format!("operations/{}", offer.key)), quote(&format!("operations/{operation_key}")))));
@@ -258,42 +293,6 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
             if reused { ",\"reused\":true" } else { "" }
         )));
     }
-    // This illustrative catalog accounts for operation slots through existing
-    // bindings of this source. It offers no named-schema report entries.
-    let accounted_slots: Vec<_> = bindings
-        .into_iter()
-        .flat_map(|v| v.members().unwrap())
-        .filter(|b| b.value.get("source").and_then(|s| s.as_str()) == Some(request.source()))
-        .filter(|b| {
-            observed.offers.iter().any(|o| {
-                b.value
-                    .get("data")
-                    .and_then(|d| d.get("item"))
-                    .and_then(|v| v.as_str())
-                    == Some(o.key.as_str())
-            })
-        })
-        .flat_map(|b| {
-            let operation = b
-                .value
-                .get("operation")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .replace('~', "~0")
-                .replace('/', "~1");
-            [
-                format!("#/operations/{operation}/input"),
-                format!("#/operations/{operation}/output"),
-            ]
-        })
-        .collect();
-    let accounted_for = |context: ReferenceContext<'_>| {
-        context.base().is_none()
-            && accounted_slots.iter().any(|slot| {
-                context.spelling() == slot
-            })
-    };
     for binding in bindings.into_iter().flat_map(|v| v.members().unwrap()) {
         if binding.value.get("source").and_then(|s| s.as_str()) != Some(request.source()) {
             continue;
@@ -329,7 +328,13 @@ fn reconcile(request: &PullRequest, observed: Observation) -> Result<PullResult,
         {
             proposal.insert("data".into(), offer.data.clone());
         }
-        let comparisons = match slots(offer, &offered_context, operation, &original_context, Some(&accounted_for)) {
+        let comparisons = match slots(
+            offer,
+            &offered_context,
+            operation,
+            &original_context,
+            &accounted_for,
+        ) {
             Ok(comparisons) => comparisons,
             Err(CatalogError::Comparison(_)) => {
                 existing.push(json(&format!(r#"{{"binding":{},"status":"unassessed","reasonCode":"comparison-unfinished","message":"The offered schemas could not be compared."}}"#, quote(key))));

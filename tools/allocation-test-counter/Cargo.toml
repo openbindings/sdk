@@ -1,0 +1,6 @@
+[package]
+name = "openbindings-allocation-test-counter"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+publish = false

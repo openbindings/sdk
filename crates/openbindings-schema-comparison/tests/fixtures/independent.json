@@ -315,8 +315,8 @@
       "right": {
         "schema_json": "{\"not\":{\"type\":[\"string\"],\"title\":\"b\"}}"
       },
-      "expected": "Different",
-      "reason": "Outside-profile keyword payload is retained verbatim, not recursively normalized."
+      "expected": "Equal",
+      "reason": "The adopted profile maps Boolean schemas and normalizes retained schema positions."
     },
     {
       "id": "opaque-prefix-items",
@@ -326,8 +326,8 @@
       "right": {
         "schema_json": "{\"prefixItems\":[{\"type\":[\"string\"],\"title\":\"b\"}]}"
       },
-      "expected": "Different",
-      "reason": "Outside-profile keyword payload is retained verbatim, not recursively normalized."
+      "expected": "Equal",
+      "reason": "The adopted profile maps Boolean schemas and normalizes retained schema positions."
     },
     {
       "id": "opaque-const-reference",
@@ -691,8 +691,8 @@
       "right": {
         "schema_json": "{\"additionalProperties\":{}}"
       },
-      "expected": "Different",
-      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+      "expected": "Equal",
+      "reason": "The adopted profile maps Boolean schemas and normalizes retained schema positions."
     },
     {
       "id": "additional-false-vs-not-empty",
@@ -702,8 +702,8 @@
       "right": {
         "schema_json": "{\"additionalProperties\":{\"not\":{}}}"
       },
-      "expected": "Different",
-      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+      "expected": "Equal",
+      "reason": "The adopted profile maps Boolean schemas and normalizes retained schema positions."
     },
     {
       "id": "additional-ref-true-vs-object",
@@ -726,8 +726,8 @@
       "right": {
         "schema_json": "{\"additionalProperties\":true}"
       },
-      "expected": "Different",
-      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+      "expected": "Equal",
+      "reason": "The adopted profile maps Boolean schemas and normalizes retained schema positions."
     },
     {
       "id": "additional-ref-false-vs-object",
@@ -750,8 +750,8 @@
       "right": {
         "schema_json": "{\"additionalProperties\":false}"
       },
-      "expected": "Different",
-      "reason": "AdditionalProperties literal booleans stay flags; only object schema form normalizes recursively. Ref targets use schema Boolean normalization, without reverse coercion."
+      "expected": "Equal",
+      "reason": "The adopted profile maps Boolean schemas and normalizes retained schema positions."
     }
   ]
 }

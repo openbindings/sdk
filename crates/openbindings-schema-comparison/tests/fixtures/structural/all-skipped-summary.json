@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "All directional slots are unspecified on at least one side, so the summary is compatible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "a": {},
+      "b": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "a": {
+        "input": {
+          "type": "integer"
+        }
+      },
+      "b": {}
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

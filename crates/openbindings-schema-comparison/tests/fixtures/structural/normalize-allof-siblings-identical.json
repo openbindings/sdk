@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Sibling keywords beside allOf form one additional branch, merged first: the carrying schema's own type, required, properties, bounds, and enum participate in the merge, and enum intersection preserves the sibling branch's value order.",
+  "description": "Sibling keywords merge first; enum intersection keeps each survivor once in first-occurrence order.",
   "mode": "identical",
   "options": {
     "profile": "OB-2020-12"

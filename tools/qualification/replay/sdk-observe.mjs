@@ -41,20 +41,20 @@ export function observe(sdk, request) {
     if (validation.status !== "conformant") throw new Error("Fixture document lacks conformance proof");
     const conformant = own(validation.document);
     if (request.action === "resolve-operation") {
-      const op = own(conformant.resolveOperation(given.name));
+      const op = conformant.resolveOperation(given.name);
       if (!op) return { ...output, outcome: "not-found" };
       return {
         ...output,
         outcome: "resolved",
         operationKey: op.key,
-        bindingKeys: op.bindings().map(binding => own(binding).key),
+        bindingKeys: conformant.operationBindings(op.key).map(binding => binding.key),
       };
     }
     if (request.action === "check-dependency-kind") {
-      const binding = own(conformant.binding(given.binding));
-      const source = own(binding.source());
-      const dependency = own(conformant.dependency(given.dependency));
-      return { ...output, outcome: dependency.acceptsKind(source.kind) ? "meets" : "does-not-meet" };
+      const binding = conformant.binding(given.binding);
+      const source = conformant.source(binding.sourceKey);
+      const dependency = conformant.dependency(given.dependency);
+      return { ...output, outcome: sdk.acceptsKind(dependency, source.kind) ? "meets" : "does-not-meet" };
     }
     let resources = own(new sdk.ExternalSchemas());
     for (const r of given.resources ?? []) {
@@ -68,9 +68,9 @@ export function observe(sdk, request) {
     const prepare = (name, side) => {
       if (side !== "input" && side !== "output")
         throw new Error("Unknown operation side: " + side);
-      const operation = own(conformant.resolveOperation(name));
+      const operation = conformant.resolveOperation(name);
       if (!operation) return { status: "operation-missing" };
-      const contract = own(side === "input" ? operation.input() : operation.output());
+      const contract = own(side === "input" ? conformant.inputSchema(operation.key) : conformant.outputSchema(operation.key));
       if (!contract) return { status: "no-contract" };
       return contract.prepare({ resources });
     };
@@ -97,14 +97,14 @@ export function observe(sdk, request) {
       };
     }
     if (request.action === "check-examples") {
-      const op = own(conformant.resolveOperation(given.operation));
+      const op = conformant.resolveOperation(given.operation);
       if (!op) throw new Error("Example operation missing");
-      const examples = op.examples()?.map(own);
+      const examples = conformant.examples(op.key);
       const results = [];
       if (examples) {
         for (const example of examples) {
           for (const direction of ["input", "output"]) {
-            const value = own(direction === "input" ? example.input() : example.output());
+            const value = own(direction === "input" ? conformant.exampleInput(op.key, example.key) : conformant.exampleOutput(op.key, example.key));
             if (value) {
               const preparation = prepare(given.operation, direction);
               const outcome =

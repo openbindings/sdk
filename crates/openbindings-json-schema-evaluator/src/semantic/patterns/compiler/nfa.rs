@@ -159,6 +159,17 @@ pub(super) fn prepare(
     let maximum_bytes = maximum_bytes.min(profile::NFA_BYTES);
     budget.check(control)?;
     let built = {
+        // The pinned forward builder holds its state vector, patch lists and
+        // helper payload together. Reserve that temporary live profile before
+        // entering it; the returned program is charged separately on publication.
+        let scratch = openbindings_internal_schema::preparation::Scratch::new(control);
+        let bytes = scores
+            .dispatch
+            .saturating_mul(96)
+            .saturating_add(scores.helper_payload.saturating_mul(32))
+            .saturating_add(scores.empty_tail_pressure.saturating_mul(32))
+            .saturating_add(4096);
+        scratch.charge_allocation(bytes)?;
         #[cfg(test)]
         tests::entered_backend();
         let mut compiler = thompson::NFA::compiler();

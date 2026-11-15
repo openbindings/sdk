@@ -2,10 +2,10 @@
 
 Compare schemas by normalized identity or directional compatibility under profile
 `OB-2020-12` version `0.1`, pinned at interfaces revision
-`a3c19658fc89815d7a417eae29ba31fd4e930daf`. This unpublished companion is independent
+`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. This unpublished companion is independent
 of core document conformance and the value evaluator. It implements the profile's
 directional rules and interface-level fold, plus the source puller's reference
-rule for existing-entry identity.
+rule for reuse and existing-entry identity.
 
 ```rust
 use openbindings::JsonValue;
@@ -112,7 +112,9 @@ as core conformance and the value evaluator, including nested `$id` resources.
 
 Normalization strips the profile's annotations/extensions, canonicalizes type and
 required, resolves references, and merges eligible allOf branches in authored
-order. Outside-profile keywords remain authored data. References at schema positions
+order. Retained operators preserve authored order. At their schema positions, Boolean
+mapping, annotation/extension stripping and canonical type/required still apply.
+Unknown-keyword payloads and const/enum instance data remain authored data. References at schema positions
 inside retained 2020-12 applicators, and initial `$dynamicRef` targets, must resolve
 and have identical normalized targets for identity. They remain uninlined.
 Missing targets and cycles fail, including when the authored content is equal.
@@ -122,9 +124,10 @@ constraint that merging would loosen remains ordered. `nullable` stays outside t
 profile. `$defs` remains only on a schema whose own schema subtree carries a
 retained keyword. Unrelated schemas and non-schema carrier members cannot keep it. Union arrays at actual schema oneOf/anyOf
 positions compare as multisets with multiplicity; ordinary arrays, including
-const/enum and unknown-keyword contents, remain ordered. Literal additionalProperties
-booleans retain their flags; object forms normalize as schemas. The profile's
-literal false/true merge rules do not rewrite object forms into those flags.
+const/enum and unknown-keyword contents, remain ordered. Boolean schemas map to objects everywhere, including additionalProperties and
+kept definitions. Kept definitions supply identity context, not directional
+constraints; definitions-only roots are Top. A sole allOf branch unwraps after
+reference resolution and enum deduplication unless siblings retain identity context.
 
 Numbers compare mathematically without binary64 conversion or exponent expansion.
 Names and strings retain decoded UTF-16 identity without Unicode normalization.
@@ -136,9 +139,8 @@ input-value hashing. Single lookups and sets of at most eight values use linear
 search; required names already normalize into sorted order. Membership leaves
 authored enum order intact, including the first failing value in a reason.
 Ambiguous duplicate object members are refused, including inside opaque data.
-Enum intersections retain the first branch's order; repeated equal first-branch
-values currently return UnsupportedNormalization because the pin does not specify
-their canonical intersection multiplicity. Standalone enum order/multiplicity is
+Enum intersections emit each surviving exact value once, in first-occurrence
+order from the first enum-bearing branch, including a sole branch. Standalone enum order/multiplicity is
 preserved. Empty type/enum intersections and conflicting const values fail the
 merge rather than producing an identity answer. Other cross-keyword constraints
 remain separate fields as the table prescribes: merging const with enum or lower
@@ -168,8 +170,8 @@ values. Each fourfold increase may use at most eight times the work: fixed-width
 cancellation polls by four, independently of input width. These are deterministic
 SDK work and poll checks, not duration guarantees.
 
-The fixture harness passes all 30 ordinary and 10 exact identity groups, and all
-65 ordinary and 29 exact directional groups, including expected normalization
+The fixture harness passes all 55 ordinary and 11 exact identity groups, and all
+186 ordinary and 29 exact directional groups, including expected normalization
 failures. No groups are skipped. All copied inputs are byte-identical to the pin,
 with hashes in `tests/fixtures/README.md`.
 
@@ -179,7 +181,8 @@ with hashes in `tests/fixtures/README.md`.
 two present `SchemaInput`s. `compare_with_control` adds cooperative cancellation.
 Both return `Result<Comparison, ComparisonFailure>`. `Comparison::verdict()` is
 `Compatible`, `Incompatible`, or `Indeterminate`; `reason()` exposes report data
-and `finding()` returns `outside-profile` for indeterminate positions. Public
+and `finding()` distinguishes `outside-profile` boundaries from `unresolved`
+proof obligations and ineligible failures. Public
 `Debug` and diagnostic `Display` never disclose schema values or reason strings.
 Normalization failures, including unsatisfiable merges and resource refusals, are
 errors without a verdict. Ordinary `identical` changes only where the amended profile changes identity:
@@ -197,17 +200,32 @@ assert_eq!(result.verdict(), Verdict::Compatible);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-The walk applies identity, outside-profile refusal, Top, type, const/enum,
-objects, items, numeric bounds, string bounds, array bounds and unions in that
-order. It stops at the first failing rule. Identity prunes even outside-profile
-positions. A non-identical position carrying both `oneOf` and `anyOf` is
-indeterminate before any other directional rule runs. Retained conjunctions with no directional merge rule fail closed when
-they differ. Union search accepts a definitive matching variant; if no variant
-matches and some comparisons are indeterminate, that variant remains indeterminate.
-A variant with no match decides incompatible before an indeterminate variant
-decides indeterminate, whatever order the variants were written in; the reason
-names the first authored variant of the deciding kind. The walk stops as soon as
-that first incompatible variant is known.
+Compatible proves inclusion. Incompatible follows the profile's conditional
+promise: a rule supplies a flowing value that is refused, subject to local
+vacuity and the stated failure guards. This is the SDK composition convention;
+the delegate-manager interface's separate established-contradiction requirement
+still requires its own evidence. Identity differences and missing operations do
+not promise a schema-value counterexample.
+
+Identity runs first. Non-identical oneOf, retained allOf and externally assigned
+foreign dialect positions stop on either side; outside-profile flowing content
+also stops. Receiving-only unknown content retains an unresolved obligation while
+its known rules run, excluding additionalProperties beside patternProperties and
+items beside prefixItems. Externally reached schemas retain their assigned dialect,
+including inherited declarations and embedded resources. Foreign identity includes
+the schema, assigned dialect and entire supplied context, without 2020-12 rewrites.
+
+Type-specific rules run only for flowing types. Effective object members compare
+in both directions over the union of declared names, then remaining names. Finite
+source constraints, numeric endpoint guards and flowing union siblings can make
+failures unresolved; they retain their located keyword and explanation. Length
+proofs use nonnegative integral domains, including empty domains and zero-item
+arrays. Receiving Top and proved empty flowing length domains can end a position.
+AnyOf supports cross-form coverage and the profile's two limited counterexample
+rules. Uncovered pairwise variants alone remain indeterminate.
+
+Every relevant member and later rule contributes. Incompatible dominates
+indeterminate, then compatible; an unresolved result never hides a later failure.
 Reasons retain nested paths, exact JSON values, exclusive markers, actual union
 keys and authored indexes. Types, properties and required names choose the first
 lexical failure; enum and union traversal retain authored order.
@@ -241,7 +259,8 @@ order of correspondences, output before input. `correspondence()` identifies the
 matched provided operation and role for each issue.
 
 Summary policy belongs to the caller. `Verdict::collapse` accepts verdicts only,
-using `indeterminate > incompatible > compatible`. The report and correspondence
+using `incompatible > indeterminate > compatible`. Empty and entirely skipped
+checks collapse to compatible. The report and correspondence
 have no collapse method that interprets comparison failures.
 
 ```rust
@@ -309,7 +328,9 @@ assert!(identical_with_references(Some(&before), Some(&offered), &|_| true, &lim
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-A source puller reports the last situation as `unassessed`. Annotation-only edits
+This reference rule applies to operation reuse as well as existing entries.
+A source puller reports the last existing-entry situation as `unassessed`;
+reuse requires identity under the same accounting. Annotation-only edits
 remain `current`. Binding and source data still compare as exact JSON values.
 
 ```rust

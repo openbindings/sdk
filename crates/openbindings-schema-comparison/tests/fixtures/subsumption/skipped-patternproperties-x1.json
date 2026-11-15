@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "description": "Receiving patternProperties prevents an additionalProperties rejection for the undeclared x1 member.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^x": {}
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "object",
+          "properties": {
+            "x1": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

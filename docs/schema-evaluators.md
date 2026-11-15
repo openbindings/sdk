@@ -132,6 +132,11 @@ details rather than allocating an unbounded diagnostic path.
 The counters cover cooperative SDK sites in environment inventory, reference
 queries, retained operands, semantic proofs and nested meta-schema validation.
 Storage reservations include temporary and failed SDK construction while held.
+Preparation uses collection capacity, owned programs and cold fixed compiler
+state rather than cumulative per-entry estimates. Version-bound construction
+profiles are qualified against requested live heap on representative shapes;
+allocator metadata, stack and RSS are outside that measurement. Fixed syntax
+admission does not charge a source-sized copy of an existing const payload.
 Local syntax checks, traversal scratch and nested meta-evaluation scratch release
 their reservations when dropped. Retained programs and indexes stay charged;
 mixed construction estimates conservatively stay charged with their owner. They do not

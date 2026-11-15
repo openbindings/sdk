@@ -1,0 +1,57 @@
+{
+  "version": "1.0",
+  "description": "The c type failure decides independently of the identical required const member k.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "required": [
+            "k",
+            "c"
+          ],
+          "properties": {
+            "k": {
+              "const": "x"
+            },
+            "c": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "required": [
+            "k",
+            "c"
+          ],
+          "properties": {
+            "k": {
+              "const": "x"
+            },
+            "c": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

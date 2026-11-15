@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Input: a candidate that cannot cover every target variant \u2014 or is not a union when the target is \u2014 is breaking (no cross-form rule is defined).",
+  "description": "The anyOf branch has an eligible type failure against its sole counterpart; the oneOf operation remains indeterminate, and incompatible wins the summary.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"

@@ -73,6 +73,7 @@ pub(super) fn select(
     limits: &crate::Limits,
     preparation: &PreparationLimits,
     attempt: &dyn Control,
+    retained: &dyn Control,
     reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Shared>, PreparationFailure>,
 ) -> Result<Selection, PreparationFailure> {
     attempt.check().map_err(PreparationFailure::from)?;
@@ -112,7 +113,11 @@ pub(super) fn select(
     // Cover selector sets/maps and the full application graph before creating
     // them. The immutable inventory is already owned by Plan.
     attempt
-        .charge_allocation(space.node_count().saturating_mul(1024).saturating_add(512))
+        .charge_allocation(
+            plan.compiled_node_count()
+                .saturating_mul(256)
+                .saturating_add(512),
+        )
         .map_err(PreparationFailure::from)?;
     let Some(mut reach) = plan.compiled_reach(attempt)? else {
         return Ok(Err("incomplete-prepared-closure"));
@@ -146,6 +151,7 @@ pub(super) fn select(
     let mut matched_bytes = 0usize;
     let mut features = Features::default();
     let mut source_bytes = 0usize;
+    let mut covered = std::collections::BTreeMap::<usize, std::ops::Range<usize>>::new();
     let mut recursive_scalar_only = true;
     let mut recursive_allocation_free = true;
     for &node in &nodes {
@@ -164,7 +170,16 @@ pub(super) fn select(
             return Ok(Err("exact-schema-text-or-duplicate-names"));
         }
         let value = original.value.view();
-        source_bytes = source_bytes.saturating_add(original.value.bytes().len());
+        // Count the reached authored text once. Nested schema positions share
+        // their parent's source span and do not own another source-sized copy.
+        let range = backend::byte_range(value);
+        if !covered
+            .get(&original.source)
+            .is_some_and(|prior| prior.start <= range.start && range.end <= prior.end)
+        {
+            source_bytes = source_bytes.saturating_add(range.len());
+            covered.insert(original.source, range);
+        }
         if [
             "unevaluatedProperties",
             "unevaluatedItems",
@@ -438,16 +453,16 @@ pub(super) fn select(
     #[cfg(test)]
     entries::record_applications(features.applications);
     features.multiplier = features.multiplier.max(1);
-    // SDK conversion/index owners have their own coarse reservation. Opaque
-    // dependency construction is admitted by the retained baseline profile and
-    // measured separately; this is not its abandoned allocation certificate.
-    attempt
+    // Lowering and dependency construction overlap with the retained Plan.
+    // This canonical profile is qualified against incremental requested heap;
+    // admission's temporary maps have their own releasing scratch scope.
+    retained
         .charge_allocation(
             nodes
                 .len()
-                .saturating_mul(1024)
+                .saturating_mul(1920)
                 .saturating_add(source_bytes.saturating_mul(8))
-                .saturating_add(512),
+                .saturating_add(8192),
         )
         .map_err(PreparationFailure::from)?;
     attempt.check().map_err(PreparationFailure::from)?;

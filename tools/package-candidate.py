@@ -11,6 +11,7 @@ import sys
 import tarfile
 import tempfile
 import tomllib
+from wasm_artifacts import checked_artifacts
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_CRATES = {
@@ -167,6 +168,35 @@ def self_test():
         files = lambda root: sorted(path.relative_to(root) for path in root.rglob("*") if path.is_file())
         assert files(compat / "src") == files(source), "Archive consumer lacks fixture sources"
         tomllib.loads((compat / "Cargo.toml").read_text(encoding='utf-8'))
+    with tempfile.TemporaryDirectory(prefix="openbindings-wasm-") as temporary:
+        wasm = Path(temporary)
+        snippet = "snippets/generated/inline0.js"
+        contents = {"openbindings_wasm.js": f'import {{record}} from "./{snippet}";',
+                    "openbindings_wasm_bg.wasm": "wasm", "openbindings_wasm_signature.js": "export default [];",
+                    snippet: "export const record = Object.freeze({key: 'run'});"}
+        for name, text in contents.items():
+            (wasm / name).parent.mkdir(parents=True, exist_ok=True)
+            (wasm / name).write_text(text, encoding="utf-8")
+        artifacts = {name: digest(wasm / name) for name in sorted(contents)}
+        record = wasm / "build-info.json"
+        record.write_text(json.dumps({"artifacts": artifacts}))
+        assert checked_artifacts(wasm) == artifacts
+        for defect in ["altered", "missing", "unrecorded", "omitted"]:
+            (wasm / snippet).write_text(contents[snippet], encoding="utf-8")
+            inventory = artifacts.copy()
+            if defect == "altered":
+                (wasm / snippet).write_text("export const record = null;", encoding="utf-8")
+            if defect in {"missing", "omitted"}:
+                (wasm / snippet).unlink()
+            if defect in {"unrecorded", "omitted"}:
+                del inventory[snippet]
+            record.write_text(json.dumps({"artifacts": inventory}))
+            try:
+                checked_artifacts(wasm)
+            except SystemExit:
+                pass
+            else:
+                raise AssertionError("Accepted an incomplete or altered Wasm runtime inventory")
 
 
 def artifact_manifests():
@@ -187,7 +217,7 @@ def main():
     args = parser.parse_args()
     if args.self_test:
         self_test()
-        print("Publication order self-test passed.")
+        print("Publication order and Wasm inventory self-tests passed.")
         return
     require(args.output is not None, "--output is required.")
     manifests = artifact_manifests()
@@ -233,11 +263,9 @@ def main():
         "import {rustSourceIdentity} from './packages/typescript/scripts/source-identity.mjs'; "
         "console.log(JSON.stringify(await rustSourceIdentity()));"]))
     require(identity["rustSource"] == current_identity, "Wasm source identity differs from this candidate.")
-    require(set(identity["artifacts"]) == {"openbindings_wasm.js", "openbindings_wasm_bg.wasm",
-                                           "openbindings_wasm_signature.js"},
-            "Incomplete Wasm artifact inventory.")
-    for name, expected in identity["artifacts"].items():
-        require(digest(npm_root / "dist/wasm" / name) == expected, f"Wasm artifact mismatch: {name}")
+    require(checked_artifacts(npm_root / "dist/wasm") ==
+            checked_artifacts(ROOT / "packages/typescript/src/wasm"),
+            "Packaged Wasm artifact inventory differs from the build.")
     version = tomllib.loads((ROOT / "Cargo.toml").read_text(encoding='utf-8'))["workspace"]["package"]["version"]
     packages = []
     for manifest in manifests:

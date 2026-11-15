@@ -1,12 +1,12 @@
 # Pinned source-pull test inputs
 
 Interface-derived inputs target revision
-`a3c19658fc89815d7a417eae29ba31fd4e930daf`. The crate's tests and guide state the
+`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. The crate's tests and guide state the
 supported interface/profile scope. Additional SDK controls are identified below;
 they are test evidence, not replacements for the pinned publication.
 
 | Fixture | Evidence owner | SHA-256 |
 | --- | --- | --- |
 | `design-controls.json` | SDK controls | `1b14c4537f8664a8c98e5f65ef330b82f78a39202ab947983004bb6ab9528e13` |
-| `pull-report.json` | Pinned interfaces | `f1e4708dc7b6eacda0af761450a94ff0656f4317a2c75da4390807d83a7ae142` |
-| `source-puller.json` | Pinned interfaces | `c6983f1018d442ce13192c0ba0c5293ad185c31a5c76121fc305dd42629c43f2` |
+| `pull-report.json` | Pinned interfaces | `7434a0586b0a1d5247818485957329303b19deb5d03980e3604c448d1484bf77` |
+| `source-puller.json` | Pinned interfaces | `3ebf1e925ee97d14566738a1f2afe43bb50fd0918ef4728ecbabb4127d38f66c` |

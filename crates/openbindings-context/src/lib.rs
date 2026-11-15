@@ -7,7 +7,7 @@ use std::fmt;
 /// Version of the adopted context document, independent of the SDK version.
 pub const CONTEXT_VERSION: &str = "0.1";
 /// Exact interfaces repository revision whose context document is applied.
-pub const APPLIED_INTERFACE_REVISION: &str = "a3c19658fc89815d7a417eae29ba31fd4e930daf";
+pub const APPLIED_INTERFACE_REVISION: &str = "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1";
 
 /// One opaque context object, supplied by value for an attempt.
 ///

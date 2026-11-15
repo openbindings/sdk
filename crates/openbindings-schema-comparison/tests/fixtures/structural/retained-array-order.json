@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "description": "Arrays in an unknown-keyword payload retain authored order even when a payload member is named required.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "unknown": [
+            {
+              "required": [
+                "a",
+                "b"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "unknown": [
+            {
+              "required": [
+                "b",
+                "a"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

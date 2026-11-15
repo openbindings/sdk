@@ -8,7 +8,7 @@ fn result(additions: &str, report: &str) -> JsonValue {
 }
 
 #[test]
-fn all_38_pinned_pull_report_cases_keep_shape_and_complete_answers() {
+fn all_41_pinned_pull_report_cases_keep_shape_and_complete_answers() {
     let pack = json(include_str!("fixtures/pull-report.json"));
     let mut positive = 0;
     let mut negative = 0;
@@ -38,7 +38,7 @@ fn all_38_pinned_pull_report_cases_keep_shape_and_complete_answers() {
             negative += 1;
         }
     }
-    assert_eq!((positive, negative), (27, 11));
+    assert_eq!((positive, negative), (30, 11));
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
 }
 #[test]

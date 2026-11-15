@@ -40,6 +40,7 @@ def main():
     if os.environ.get('NODE_VERSION') and node_identity['version']!=os.environ['NODE_VERSION']:
         raise ValueError('Node version differs from requested NODE_VERSION')
     assets = {str(p.relative_to(HERE)):sha(p) for p in HERE.rglob('*') if p.is_file() and not any(x in p.parts for x in ['target','__pycache__']) and 'out' not in p.parts}
+    assets['../../packages/typescript/scripts/wasm-artifacts.mjs'] = sha(HERE / '../../packages/typescript/scripts/wasm-artifacts.mjs')
     status = subprocess.check_output(['git','status','--short'],cwd=args.source,text=True)
     # Binding a tarball hash is useful only if the consumed files match it.
     with tarfile.open(args.archive, 'r:gz') as archive:

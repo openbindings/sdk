@@ -64,7 +64,6 @@ export function inspectEditExampleCases(sdk, example) {
       try {
         assert.deepEqual(operation.tags, ["read", "reviewed"]);
       } finally {
-        operation.dispose();
         proof.dispose();
       }
     } finally {

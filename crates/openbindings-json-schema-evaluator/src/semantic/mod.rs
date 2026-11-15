@@ -118,6 +118,9 @@ pub(super) struct Plan {
     value_hash: std::collections::hash_map::RandomState,
 }
 impl Plan {
+    pub(super) fn compiled_node_count(&self) -> usize {
+        self.fields.len()
+    }
     /// Reuse this Plan's completed original-node interpretation and resolved
     /// queries. Missing scan facts never certify a closed compiler input.
     pub(super) fn compiled_reach(

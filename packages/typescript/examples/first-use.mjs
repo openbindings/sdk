@@ -31,20 +31,10 @@ export function firstUse(
     const checked = parsed.value.validate();
     if (checked.status !== "conformant") return checked;
     proof = checked.document;
-    const entries = proof.operations();
-    let operations;
-    try {
-      operations = entries.map((entry) => ({
-        key: entry.key,
-        aliases: entry.aliases,
-        description: entry.description,
-      }));
-    } finally {
-      for (const entry of entries) entry.dispose();
-    }
+    const operations = proof.operations(); // detached frozen records
     selected = proof.resolveOperation(operation); // primary name or alias
     if (!selected) return { status: "operation-missing" };
-    schema = selected.input();
+    schema = proof.inputSchema(selected.key);
     if (!schema) return { status: "no-schema" };
     const setup = schema.prepare();
     if (setup.status !== "ready") return setup;
@@ -53,7 +43,6 @@ export function firstUse(
   } finally {
     prepared?.dispose();
     schema?.dispose();
-    selected?.dispose();
     proof?.dispose();
     parsed.value.dispose();
   }

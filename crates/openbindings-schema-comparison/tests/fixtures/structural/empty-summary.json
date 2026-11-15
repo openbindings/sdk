@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "description": "An empty set of operation checks summarizes to compatible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {}
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {}
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

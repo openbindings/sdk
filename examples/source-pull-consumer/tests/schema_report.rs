@@ -73,7 +73,7 @@ async fn schemas_and_reference_conflict_pass_the_checked_pull() {
         assert_eq!(identical(Some(&old), Some(&new), &limits), Ok(equal));
     }
     // An existing entry accounts for User's drift, so a same-spelled reference
-    // to it stays a leaf when judging existing entries (not operation reuse).
+    // to it stays a leaf when judging reuse and existing entries alike.
     let path = "/operations/getUser/output";
     let old = before.schema(before.document().at(path).unwrap().to_owned());
     let new = offered.schema(offered.document().at(path).unwrap().to_owned());
@@ -124,5 +124,42 @@ async fn schemas_and_reference_conflict_pass_the_checked_pull() {
             .unwrap()
             .as_str(),
         Some("integer")
+    );
+}
+
+#[test]
+fn recursive_operation_reuse_requires_accounting_and_independent_target_shape() {
+    let root = |ty: &str| {
+        json(&format!(
+            r##"{{"openbindings":"0.2.0","operations":{{"walk":{{"input":{{"$ref":"#/schemas/Node"}}}}}},"schemas":{{"Node":{{"type":"object","properties":{{"value":{{"type":"{ty}"}},"next":{{"$ref":"#/schemas/Node"}}}}}}}}}}"##
+        ))
+    };
+    let before = ComparisonContext::new(root("string"));
+    let offered = ComparisonContext::new(root("integer"));
+    let select = |context: &ComparisonContext, path: &str| {
+        context.schema(context.document().at(path).unwrap().to_owned())
+    };
+    let left = select(&before, "/operations/walk/input");
+    let right = select(&offered, "/operations/walk/input");
+    let limits = ComparisonLimits::default();
+    let accounted = |reference: openbindings_schema_comparison::ReferenceContext<'_>| {
+        reference.spelling() == "#/schemas/Node"
+    };
+    assert_eq!(
+        identical_with_references(Some(&left), Some(&right), &accounted, &limits),
+        Ok(true)
+    );
+    assert_eq!(
+        identical_with_references(Some(&left), Some(&right), &|_| false, &limits)
+            .unwrap_err()
+            .kind(),
+        openbindings_schema_comparison::ComparisonFailureKind::ReferenceCycle
+    );
+    let left = select(&before, "/schemas/Node");
+    let right = select(&offered, "/schemas/Node");
+    // Accounting for recursive edges does not hide a target's own changed shape.
+    assert_eq!(
+        identical_with_references(Some(&left), Some(&right), &accounted, &limits),
+        Ok(false)
     );
 }

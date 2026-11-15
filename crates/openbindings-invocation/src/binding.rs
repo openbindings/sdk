@@ -38,7 +38,7 @@ pub trait BindingInvoker {
     /// `Ok(None)` means no prediction, not a promise invocation will proceed.
     /// With `type Preflight<'a> = std::future::Ready<Result<Option<ContextChallenge>, InvocationError>>`,
     /// a provider with no prediction implements the body as `std::future::ready(Ok(None))`.
-    /// The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/binding-invoker/README.md)
+    /// The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/binding-invoker/README.md)
     /// states that `null` is always conformant, even if invocation needs context.
     fn handle_preflight<'a>(
         &'a self,

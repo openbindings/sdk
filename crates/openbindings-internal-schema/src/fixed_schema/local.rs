@@ -189,9 +189,16 @@ fn extent(value: JsonRef<'_>, dialect: Dialect, control: &dyn Control) -> Result
     Ok(bytes)
 }
 
-fn reserve_bytes(bytes: usize, control: &dyn Control) -> Result<(), Failure> {
-    let allocation = bytes.checked_mul(64).and_then(|n| n.checked_add(4096));
-    let Some(allocation) = allocation else {
+fn reserve_bytes(
+    bytes: usize,
+    allocation_bytes: usize,
+    control: &dyn Control,
+) -> Result<(), Failure> {
+    let allocation = allocation_bytes
+        .checked_mul(4)
+        .and_then(|n| n.checked_add(512));
+    let work = bytes.checked_mul(64).and_then(|n| n.checked_add(1));
+    let (Some(allocation), Some(work)) = (allocation, work) else {
         control.allocation_limit_reached();
         return Err(Failure::new(
             FailureReason::LimitExceeded,
@@ -199,8 +206,6 @@ fn reserve_bytes(bytes: usize, control: &dyn Control) -> Result<(), Failure> {
             "fixed syntax checking exceeded its allocation allowance",
         ));
     };
-    // The larger allocation expression already proves this one cannot overflow.
-    let work = bytes * 64 + 1;
     control.charge_allocation(allocation)?;
     control.charge_work(work)
 }
@@ -210,7 +215,14 @@ pub(super) fn reserve(
     dialect: Dialect,
     control: &dyn Control,
 ) -> Result<(), Failure> {
-    reserve_bytes(extent(value, dialect, control)?, control)
+    let bytes = extent(value, dialect, control)?;
+    // Every pinned localized meta-schema gives const the true schema. Syntax
+    // checking retains no copy or traversal storage for its existing payload.
+    // Keep the work reservation independent of this storage-only adjustment.
+    let allocation_bytes = value
+        .get("const")
+        .map_or(Ok(bytes), |operand| subtract(bytes, operand.text().len()))?;
+    reserve_bytes(bytes, allocation_bytes, control)
 }
 
 #[cfg(test)]

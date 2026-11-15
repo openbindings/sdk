@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "A candidate that declares no schema for a target-declared property treats it as unconstrained: no finding.",
+  "description": "An absent receiving property entry uses its additionalProperties; here absence makes that effective schema Top.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"

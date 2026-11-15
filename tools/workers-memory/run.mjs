@@ -129,6 +129,17 @@ table("Limit calibration", ["Parameters", "Result / code", "Linear MiB", "Growth
       r.ms.toFixed(3), r.evaluateMs?.toFixed(3) ?? ""];
   }));
 
+// Entry ownership is separate from the preparation tables above. One synchronous
+// turn deliberately leaves every returned record undisposed, with no GC/yield.
+const disposal = JSON.parse(execFileSync(process.execPath,
+  [resolve(root, "tools/workers-memory/disposal.mjs"), packagePath], { encoding: "utf8" }));
+assert.equal(disposal.operations, 27);
+assert.equal(disposal.calls, 10000);
+assert.equal(disposal.growthBytes, 0);
+raw.push({ params: { kind: "entry-disposal" }, ...disposal });
+table("Synchronous entry disposal", ["Operations", "Calls", "Before MiB", "After MiB", "Growth MiB"],
+  [[disposal.operations, disposal.calls, mib(disposal.beforeBytes), mib(disposal.afterBytes), mib(disposal.growthBytes)]]);
+
 const bytes = readFileSync(`${packagePath}/dist/wasm/openbindings_wasm_bg.wasm`);
 const metadata = { node: process.version, platform: process.platform, arch: process.arch,
   wasmSha256: createHash("sha256").update(bytes).digest("hex"),

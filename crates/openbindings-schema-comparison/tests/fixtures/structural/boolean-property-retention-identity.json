@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "Boolean mapping at every schema position precedes retention, including the property outside definitions.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "properties": {
+            "a": false
+          },
+          "$defs": {
+            "d": {}
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "properties": {
+            "a": {
+              "not": {}
+            }
+          },
+          "$defs": {
+            "d": {}
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

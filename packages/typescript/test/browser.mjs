@@ -4,6 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
+import { runtimeFiles } from "../scripts/wasm-artifacts.mjs";
 import { firstUsePage, firstUseLoadingFailures } from "./first-use-browser.mjs";
 import { discoveryPage } from "./discovery-browser.mjs";
 import { editorPage } from "./editor-browser.mjs";
@@ -31,14 +32,7 @@ const requests = JSON.parse(
 );
 const files = new Map();
 await usingExampleFiles(packageRoot, files);
-for (const name of [
-  ...(await fs.readdir(path.join(packageRoot, "dist")))
-    .filter((name) => name.endsWith(".js"))
-    .sort(),
-  "wasm/openbindings_wasm.js",
-  "wasm/openbindings_wasm_signature.js",
-  "wasm/openbindings_wasm_bg.wasm",
-]) {
+for (const name of await runtimeFiles(packageRoot)) {
   const bytes = await fs.readFile(path.join(packageRoot, "dist", name));
   files.set(
     "/conformant-contracts.mjs",
@@ -184,6 +178,36 @@ try {
         await fetch("/syntax-facts-input.json")
       ).json();
       await sdk.initialize();
+      // A public operation read exercises the generated inline-JavaScript module.
+      const parsed = sdk.Document.parse(
+        '{"openbindings":"0.2.0","operations":{"run":{"description":"snippet record","aliases":["alias"],"tags":["tag"]}}}',
+      );
+      if (parsed.status !== "parsed") throw Error("operation document parse");
+      try {
+        const checked = parsed.value.validate();
+        if (checked.status !== "conformant")
+          throw Error("operation document validation");
+        try {
+          const record = checked.document.operation("run");
+          if (
+            JSON.stringify(record) !==
+              JSON.stringify({
+                key: "run",
+                description: "snippet record",
+                aliases: ["alias"],
+                tags: ["tag"],
+              }) ||
+            !Object.isFrozen(record) ||
+            !Object.isFrozen(record.aliases) ||
+            !Object.isFrozen(record.tags)
+          )
+            throw Error("operation record transport");
+        } finally {
+          checked.document.dispose();
+        }
+      } finally {
+        parsed.value.dispose();
+      }
       const run = (list) =>
         list.map((request) => {
           try {

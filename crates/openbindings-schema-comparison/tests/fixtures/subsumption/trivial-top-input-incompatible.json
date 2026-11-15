@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "An unconstrained (Top) target may send anything; a constrained candidate cannot accept it all.",
+  "description": "A Top source is rejected by a receiving type constraint, not by Top syntax alone.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"

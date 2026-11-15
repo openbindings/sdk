@@ -943,6 +943,32 @@
           "9007199254740993"
         ]
       }
+    },
+    {
+      "id": "enum-intersection-exact-dedup",
+      "rule": "stable intersection uses mathematical numeric equality",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"allOf\":[{\"enum\":[1,1.0,2,2.0]},{\"enum\":[2e0,1e0,1]}]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"enum\":[1,2]}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "numberTokens": {
+        "left": [
+          "1",
+          "1",
+          "1.0",
+          "1e0",
+          "2",
+          "2.0",
+          "2e0"
+        ],
+        "right": [
+          "1",
+          "2"
+        ]
+      }
     }
   ]
 }

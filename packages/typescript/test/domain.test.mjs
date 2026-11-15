@@ -52,69 +52,85 @@ test("all 32 domain fields and their relationships match the Rust fixture", () =
     assert.equal(document.version, "release-label");
     assert.equal(document.description, "document");
     assert.deepEqual(
-      many(document.operations()).map((value) => value.key),
+      document.operations().map((value) => value.key),
       ["a", "z"],
     );
     assert.equal(document.operation("alias"), undefined);
-    const operation = own(document.resolveOperation("alias"));
-    assert.ok(operation instanceof sdk.Operation);
+    const operation = document.resolveOperation("alias");
+    assert.ok(Object.isFrozen(operation));
     assert.equal(operation.key, "z");
     assert.equal(operation.description, "operation");
     assert.equal(operation.deprecated, false);
     assert.deepEqual(operation.tags, ["second", "first"]);
     assert.deepEqual(operation.aliases, ["alias"]);
     assert.ok(Object.isFrozen(operation.tags));
-    assert.equal(own(own(operation.input()).json()).text, "true");
-    assert.equal(own(own(operation.output()).json()).text, "false");
+    assert.equal(
+      own(own(document.inputSchema(operation.key)).json()).text,
+      "true",
+    );
+    assert.equal(
+      own(own(document.outputSchema(operation.key)).json()).text,
+      "false",
+    );
     assert.deepEqual(
-      many(operation.examples()).map((value) => value.key),
+      document.examples(operation.key).map((value) => value.key),
       ["null", "sample"],
     );
-    const example = own(operation.example("sample"));
+    const example = document.example(operation.key, "sample");
     assert.equal(example.description, "example");
-    assert.equal(own(example.input()).text, "9007199254740993");
-    assert.equal(own(example.output()).text, "0.29000000000000001");
-    const source = own(document.source("s"));
+    assert.equal(
+      own(document.exampleInput(operation.key, example.key)).text,
+      "9007199254740993",
+    );
+    assert.equal(
+      own(document.exampleOutput(operation.key, example.key)).text,
+      "0.29000000000000001",
+    );
+    const source = document.source("s");
     assert.equal(source.kind, "example.Kind@1");
     assert.equal(source.description, "source");
-    assert.equal(own(source.data()).text, "null");
-    const binding = own(document.binding("z"));
+    assert.equal(own(document.sourceData(source.key)).text, "null");
+    const binding = document.binding("z");
     assert.equal(binding.description, "binding");
     assert.equal(binding.preference, -1);
     assert.equal(binding.idempotent, false);
     assert.equal(binding.deprecated, true);
     assert.equal(binding.operationKey, "z");
     assert.equal(binding.sourceKey, "s");
-    assert.equal(own(binding.operation()).key, "z");
-    assert.equal(own(binding.source()).kind, "example.Kind@1");
-    assert.equal(own(own(binding.data()).get("wide")).text, "9007199254740993");
+    assert.equal(document.operation(binding.operationKey).key, "z");
+    assert.equal(document.source(binding.sourceKey).kind, "example.Kind@1");
+    assert.equal(
+      own(own(document.bindingData(binding.key)).get("wide")).text,
+      "9007199254740993",
+    );
     assert.deepEqual(
-      many(operation.bindings()).map((value) => value.key),
+      document.operationBindings(operation.key).map((value) => value.key),
       ["a", "z"],
     );
-    const dependency = own(document.dependency("d"));
+    const dependency = document.dependency("d");
     assert.equal(dependency.description, "dependency");
     assert.equal(dependency.operationKey, "z");
-    assert.equal(own(dependency.operation()).key, "z");
+    assert.equal(document.operation(dependency.operationKey).key, "z");
     assert.deepEqual(dependency.kinds, ["example.Kind@1", "other"]);
-    assert.equal(dependency.acceptsKind("example.Kind@1"), true);
-    assert.equal(dependency.acceptsKind("example.kind@1"), false);
-    assert.equal(many(document.sources()).length, 1);
-    assert.equal(many(document.bindings()).length, 2);
-    assert.equal(many(document.dependencies()).length, 1);
+    assert.equal(sdk.acceptsKind(dependency, "example.Kind@1"), true);
+    assert.equal(sdk.acceptsKind(dependency, "example.kind@1"), false);
+    assert.equal(document.sources().length, 1);
+    assert.equal(document.bindings().length, 2);
+    assert.equal(document.dependencies().length, 1);
     const schemas = document.schemas();
     many(schemas.values());
     assert.deepEqual([...schemas.keys()], ["a", "z"]);
     assert.equal(own(own(document.schema("z")).json()).text, "false");
   }));
-test("canonical owners keep same-snapshot relationships and operation-local examples", () =>
+test("detached records and proof queries preserve snapshot relationships and local examples", () =>
   owners((own) => {
-    const document = own(proof(fixture)),
-      binding = own(document.binding("z"));
-    const dependency = own(document.dependency("d")),
-      operation = own(binding.operation());
-    const example = own(operation.example("sample")),
-      other = own(own(document.operation("a")).example("sample"));
+    const document = own(proof(fixture));
+    const retained = own(document.retain());
+    const binding = document.binding("z"),
+      dependency = document.dependency("d");
+    const operation = document.operation(binding.operationKey);
+    const example = document.example(operation.key, "sample");
+    const other = document.example("a", "sample");
     const draft = own(document.asDocument());
     const changed = own(
       draft.edit([
@@ -123,28 +139,39 @@ test("canonical owners keep same-snapshot relationships and operation-local exam
       ]),
     );
     const next = own(changed.validate().document);
-    assert.equal(own(own(next.binding("z")).source()).kind, "changed");
+    assert.equal(next.source(binding.sourceKey).kind, "changed");
+    assert.equal(next.operation(operation.key).description, "changed");
     next.dispose();
     changed.dispose();
     draft.dispose();
     document.dispose();
-    operation.dispose();
-    assert.equal(own(binding.source()).kind, "example.Kind@1");
-    assert.equal(own(dependency.operation()).description, "operation");
-    assert.equal(own(other.output()).text, '"another"');
+    assert.equal(operation.description, "operation");
+    assert.equal(retained.source(binding.sourceKey).kind, "example.Kind@1");
     assert.equal(
-      own(example.value()).metadata.location.pointer,
+      retained.operation(dependency.operationKey).description,
+      "operation",
+    );
+    assert.equal(own(retained.exampleOutput("a", other.key)).text, '"another"');
+    const exact = own(retained.exampleValue(operation.key, example.key));
+    assert.equal(
+      exact.metadata.location.pointer,
       "/operations/z/examples/sample",
     );
     assert.equal(
-      own(other.value()).metadata.location.pointer,
+      own(retained.exampleValue("a", other.key)).metadata.location.pointer,
       "/operations/a/examples/sample",
     );
-    assert.equal(own(own(example.value()).get("x-exact")).text, "1.00");
-    const output = own(example.output());
-    example.dispose();
+    assert.equal(own(exact.get("x-exact")).text, "1.00");
+    const output = own(retained.exampleOutput(operation.key, example.key));
+    assert.equal(retained.name, "interface");
+    retained.dispose();
     assert.equal(output.text, "0.29000000000000001");
-    assert.equal(own(binding.document()).name, "interface");
+    assert.equal(binding.sourceKey, "s");
+    assert.equal(example.description, "example");
+    assert.throws(
+      () => retained.source(binding.sourceKey),
+      (e) => e.code === "disposed-handle",
+    );
   }));
 test("optional namespaces retain absence versus empty and metadata retains false versus absent", () =>
   owners((own, many) => {
@@ -155,24 +182,24 @@ test("optional namespaces retain absence versus empty and metadata retains false
     assert.equal(absent.bindings(), undefined);
     assert.equal(absent.dependencies(), undefined);
     assert.equal(absent.schemas(), undefined);
-    const operation = own(absent.operation("op"));
+    const operation = absent.operation("op");
     for (const field of ["description", "deprecated", "tags", "aliases"])
       assert.equal(operation[field], undefined);
-    assert.equal(operation.examples(), undefined);
-    assert.equal(operation.input(), undefined);
-    assert.equal(operation.output(), undefined);
-    assert.deepEqual(many(operation.bindings()), []);
+    assert.equal(absent.examples(operation.key), undefined);
+    assert.equal(absent.inputSchema(operation.key), undefined);
+    assert.equal(absent.outputSchema(operation.key), undefined);
+    assert.deepEqual(absent.operationBindings(operation.key), []);
     const empty = own(
       proof(
         '{"openbindings":"0.2.0","operations":{"op":{"deprecated":false,"tags":[],"aliases":[],"examples":{}}},"sources":{},"bindings":{},"dependencies":{},"schemas":{}}',
       ),
     );
     for (const method of ["sources", "bindings", "dependencies"])
-      assert.deepEqual(many(empty[method]()), []);
+      assert.deepEqual(empty[method](), []);
     assert.equal(empty.schemas().size, 0);
-    const op = own(empty.operation("op"));
+    const op = empty.operation("op");
     assert.equal(op.deprecated, false);
     assert.deepEqual(op.tags, []);
     assert.deepEqual(op.aliases, []);
-    assert.deepEqual(many(op.examples()), []);
+    assert.deepEqual(empty.examples(op.key), []);
   }));
