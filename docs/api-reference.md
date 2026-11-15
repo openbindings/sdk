@@ -529,6 +529,28 @@ in [OBI-01](https://github.com/openbindings/spec/blob/c1419c9fc3ae5a00c2b83da710
 the same bytes can yield different values across parsers. The SDK refuses
 ambiguity without interpreting members, using the exact JSON's existing index.
 
+## Pattern search work limits
+
+Rust evaluator `Limits::pattern_search_work_units: Option<usize>` and TypeScript
+`EvaluatorLimits.patternSearchWorkUnits: number | null` bound the SDK work charged
+to one uncancellable Original pattern search. The default is 250,000,000;
+TypeScript reads it from Wasm through `evaluatorLimits()`. Numeric TypeScript
+values use the same nonnegative integer range as other evaluator limits,
+0 through 4,294,967,295. `None` / `null` removes the ceiling.
+
+A charge above the ceiling returns `NoVerdict` / `no-verdict`, reason
+`LimitExceeded` / `limit-exceeded`, code `pattern-search-work-limit`, before
+searching. The charge is `(UTF-8 input bytes + 1) * prepared program weight`,
+in the existing evaluation work units. It contains no document values.
+`evaluation_sdk_work_units` / `evaluationSdkWorkUnits` remains the separate
+optional cumulative work cap. Internal fixed-width accounting cannot invent an
+uncapped work-limit refusal by overflowing on Wasm.
+
+Changing the search ceiling from its default selects Original, as other changed
+evaluator limits do. Explicitly supplying the default preserves lane selection.
+The compiled lane retains its separate admission bounds. Neither policy is a
+deadline; cancellation is observed around an engine call, never inside it.
+
 ## TypeScript preparation and registration limits
 
 ```ts

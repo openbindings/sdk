@@ -41,7 +41,7 @@ pub(super) struct Graph<'a> {
     applied: BTreeMap<(Op, Formula, Formula), Formula>,
     bytes: usize,
     maximum_bytes: usize,
-    steps: usize,
+    steps: u64,
     maximum_steps: Option<usize>,
     maximum_variables: usize,
     control: &'a dyn WorkControl,
@@ -61,7 +61,7 @@ impl<'a> Graph<'a> {
             bytes: self.maximum_bytes.saturating_sub(self.bytes),
             work: self
                 .maximum_steps
-                .map(|maximum| maximum.saturating_sub(self.steps)),
+                .map(|maximum| maximum.saturating_sub(self.steps.min(usize::MAX as u64) as usize)),
         }
     }
     #[cfg(test)]
@@ -102,24 +102,37 @@ impl<'a> Graph<'a> {
         self.work(1)
     }
     pub(super) fn work(&mut self, units: usize) -> Result<(), NoVerdict> {
+        self.work_units(units as u64)
+    }
+    pub(super) fn work_units(&mut self, units: u64) -> Result<(), NoVerdict> {
         self.control.check().map_err(NoVerdict::from)?;
         if let Some(stack) = &mut self.stack {
             stack.check()?;
         }
         if let Some(attempt) = self.preparation {
+            // A preparation cap is still usize-sized. Split a wider debit so
+            // its control sees the full charge without truncation on wasm32.
+            let mut remaining = units;
+            while remaining > usize::MAX as u64 {
+                attempt
+                    .charge_work(usize::MAX)
+                    .map_err(super::preparation_control_inability)?;
+                remaining -= usize::MAX as u64;
+            }
             attempt
-                .charge_work(units)
+                .charge_work(remaining as usize)
                 .map_err(super::preparation_control_inability)?;
         }
-        self.steps = self
-            .steps
-            .checked_add(units)
-            .ok_or_else(|| limit("evaluation-work-limit"))?;
-        if self
-            .maximum_steps
-            .is_some_and(|maximum| self.steps > maximum)
-        {
-            return Err(limit("evaluation-work-limit"));
+        // An uncapped call has no work ledger to overflow, as in comparison's
+        // Attempt. A requested cap is checked in fixed-width arithmetic.
+        if let Some(maximum) = self.maximum_steps {
+            self.steps = self
+                .steps
+                .checked_add(units)
+                .ok_or_else(|| limit("evaluation-work-limit"))?;
+            if self.steps > maximum as u64 {
+                return Err(limit("evaluation-work-limit"));
+            }
         }
         Ok(())
     }

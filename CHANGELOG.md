@@ -13,6 +13,18 @@
   row of the provider's report. Where two rows contradict each other the later one is named; missing coverage has no
   row. `Display` names no location.
 
+- A single uncancellable pattern search on the evaluator's own lane may be charged at most 250,000,000 work units by
+  default; a larger search returns `no-verdict` with `pattern-search-work-limit` before it runs. Rust
+  `Limits::pattern_search_work_units` and TypeScript `EvaluatorLimits.patternSearchWorkUnits` raise it or remove it
+  (`None` / `null`). The two hostile patterns from the review, which ran 6 to 21 seconds and could not be cancelled,
+  are now refused in under 2 ms.
+
+### Fixed
+
+- The evaluator's work counter was pointer-width, so on wasm32 a pattern charge above 2^32 was reported as a work
+  limit nobody set and Rust and TypeScript answered one input differently. It is 64-bit, and accumulates only when a
+  cap is set.
+
 ## 2026-11-14 panel shapes (unreleased)
 
 ### Changed

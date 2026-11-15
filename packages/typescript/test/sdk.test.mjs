@@ -447,15 +447,14 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   );
   assert.equal(grown.evaluate(value).status, "satisfies");
   grown.dispose();
-  // Only evaluationSdkWorkUnits and schemaResources have null defaults, and the
-  // refusal says so.
+  // The refusal identifies the optional work and resource caps.
   assert.throws(
     () => contract.prepare({ limits: { patternDepth: null } }),
     (e) =>
       e.code === "invalid-evaluator-limits" &&
       e.message.includes("4294967295") &&
       e.message.includes(
-        "evaluationSdkWorkUnits and schemaResources may also be null",
+        "evaluationSdkWorkUnits, patternSearchWorkUnits and schemaResources may also be null",
       ),
   );
   const partial = document.references({ resources, signal: control.signal });

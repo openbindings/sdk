@@ -472,3 +472,5 @@ write
 wrong
 x
 y
+pattern-search-work-limit
+pattern_search_work_units

@@ -348,6 +348,15 @@ policy. Preparation returns a refusal; registration throws `SdkError` with code
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning;
 simple Boolean identities add no proof-work unit. Growing loops retain cooperative
 checks, and fast results do not reset shared preparation budgets.
+Its fixed-width accounting agrees with native evaluation for caps both targets
+can express. With `evaluationSdkWorkUnits: null`, counter overflow cannot report
+a work limit. Numeric limit options retain their existing 32-bit range.
+`patternSearchWorkUnits` defaults to 250,000,000 SDK work units per Original
+pattern search. A larger charge returns `no-verdict` with
+`pattern-search-work-limit` before the uncancellable matcher runs. Raise it or
+set it to `null` to remove the ceiling. Changing it from the Wasm-provided
+default selects Original; explicitly supplying the default preserves routing.
+The cumulative `evaluationSdkWorkUnits` cap remains `null` by default.
 Budgets are not deadlines or process-memory measurements. Original uses
 original schema locations and explicit evaluation frames, with a fixed supported
 maximum of 64 distinct symbolic effects per proof. The retired `stackBytes` and

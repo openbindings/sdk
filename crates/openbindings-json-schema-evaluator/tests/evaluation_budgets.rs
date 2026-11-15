@@ -164,6 +164,7 @@ fn evaluation_allowance_serialization_uses_only_current_names() {
 fn an_evaluator_reports_the_budgets_it_was_given() {
     let limits = Limits {
         evaluation_sdk_work_units: Some(7),
+        pattern_search_work_units: Some(13),
         pattern_bytes: 19,
         pattern_depth: 23,
         total_pattern_bytes: 31,
@@ -174,6 +175,7 @@ fn an_evaluator_reports_the_budgets_it_was_given() {
     let evaluator = DefaultEvaluator::with_limits(limits);
     let reported = evaluator.limits();
     assert_eq!(reported.evaluation_sdk_work_units, Some(7));
+    assert_eq!(reported.pattern_search_work_units, Some(13));
     assert_eq!(reported.schema_resources, Some(29));
     assert_eq!(reported.total_pattern_bytes, 31);
     assert_eq!(reported.total_pattern_memory, 37);

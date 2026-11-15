@@ -41,7 +41,8 @@ stream, before buffering it all; an SDK byte limit cannot bound the host's copy.
 | JSON `maxDepth` | 10,000 (default) | Keep the existing qualified depth ceiling: 9,990 array levels grew memory by 1.125 MiB. This is not a stack-byte guarantee. |
 | `preparationLimits.maxSdkReservationBytes` | Select by workload below | Choose the smallest tested allowance admitting the required shape, then measure its linear high-water plus the body's bytes against the host budget. Reservation bytes cannot be subtracted from that budget as if they were actual memory growth. |
 | `preparationLimits.maxSdkWorkUnits` | 100,000,000 | Smallest tested decade completing both large preparations when memory permits: 1,000,000 completed the records, but 10,000,000 still refused the chain. The completing chain took 108 ms here; lower and remeasure for a smaller CPU budget. |
-| `limits.evaluationSdkWorkUnits` | 100,000,000 | Smallest tested decade deciding both large values: 1,000,000 returned no-verdict for the records, as did 10,000,000 for the chain. The hostile pattern returned no-verdict in 3.43 ms with `evaluation-work-limit`, versus 1.858 s uncapped. Use this for hostile work, not memory sizing. Units are not a deadline. |
+| `limits.patternSearchWorkUnits` | 250,000,000 (default) | Refuses one oversized Original pattern search before entry with `pattern-search-work-limit`. Raise it or use `null` to remove the ceiling; either change selects Original. This is not a deadline. |
+| `limits.evaluationSdkWorkUnits` | 100,000,000 | Smallest tested decade deciding both large values: 1,000,000 returned no-verdict for the records, as did 10,000,000 for the chain. The hostile pattern returned no-verdict in 3.43 ms with `evaluation-work-limit`, versus 1.858 s before the default search ceiling. Default limits now refuse that search with `pattern-search-work-limit`. Use this for hostile work, not memory sizing. Units are not a deadline. |
 | `limits.evaluationSdkReservationBytes` | 4 MiB | Smallest tested allowance completing the 3,000-record value; 1 MiB returned `semantic-analysis-memory-limit`. Qualify it together with preparation and admission. This is SDK accounting, not all allocation. |
 | Validation `maxFindings` | 100 | Smallest nonzero retention tested. On 100,000 invalid operations it saved 2.813 MiB versus 4,096 findings; it is secondary to admission limits. Truncation does not change rule conclusions. |
 
@@ -197,8 +198,11 @@ reservations for preparation storage and evaluation work units for work.
   finish SDK work synchronously, copy needed plain results, dispose, then await
   further I/O. Concurrent retained owners add to the same isolate's high-water mark.
 - A timer-driven `AbortSignal` cannot interrupt synchronous SDK work: the timer
-  cannot run until the call returns. Use work limits. A pre-aborted signal works.
-  Measured in local workerd on 2026-11-14, a hostile evaluation stalled a ping
+  cannot run until the call returns. The default per-search ceiling now refuses
+  the measured hostile pattern before its uncancellable search runs. It does
+  not bound an entire request or let timers interrupt admitted searches. Keep
+  a cumulative work cap for aggregate work. A pre-aborted signal works.
+  Before the ceiling, local workerd on 2026-11-14 measured a hostile evaluation stalling a ping
   to the same isolate for 1,671-1,947 ms; this is not deployed-platform timing.
 
 ## Memory exhaustion

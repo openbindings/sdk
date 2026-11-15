@@ -540,3 +540,25 @@ fn recursive_scalar_literals_keep_their_reservation_charge() {
         assert_eq!(compare(&selected, &original, &value).0, lane);
     }
 }
+
+#[test]
+fn pattern_search_default_preserves_compiled_selection() {
+    let text = document(r#"{"pattern":"^[a-z]+$"}"#);
+    let default = Limits::default().pattern_search_work_units;
+    for ceiling in [default, None, Some(0), default.map(|n| n + 1)] {
+        let validator = prepare_document(
+            &text,
+            &ExternalSchemas::default(),
+            &DefaultEvaluator::with_limits(Limits {
+                pattern_search_work_units: ceiling,
+                ..Limits::default()
+            }),
+            &PreparationLimits::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            matches!(validator.compiled, compiled::Lane::Compiled(_)),
+            ceiling == default,
+        );
+    }
+}

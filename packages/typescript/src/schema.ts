@@ -368,10 +368,12 @@ export interface WorkOptions {
   signal?: AbortSignal;
 }
 
-/** Built-in evaluator budgets. Each numeric value is a nonnegative 32-bit integer; evaluationSdkWorkUnits and schemaResources also accept null. Preparation exhaustion returns a preparation failure; evaluation exhaustion returns no-verdict. Exhausted diagnostics preserve an established failure with problemsComplete false. These budgets are not elapsed-time deadlines or total process-memory bounds. */
+/** Built-in evaluator budgets. Each numeric value is a nonnegative 32-bit integer; evaluationSdkWorkUnits, patternSearchWorkUnits and schemaResources also accept null. Preparation exhaustion returns a preparation failure; evaluation exhaustion returns no-verdict. Exhausted diagnostics preserve an established failure with problemsComplete false. These budgets are not elapsed-time deadlines or total process-memory bounds. */
 export interface EvaluatorLimits {
   /** Cooperative SDK evaluation work units; null (default) sets no caller-selected cap. Internal capability bounds still apply. These are SDK-defined debits, not CPU operations or a count of schema steps. */
   evaluationSdkWorkUnits: number | null;
+  /** Maximum SDK work charged to one uncancellable Original pattern search; default 250,000,000. A larger charge returns pattern-search-work-limit before searching. null removes the ceiling. Changing the default selects Original. This is not a deadline. */
+  patternSearchWorkUnits: number | null;
   /** Maximum UTF-8 bytes in one schema pattern and its expanded form; default 1,048,576. */
   patternBytes: number;
   /** Caller-selected authored pattern group ceiling; default 32. The supported maximum remains 32 even when a larger value is requested. */
@@ -496,7 +498,7 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
   const defaults = evaluatorLimits();
   const encoded: Record<string, number | null> = {};
   for (const [key, value] of ownEntries(limits)) {
-    // A null limit is accepted only where the default itself is null.
+    // The per-search ceiling also accepts null to remove its finite default.
     const budget =
       typeof value === "number" &&
       Number.isSafeInteger(value) &&
@@ -506,12 +508,14 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
       !Object.hasOwn(defaults, key) ||
       !(
         budget ||
-        (value === null && defaults[key as keyof EvaluatorLimits] === null)
+        (value === null &&
+          (key === "patternSearchWorkUnits" ||
+            defaults[key as keyof EvaluatorLimits] === null))
       )
     )
       throw new SdkError(
         "invalid-evaluator-limits",
-        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSdkWorkUnits and schemaResources may also be null for their defaults.",
+        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSdkWorkUnits, patternSearchWorkUnits and schemaResources may also be null to remove their caps.",
       );
     encoded[key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase())] = value;
   }

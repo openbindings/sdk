@@ -73,6 +73,7 @@ impl Search {
     pub(super) fn evaluate(
         &mut self,
         text: Option<&str>,
+        maximum_work: Option<usize>,
         graph: &mut Graph<'_>,
     ) -> Result<ResultKind, NoVerdict> {
         let matched = match self.program.as_ref() {
@@ -83,20 +84,36 @@ impl Search {
                 let Some(text) = text else {
                     return Ok(ResultKind::Unpaired);
                 };
-                graph.work(text.len().saturating_add(1).saturating_mul(*work))?;
+                charge_search(text, *work, maximum_work, graph)?;
                 matcher.is_match(text)
             }
             Program::Vm { engine, work } => {
                 let Some(text) = text else {
                     return Ok(ResultKind::Unpaired);
                 };
-                graph.work(text.len().saturating_add(1).saturating_mul(*work))?;
+                charge_search(text, *work, maximum_work, graph)?;
                 engine.is_match(self.cache.as_mut().expect("call-local VM cache"), text)
             }
         };
         graph.tick()?;
         Ok(ResultKind::Matched(matched))
     }
+}
+
+fn charge_search(
+    text: &str,
+    work: usize,
+    maximum: Option<usize>,
+    graph: &mut Graph<'_>,
+) -> Result<(), NoVerdict> {
+    let units = (text.len() as u64 + 1).saturating_mul(work as u64);
+    // Keep cancellation, shared preparation and the caller's cumulative cap
+    // precedence. The per-search ceiling prevents entry into either matcher.
+    graph.work_units(units)?;
+    if maximum.is_some_and(|maximum| units > maximum as u64) {
+        return Err(decision::limit("pattern-search-work-limit"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
