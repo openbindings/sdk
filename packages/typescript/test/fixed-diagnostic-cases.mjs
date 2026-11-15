@@ -174,7 +174,7 @@ export function fixedDiagnosticCases(sdk) {
               : "additionalProperties");
         check(finding.keyword === keyword, `${fixture.name}: keyword`);
         check(
-          finding.schema.sourceUri ===
+          finding.schema.retrievalUri ===
             "https://openbindings.com/schema/openbindings-0.2.0.json" &&
             finding.schema.pointer === fixture.schemaPointer,
           `${fixture.name}: published keyword location`,
@@ -198,8 +198,8 @@ export function fixedDiagnosticCases(sdk) {
                 finding.schema,
                 finding.details,
               ]),
-            ) === 198,
-            "largest pinned schema fact uses the TypeScript sourceUri spelling",
+            ) === 201,
+            "largest pinned schema fact uses the TypeScript retrievalUri spelling",
           );
         }
         const facts = JSON.stringify([
@@ -208,7 +208,7 @@ export function fixedDiagnosticCases(sdk) {
           finding.details,
         ]);
         check(
-          !facts.includes("REJECTED_SENTINEL") && byteLength(facts) <= 198,
+          !facts.includes("REJECTED_SENTINEL") && byteLength(facts) <= 201,
           `${fixture.name}: bounded schema-only facts`,
         );
       }
@@ -311,11 +311,11 @@ export function fixedDiagnosticCases(sdk) {
       const size = byteLength(
         JSON.stringify([finding.keyword, finding.schema, finding.details]),
       );
-      check(size <= 198, "pinned schema fact size");
+      check(size <= 201, "pinned schema fact size");
       bytes += size;
     });
     check(
-      bytes <= 4096 * 198 && report.evidence["OBI-02"] === "violated",
+      bytes <= 4096 * 201 && report.evidence["OBI-02"] === "violated",
       "aggregate facts and independent evidence",
     );
   }

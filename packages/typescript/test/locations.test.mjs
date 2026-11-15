@@ -80,7 +80,7 @@ test("transitive missing resources are visible before preparation and located du
     assert.equal(report.references.length, 2);
     const missing = report.references[1];
     assert.deepEqual(missing.location, {
-      sourceUri: "https://example.test/a",
+      retrievalUri: "https://example.test/a",
       pointer: "/allOf/0/$ref",
     });
     assert.equal(missing.resolution.status, "unresolved");
@@ -122,7 +122,7 @@ test("explained problems locate the value's node and the document's keyword", ()
     });
     assert.equal(value.locate("/items/2"), null);
     const keyword = "/operations/op/input/properties/items/items/type";
-    assert.deepEqual(problem.schema, { sourceUri: null, pointer: keyword });
+    assert.deepEqual(problem.schema, { retrievalUri: null, pointer: keyword });
     const at = source.indexOf('"integer"');
     assert.deepEqual(proof.locate(problem.schema), {
       pointer: keyword,
@@ -130,7 +130,7 @@ test("explained problems locate the value's node and the document's keyword", ()
       ...position(source, at),
     });
     assert.equal(
-      proof.locate({ sourceUri: null, pointer: "/operations/op/absent" }),
+      proof.locate({ retrievalUri: null, pointer: "/operations/op/absent" }),
       null,
     );
     const empty = own(new sdk.ExternalSchemas());
@@ -193,7 +193,10 @@ test("supplied resources locate their keywords, including through unpaired names
     const contract = own(ready.schema);
     const value = own(exact("3"));
     const [problem] = contract.explain(value).problems;
-    assert.deepEqual(problem.schema, { sourceUri: uri, pointer: "/minimum" });
+    assert.deepEqual(problem.schema, {
+      retrievalUri: uri,
+      pointer: "/minimum",
+    });
     const at = resourceText.indexOf("10");
     assert.deepEqual(resources.locate(problem.schema), {
       pointer: "/minimum",
@@ -204,13 +207,13 @@ test("supplied resources locate their keywords, including through unpaired names
     // A JavaScript string holds the unpaired unit; the pointer crosses exactly.
     const lone = "/$defs/\ud800/type";
     const offset = resourceText.indexOf('"string"');
-    assert.deepEqual(resources.locate({ sourceUri: uri, pointer: lone }), {
+    assert.deepEqual(resources.locate({ retrievalUri: uri, pointer: lone }), {
       pointer: lone,
       byteOffset: offset,
       ...position(resourceText, offset),
     });
     assert.equal(
-      resources.locate({ sourceUri: uri, pointer: "/$defs/\udc00/type" }),
+      resources.locate({ retrievalUri: uri, pointer: "/$defs/\udc00/type" }),
       null,
     );
   }));

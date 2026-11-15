@@ -73,7 +73,7 @@ fn unavailable_resources_keep_the_original_reference_location() {
             let location = detail.location.unwrap();
             if external.is_some() {
                 assert_eq!(
-                    location.source_uri.as_deref(),
+                    location.retrieval_uri.as_deref(),
                     Some("https://example.test/a")
                 );
                 assert_eq!(location.pointer, "/allOf/0/$ref");
@@ -82,7 +82,7 @@ fn unavailable_resources_keep_the_original_reference_location() {
                     Some(location.pointer)
                 );
             } else {
-                assert_eq!(location.source_uri, None);
+                assert_eq!(location.retrieval_uri, None);
                 assert_eq!(location.pointer, "/operations/op/input/$ref");
                 assert_eq!(
                     document.locate(&location).unwrap().pointer,

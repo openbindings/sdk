@@ -71,7 +71,7 @@ for (const longTarget of [false, true]) {
 const utf8 = (s) => Buffer.byteLength(s ?? "", "utf8");
 const originBytes = (o) =>
   o
-    ? utf8(o.sourceUri) +
+    ? utf8(o.retrievalUri) +
       (o.pointer.isWellFormed() ? utf8(o.pointer) : 2 * o.pointer.length)
     : 0;
 const entryBytes = (r) =>

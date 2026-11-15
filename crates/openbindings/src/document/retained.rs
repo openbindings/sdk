@@ -13,7 +13,8 @@ fn cached_namespace(cache: &NamespaceCache) -> usize {
     cache.get().and_then(Option::as_ref).map_or(0, namespace)
 }
 fn origin(origin: &SchemaOrigin) -> usize {
-    origin.source_uri.as_ref().map_or(0, String::capacity) + pointer_retained_bytes(&origin.pointer)
+    origin.retrieval_uri.as_ref().map_or(0, String::capacity)
+        + pointer_retained_bytes(&origin.pointer)
 }
 fn strings(values: &Vec<String>) -> usize {
     vec_bytes(values) + values.iter().map(String::capacity).sum::<usize>()

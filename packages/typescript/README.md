@@ -194,12 +194,26 @@ reject with `SdkError`, as does a WebAssembly module that is not this package's,
 which is refused before it is instantiated; retry after correcting the host
 condition.
 
+For Cloudflare Workers, follow the
+[Workers guide](https://github.com/openbindings/sdk/blob/main/docs/workers.md)
+for admission, `preparationLimits`, evaluation work, disposal and fatal Wasm
+traps. The defaults can exceed the isolate's memory ceiling; local workerd
+does not enforce the platform's memory or CPU limits.
+
 ## Exact values and editing
 
 Use JSON text or UTF-8 bytes for exact numbers such as `9007199254740993`.
 `parseJson` retains tokens; `ExactJson.from` checks ordinary JavaScript input and
 cannot restore precision already lost to a JavaScript number. Nonfinite numbers,
 undefined opaque values, bigint, cycles, sparse arrays and accessors are refused.
+Those failures throw standard `TypeError` with a stable `.code` such as
+`non-finite-number`, `unsupported-value`, `cyclic-value` or `accessor-property`.
+Ordinary admission limits throw `RangeError` with code `input-limit`, retaining
+fixed messages. `evaluate` and `explain` return that same ordinary limit code;
+`parseJson` and `evaluateJson` retain `byte-limit`, `node-limit` and `depth-limit`.
+These route distinctions are intentional existing behavior. Caller-thrown
+exceptions pass through unchanged. `ExactJson.metadata.kind` has the exported
+`JsonKind` union: `"null" | "boolean" | "number" | "string" | "array" | "object"`.
 
 Edit a `Document` through `set(pointer, value)`, `remove(pointer)` or an atomic
 `edit([{ op: "set", pointer, value }, { op: "remove", pointer }])` batch. Paths use
@@ -314,12 +328,23 @@ preparation failure. Reservation bytes are SDK estimates, not exact allocator
 requests, live heap or immutable pattern-program size.
 
 The original schema environment also has preparation footprint, work and
-allocation bounds, using Rust's default `PreparationLimits` in this facade.
+allocation bounds, exposed by `PrepareOptions.preparationLimits` with Rust's
+`PreparationLimits` defaults.
 Preparation work is uncapped by default and memory keeps a 512 MiB conservative
-allowance for storage held at once, releasing completed scratch. A time bound is
-the application's choice; use a Worker to enforce an elapsed-time policy for this
-synchronous facade. Those preparation settings are not currently exposed as
-TypeScript options. See the dated Rust [host-specific 250 ms suggestion](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026).
+allowance for storage held at once, releasing completed scratch. It is not a
+Wasm memory ceiling. A time bound is the application's choice; a parent can
+terminate a browser Worker or Node worker thread running this synchronous
+facade. A timer in the same Cloudflare isolate cannot interrupt it.
+`preparationLimits()` returns a fresh frozen default snapshot:
+`maxSchemaNodes: 100_000`, `maxIdentityBytes: 8_388_608`,
+`maxSdkWorkUnits: null`, `maxSdkReservationBytes: 536_870_912`.
+Pass partial overrides to `Schema.prepare` or `ExternalSchemas.prepare` under
+`preparationLimits`. All numeric values must be nonnegative 32-bit integers; only
+work accepts `null`. Registration takes the same budgets through
+`new ExternalSchemas(entries, { limits, signal })` or
+`resources.with(uri, value, { limits, signal })`. Each call chooses its own
+policy. Preparation returns a refusal; registration throws `SdkError` with code
+`resource`. Supplied owners remain usable after either refusal. See the dated Rust [host-specific 250 ms suggestion](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026).
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning;
 simple Boolean identities add no proof-work unit. Growing loops retain cooperative
 checks, and fast results do not reset shared preparation budgets.
@@ -356,7 +381,7 @@ Serializing whole problems into a public response sends schema facts. An app
 with a private contract should forward only `instance` and `code`.
 
 A problem's `instance` is relative to the exact value passed;
-`schema.sourceUri` and `schema.pointer` identify the original schema source.
+`schema.retrievalUri` and `schema.pointer` identify the original schema source.
 `value.locate(problem.instance)`, `ConformantDocument.locate(problem.schema)` and
 `ExternalSchemas.locate(problem.schema)` compute source coordinates on demand.
 Keep the corresponding source owner when coordinate lookup is needed.
@@ -365,10 +390,14 @@ Result records may gain properties: read the properties needed by the applicatio
 
 Document findings use exact JSON Pointers and UTF-8 byte coordinates in the assessed revision.
 A pointer keeps a member name's unpaired UTF-16 unit, as a JavaScript string can,
-and is null for parser syntax errors and admission limits. Render
+and is null for parser syntax errors and admission limits. Transport a pointer
+exactly with `JSON.stringify(pointer)` and recover it with `JSON.parse(text)`.
+Rust exports the same JSON string-token form with `Pointer::to_exact_json()`;
+ordinary Rust Serde instead replaces unpaired units with U+FFFD and can select
+a different draft member. Render
 pointers as text and convert byte offsets before selecting text in a JavaScript
 editor. OBI-02 findings carry `keyword`, `schema: SchemaOrigin` and optional
-`details: ValueProblemDetails` from the published fixed schema. Its `sourceUri` is
+`details: ValueProblemDetails` from the published fixed schema. Its `retrievalUri` is
 `https://openbindings.com/schema/openbindings-0.2.0.json`; the pointer identifies
 the failing keyword. Required details name one missing member per finding in
 schema-array order, and type details list all expected types. Disallowed members
@@ -409,8 +438,8 @@ and a required `limitation`. `referenceLimits()` returns the default 8 MiB text
 allowance. This is separate from JSON admission and inventory protection.
 
 The pinned 0.2 schema's
-largest serialized `[keyword, schema, details]` tuple is 198 bytes in TypeScript
-JSON (199 in Rust JSON). An exhaustive schema test guards this fixed property;
+largest serialized `[keyword, schema, details]` tuple is 201 bytes in TypeScript
+JSON (202 in Rust JSON). An exhaustive schema test guards this fixed property;
 there is no runtime fact-size cap. `findingsTruncated` records count and
 source-pointer omissions, leaving rule evidence available. The [editor example](examples/editor.html)
 shows source correction, Worker scheduling and coordinate conversion.

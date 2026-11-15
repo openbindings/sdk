@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicBool;
 
 const ALLOWANCE: usize = 8 * 1024 * 1024;
 fn origin_bytes(origin: &SchemaOrigin) -> usize {
-    origin.source_uri.as_ref().map_or(0, String::len)
+    origin.retrieval_uri.as_ref().map_or(0, String::len)
         + origin
             .pointer
             .as_str()
@@ -74,7 +74,7 @@ fn missing_directory_names_charge_expansion_before_retention() {
 }
 
 #[test]
-fn supplied_source_uris_charge_every_origin_copy() {
+fn supplied_retrieval_uris_charge_every_origin_copy() {
     let uri = format!("https://fetch.test/{}", "a".repeat(256 * 1024));
     for (nested, missing) in [(false, false), (false, true), (true, false), (true, true)] {
         let mut external = json!({"allOf":(0..64).map(|_| json!({"$ref":if missing { "#absent" } else { "#" }})).collect::<Vec<_>>()});
@@ -100,9 +100,9 @@ fn supplied_source_uris_charge_every_origin_copy() {
             assert_eq!(incomplete(&report).0.len(), 11);
             assert!(bytes + entry_bytes(&incomplete(&report).0[1]) > ALLOWANCE);
             for reference in &incomplete(&report).0[1..] {
-                assert_eq!(reference.location.source_uri.as_ref(), Some(&uri));
+                assert_eq!(reference.location.retrieval_uri.as_ref(), Some(&uri));
                 let root = reference.resource_root.as_ref().unwrap();
-                assert_eq!(root.source_uri.as_ref(), Some(&uri));
+                assert_eq!(root.retrieval_uri.as_ref(), Some(&uri));
                 assert_eq!(root.pointer, if nested { "/$defs/nested" } else { "" });
             }
         }

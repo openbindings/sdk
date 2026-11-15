@@ -26,6 +26,8 @@ values and supplied schema resources still retain unpaired UTF-16 units exactly,
 and so do the JSON Pointers that locate their nodes.
 
 Default parsing admits 32 MiB, 10,000 container levels and 1,000,000 nodes.
+These defaults can exceed a Worker's isolate memory ceiling; use the smaller
+admission and preparation allowances in the [Workers guide](docs/workers.md).
 Rust `JsonValue::parse_prefix` also admits one exact value from a byte buffer,
 returning its exclusive end offset or a distinct `JsonPrefixError::Incomplete`.
 At EOF the host uses whole-text admission on an incomplete remainder. The host
@@ -52,6 +54,11 @@ has separate footprint, cooperative SDK work and explicit SDK storage reservatio
 bounds through `PreparationLimits` (`max_sdk_work_units`,
 `max_sdk_reservation_bytes`). Work is optional and off by default (`None`);
 explicit SDK storage keeps a 512 MiB default allowance for storage held at once.
+That exceeds a Worker's 128 MB ceiling. TypeScript accepts smaller allowances
+under `PrepareOptions.preparationLimits`, and `{ limits }` on `ExternalSchemas`
+registration. The allowance bounds SDK reservations, not Wasm growth or all
+dependency allocations; the [Workers measurements](docs/workers.md#preparation-memory)
+show clean refusals and the remaining limits of this accounting.
 A time bound belongs to the caller through cancellation or `Some(work_units)`.
 See the host-specific [250 ms suggestion](docs/performance-boundaries.md#limits-principle-november-2026).
 These are not allocator-wide or CPU accounting for

@@ -176,7 +176,7 @@ fn substituted_resource_nodes_keep_distinct_original_provenance() {
             if mode == Detail::Explain {
                 let location = &problems[0].schema;
                 assert_eq!(
-                    location.source_uri.as_deref(),
+                    location.retrieval_uri.as_deref(),
                     Some("https://exact.test/root")
                 );
                 assert_eq!(location.pointer, pointer);

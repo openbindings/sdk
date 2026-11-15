@@ -15,7 +15,8 @@ use std::{fmt, str::FromStr};
 /// always writes an ordinary string, replacing each unpaired unit with U+FFFD,
 /// as `String::from_utf16_lossy` does. This works with `serde_json::to_value`,
 /// `json!`, `to_string` and `to_writer`. The pointer itself keeps its exact units
-/// for locating and editing. `Debug` shows no segment.
+/// for locating and editing. Use [`Self::to_exact_json`] for target-preserving
+/// JSON-text transport, including draft pointers. `Debug` shows no segment.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Pointer(Repr);
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -62,6 +63,43 @@ impl Pointer {
         text.into_iter()
             .flat_map(str::encode_utf16)
             .chain(units.into_iter().flatten())
+    }
+    /// Export a complete exact JSON string token, including its quotes.
+    /// Unpaired UTF-16 units are written as `\uXXXX` escapes, never replaced.
+    /// Unlike ordinary Serde or `Display`, this preserves every pointer's target.
+    ///
+    /// Carry the returned text as JSON text, as with [`crate::JsonValue::text`].
+    /// Read it with [`crate::JsonValue::parse`] (with sufficient admission limits)
+    /// and pass its string's `utf16_units()` to [`Self::from_utf16`]. JavaScript
+    /// uses `JSON.parse(text)` and `JSON.stringify(pointer)` for the same contract.
+    /// Do not convert through an ordinary Rust JSON string value: it cannot hold
+    /// an unpaired unit. This allocates output proportional to the pointer length.
+    pub fn to_exact_json(&self) -> String {
+        if let Some(text) = self.as_str() {
+            return serde_json::to_string(text).expect("a string is JSON");
+        }
+        use std::fmt::Write;
+        let mut token = String::from("\"");
+        for unit in char::decode_utf16(self.utf16_units()) {
+            match unit {
+                Ok('"') => token.push_str("\\\""),
+                Ok('\\') => token.push_str("\\\\"),
+                Ok('\u{8}') => token.push_str("\\b"),
+                Ok('\t') => token.push_str("\\t"),
+                Ok('\n') => token.push_str("\\n"),
+                Ok('\u{c}') => token.push_str("\\f"),
+                Ok('\r') => token.push_str("\\r"),
+                Ok(c) if c <= '\u{1f}' => {
+                    let _ = write!(token, "\\u{:04x}", u32::from(c));
+                }
+                Ok(c) => token.push(c),
+                Err(unit) => {
+                    let _ = write!(token, "\\u{:04x}", unit.unpaired_surrogate());
+                }
+            }
+        }
+        token.push('"');
+        token
     }
     /// Check escaped RFC 6901 UTF-16 units, as [`Self::utf16_units`] gives them,
     /// keeping unpaired units; the counterpart of `String::from_utf16`.

@@ -62,6 +62,8 @@ preparation limits and no cancellation. Use `prepare_with_control` for explicit
 limits or cancellation. Core does
 not depend on the evaluator companion. Original schema inventory and resolution
 are available through `SchemaEnvironment`; evaluator projections remain private.
+`ResourceIdentity` implements `Eq` and `Hash` by environment allocation and
+resource index. It can key a hash map or set; URI spelling alone is not identity.
 
 Retain a prepared schema and handle satisfies, fails, undefined and no-verdict for
 each value. Preparation failure judges no value. Parse exact JSON text or bytes
@@ -133,7 +135,7 @@ Failed `anyOf` and `oneOf` report at the applicator, without branch facts, match
 value explanations. The pinned document schema uses `anyOf`, not `oneOf`.
 `pattern` and `uniqueItems` also have no detail variant. Numeric and size bounds
 use exact schema token strings; enum facts contain the complete choices.
-The pinned 0.2 schema's largest serialized keyword/schema/details tuple is 199
+The pinned 0.2 schema's largest serialized keyword/schema/details tuple is 202
 bytes. An exhaustive schema test guards this property; no runtime fact-size cap
 is needed. Finding-count and source-pointer truncation leave rule evidence intact. Use codes and evidence
 for program logic. Messages are advisory; locations refer to the assessed revision's UTF-8 bytes.

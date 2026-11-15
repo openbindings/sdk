@@ -129,7 +129,7 @@ pub struct Finding {
     /// emits one finding per missing member. Disallowed members are identified
     /// only by `location`; anyOf/oneOf, pattern and uniqueItems have no detail.
     /// Never copies rejected document values. The keyword/schema/details tuple
-    /// has a measured maximum of 199 serialized JSON bytes in the pinned 0.2
+    /// has a measured maximum of 202 serialized JSON bytes in the pinned 0.2
     /// schema, guarded by an exhaustive schema test rather than a runtime cap.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<ValueProblemDetails>,
@@ -213,7 +213,7 @@ impl Default for ValidationLimits {
 #[derive(Clone, PartialEq, Eq, Serialize)]
 /// Assessment of all normative document rules at the pinned specification revision. By default at most 4096 findings and 8 MiB of aggregate generated-pointer bytes (UTF-8, or two per UTF-16 unit for a pointer through a name with an unpaired surrogate) are retained, adjustable with [`ValidationLimits`]. Omitted findings set `findings_truncated`; rule evidence and the conclusion remain independent of presentation caps. Retained coordinates always refer to original source. Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
 ///
-/// The pinned 0.2 schema's largest OBI-02 keyword/schema/details tuple is 199
+/// The pinned 0.2 schema's largest OBI-02 keyword/schema/details tuple is 202
 /// serialized JSON bytes. An exhaustive schema test guards this fixed property;
 /// there is no runtime fact-size cap. Facts are never partial.
 /// Failed anyOf/oneOf report the applicator with no branch detail. Missing required
@@ -1133,7 +1133,7 @@ mod finding_identity_tests {
         assert_eq!(
             measured.last().unwrap(),
             &(
-                199,
+                202,
                 "minimum",
                 "/$defs/BindingEntry/properties/preference/minimum".into()
             )

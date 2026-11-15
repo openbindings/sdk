@@ -65,7 +65,7 @@ fn resource_roots_agree_on_drafts_proofs_and_schema_nodes() {
                     .rsplit_once('/')
                     .unwrap()
                     .0;
-                let schema = match reference.location.source_uri.as_deref() {
+                let schema = match reference.location.retrieval_uri.as_deref() {
                     None => {
                         let mut parts = holder.split('/').skip(1);
                         assert_eq!(parts.next(), Some("schemas"));

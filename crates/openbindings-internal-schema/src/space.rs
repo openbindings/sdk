@@ -351,7 +351,7 @@ impl std::fmt::Debug for Reference {
 /// Bounded original-context reference inspection, not conformance proof or successful schema preparation.
 /// Retains at most 8 MiB of generated and source text in reference entries:
 /// all location, resource-root, target and refusal pointers, every origin's
-/// source URI, keywords, spellings, refusal codes/messages and unavailable-resource
+/// retrieval URI, keywords, spellings, refusal codes/messages and unavailable-resource
 /// URIs. Text is counted in UTF-8 bytes; pointers through an unpaired name use
 /// two bytes per UTF-16 unit. This is a text allowance, not total heap usage.
 /// The whole entry is charged before its text is materialized or cloned. The
@@ -934,8 +934,8 @@ impl SchemaSpace {
         }
         true
     }
-    /// The URI of a node's source, as [`Self::location`] gives it.
-    pub fn source_uri(&self, node: usize) -> Option<&str> {
+    /// The schema document's retrieval URI, as [`Self::location`] gives it.
+    pub fn retrieval_uri(&self, node: usize) -> Option<&str> {
         self.source(self.node(node).source).uri.as_deref()
     }
     pub fn location(&self, node: usize) -> Location {
@@ -2564,7 +2564,7 @@ mod projection_tests {
                 };
                 out.clear();
                 assert!(space.location_into(node, &mut out, &mut scratch), "{key}");
-                assert_eq!(space.source_uri(node), at.resource.as_deref(), "{key}");
+                assert_eq!(space.retrieval_uri(node), at.resource.as_deref(), "{key}");
                 assert_eq!(at.pointer, std::str::from_utf8(&out).unwrap(), "{key}");
                 checked += 1;
             }

@@ -82,6 +82,9 @@ sent?;
 
 The caller's **output handle alone drives** provider and validation work. Poll
 input submission and output consumption concurrently when either can block.
+`Invocation` is `#[must_use]` because discarding the lazy owner runs no provider
+or validation work. Use `drop(invocation)` to abandon an attempt explicitly.
+The annotation does not apply to input or other lifecycle handles.
 Dropping output cancels the attempt and releases its future; input and control
 handles retain no provider future. `InvocationControl::cancel` settles the
 attempt. Its provider future is never polled again and is dropped at the output

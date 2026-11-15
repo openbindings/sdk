@@ -22,7 +22,7 @@ typescript = subprocess.run(['node',str(root / 'tools/qualification/replay/node-
 def canonical(value):
     if isinstance(value, list): return [canonical(x) for x in value]
     if isinstance(value, dict):
-        return {{'byteOffset':'byte_offset','byteColumn':'byte_column','sourceUri':'source_uri'}.get(k,k):canonical(v) for k,v in value.items()}
+        return {{'byteOffset':'byte_offset','byteColumn':'byte_column','retrievalUri':'retrieval_uri'}.get(k,k):canonical(v) for k,v in value.items()}
     return value
 
 rows = []
@@ -33,7 +33,7 @@ for case, a, b in zip(cases, native.stdout.splitlines(), typescript.stdout.split
     assert [f['location']['pointer'] for f in fixed] == case['obi02_pointers'], case['id']
     assert all(f['message'] == 'value violates the fixed normative schema' for f in fixed)
     assert [f['keyword'] for f in fixed] == case['obi02_keywords'], case['id']
-    assert all(f['schema']['source_uri'] == 'https://openbindings.com/schema/openbindings-0.2.0.json' for f in fixed)
+    assert all(f['schema']['retrieval_uri'] == 'https://openbindings.com/schema/openbindings-0.2.0.json' for f in fixed)
     assert [f.get('details', {}).get('member') for f in fixed if f['keyword'] == 'required'] == case.get('required', [])
     assert all(len(json.dumps([f['keyword'], f['schema'], f.get('details')], ensure_ascii=False, separators=(',', ':')).encode()) <= 1024 for f in fixed)
     assert a['outcome'] == 'non-conformant' and a['rules']['OBI-02'] == 'violated'

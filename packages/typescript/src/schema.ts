@@ -25,10 +25,10 @@ import {
 import type { ExactInput, JsonInput } from "./json.js";
 import { Managed, adopt, handle } from "./ownership.js";
 
-/** A keyword or schema in an original schema source, by source URI and exact pointer. sourceUri null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and ExternalSchemas.locate() for a supplied resource; prepared schemas may retain immutable original sources needed for evaluation. Keep the corresponding document or external-schema owner when explicit coordinate lookup is needed. */
+/** A keyword or schema in an original schema source, by retrieval URI and exact pointer. retrievalUri null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and ExternalSchemas.locate() for a supplied resource; prepared schemas may retain immutable original sources needed for evaluation. Keep the corresponding document or external-schema owner when explicit coordinate lookup is needed. */
 export interface SchemaOrigin {
   /** Original source retrieval URI, the published fixed-schema URI for an OBI-02 finding, or null for the OpenBindings document; distinct from a nested resource’s $id. */
-  sourceUri: string | null;
+  retrievalUri: string | null;
   /** Exact RFC 6901 pointer from that source's root; empty string denotes root. */
   pointer: string;
 }
@@ -306,7 +306,7 @@ export interface ReferenceRefusal {
 export interface Reference {
   /** Original reference-keyword location. */
   location: SchemaOrigin;
-  /** Original location of the schema beginning the site's resource, not the resolved base. Null exactly for the document resource. A supplied source's top resource uses its sourceUri and an empty pointer even without $id. Conformant Rust callers can use SchemaNode::resource_base for the base. */
+  /** Original location of the schema beginning the site's resource, not the resolved base. Null exactly for the document resource. A supplied source's top resource uses its retrievalUri and an empty pointer even without $id. Conformant Rust callers can use SchemaNode::resource_base for the base. */
   resourceRoot: SchemaOrigin | null;
   /** Reference keyword spelling, such as $ref or $dynamicRef. */
   keyword: string;
@@ -332,7 +332,7 @@ export interface Reference {
 
 /** Original-context reference inspection, separate from normative proof and preparation. complete describes traversal completion; a complete report can still contain unresolved reference results.
  * Missing or malformed openbindings declarations use 0.2's rules, matching validation of a text declaring no version. This adds no limitation; a complete traversal is complete. Well-formed unsupported declarations and duplicate member names still prevent inspection.
- * By default retains at most 8 MiB of generated and source text in reference entries: all location, resource-root, target and refusal pointers, every origin's sourceUri, keywords, spellings, refusal codes/messages and unavailable-resource URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per UTF-16 unit. ReferenceOptions.limits overrides this text allowance, which is not total heap usage. Each whole entry is charged before materializing or cloning its text. The first entry that does not fit stops traversal, sets complete to false and reports a limit-exceeded limitation with code `reference-report-bytes` and no omitted location.
+ * By default retains at most 8 MiB of generated and source text in reference entries: all location, resource-root, target and refusal pointers, every origin's retrievalUri, keywords, spellings, refusal codes/messages and unavailable-resource URIs. Text uses UTF-8 bytes; pointers through an unpaired name use two bytes per UTF-16 unit. ReferenceOptions.limits overrides this text allowance, which is not total heap usage. Each whole entry is charged before materializing or cloning its text. The first entry that does not fit stops traversal, sets complete to false and reports a limit-exceeded limitation with code `reference-report-bytes` and no omitted location.
  */
 export type ReferenceReport =
   | {
@@ -392,6 +392,90 @@ export interface PrepareOptions extends WorkOptions {
   resources?: ExternalSchemas;
   /** Overrides for built-in evaluator budgets; unspecified entries use evaluatorLimits(). */
   limits?: Partial<EvaluatorLimits>;
+  /** Overrides for original-environment preparation; unspecified entries use preparationLimits(). Separate from evaluator limits. */
+  preparationLimits?: Partial<PreparationLimits>;
+}
+
+/** Existing Rust preparation and registration budgets. Numbers are nonnegative 32-bit integers. These estimates are neither process-memory ceilings nor elapsed-time deadlines. */
+export interface PreparationLimits {
+  /** Maximum inventoried schema positions, including supplied and packaged schemas; default 100,000. */
+  maxSchemaNodes: number;
+  /** Conservative cumulative expanded-URI spelling bound; default 8,388,608 bytes. */
+  maxIdentityBytes: number;
+  /** Cooperative SDK work units; null (default) leaves work uncapped. */
+  maxSdkWorkUnits: number | null;
+  /** Conservative SDK storage reservations held at once; default 536,870,912 bytes. Does not account for all dependency allocations or host copies. */
+  maxSdkReservationBytes: number;
+}
+
+/** Limits and cooperative cancellation for this registration only; later preparations choose their own settings. */
+export interface ResourceRegistrationOptions extends WorkOptions {
+  /** Partial preparation/registration budgets; unspecified entries use preparationLimits(). */
+  limits?: Partial<PreparationLimits>;
+}
+
+/** Return a fresh frozen copy of Rust's default preparation and registration budgets. Requires initialization. */
+export function preparationLimits(): Readonly<PreparationLimits> {
+  requireReady();
+  return Object.freeze(decode<PreparationLimits>(wasm.preparationLimits()));
+}
+
+function preparationSettings(limits?: Partial<PreparationLimits>): {
+  encoded?: string;
+  maxIdentityBytes?: number;
+} {
+  if (limits === undefined) return {};
+  const invalid = () =>
+    new SdkError(
+      "invalid-preparation-limits",
+      "Preparation limits must be known nonnegative 32-bit budgets; only maxSdkWorkUnits accepts null.",
+    );
+  if (!limits || typeof limits !== "object" || Array.isArray(limits))
+    throw invalid();
+  const defaults = preparationLimits();
+  const encoded: Record<string, number | null> = {};
+  for (const [key, value] of ownEntries(limits)) {
+    const budget =
+      typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      value >= 0 &&
+      value <= 0xffffffff;
+    if (
+      !Object.hasOwn(defaults, key) ||
+      !(
+        budget ||
+        (value === null && defaults[key as keyof PreparationLimits] === null)
+      )
+    )
+      throw invalid();
+    encoded[key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase())] = value;
+  }
+  return {
+    encoded: JSON.stringify(encoded),
+    maxIdentityBytes: encoded.max_identity_bytes as number | undefined,
+  };
+}
+
+function registrationOptions(
+  options?: ResourceRegistrationOptions,
+): ReturnType<typeof preparationSettings> & { signal?: AbortSignal } {
+  if (options === undefined) return {};
+  if (!options || typeof options !== "object" || Array.isArray(options))
+    throw new SdkError(
+      "invalid-work-options",
+      "Registration options must be an object.",
+    );
+  const { limits, ...work } = options;
+  const settings = preparationSettings(limits);
+  return { ...settings, signal: workSignal(work) };
+}
+
+function registrationActive(signal: AbortSignal | undefined): void {
+  if (isAborted(signal))
+    throw new SdkError(
+      "resource",
+      "external schema registration was cancelled",
+    );
 }
 
 /** Explicit resources and cooperative cancellation for reference inspection; no retrieval or global resource registry is used. */
@@ -452,56 +536,76 @@ function schemaRaw(owner: Schema): wasm.WasmSchema {
 // UTF-16 unit, so the engine reads the pointer exactly.
 /** @internal */
 export function schemaLocationText(at: SchemaOrigin): string {
-  return JSON.stringify({ source_uri: at?.sourceUri, pointer: at?.pointer });
+  return JSON.stringify({
+    retrieval_uri: at?.retrievalUri,
+    pointer: at?.pointer,
+  });
 }
 
 // Rust's default identity-byte allowance, read once. Registration and lookup
 // refuse a longer URI before reading it, so one certainly past the allowance
 // crosses only as the prefix that establishes the same refusal.
 let identityBytes: number | undefined;
-function resourceUri(uri: string): string {
+function resourceUri(uri: string, maxIdentityBytes?: number): string {
   scalar(uri);
-  return boundedText(uri, (identityBytes ??= wasm.identityByteLimit()));
+  return boundedText(
+    uri,
+    maxIdentityBytes ?? (identityBytes ??= wasm.identityByteLimit()),
+  );
 }
 
 const resourceToken = Symbol("retained resource set");
 
 /** Immutable explicit resource set. URIs must be absolute without a nonempty fragment; normalized duplicate identities are refused even for equal bytes. Resources are retained, never fetched. Batch failure releases partial state and leaves supplied owners usable. Distinct contexts may associate the same URI with different snapshots. */
 export class ExternalSchemas extends Managed {
-  /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Iteration stops at the first entry exceeding the default resource count or cumulative URI byte bound. Construction refuses invalid/duplicate URI or duplicate-member documents with SdkError; partial construction is released. */
-  constructor(entries?: Iterable<readonly [uri: string, document: ExactJson]>);
+  /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Iteration stops at the first entry exceeding the selected resource count or cumulative URI byte bound. options.limits overrides preparationLimits() defaults for this registration; options.signal permits cooperative cancellation. Construction refuses invalid/duplicate URI or duplicate-member documents with SdkError; partial construction is released. */
+  constructor(
+    entries?: Iterable<readonly [uri: string, document: ExactJson]>,
+    options?: ResourceRegistrationOptions,
+  );
   /** @internal */ constructor(raw: wasm.WasmResources, token: symbol);
   constructor(
     entries?: Iterable<readonly [string, ExactJson]> | wasm.WasmResources,
-    token?: symbol,
+    options?: ResourceRegistrationOptions | symbol,
   ) {
     requireReady();
-    if (token === resourceToken) {
+    if (options === resourceToken) {
       super(entries as wasm.WasmResources);
       return;
     }
-    if (entries === undefined) {
+    if (entries === undefined && options === undefined) {
       super(new wasm.WasmResources());
       return;
     }
+    const settings = registrationOptions(
+      options as ResourceRegistrationOptions | undefined,
+    );
+    registrationActive(settings.signal);
     // Bound staging by entry count and URI bytes, then admit the batch once.
     let pending: wasm.WasmResourceEntries | undefined;
     let raw: wasm.WasmResources;
     try {
-      for (const [uri, document] of entries as Iterable<
+      for (const [uri, document] of (entries ?? []) as Iterable<
         readonly [string, ExactJson]
       >) {
-        const bounded = resourceUri(uri);
+        const bounded = resourceUri(uri, settings.maxIdentityBytes);
+        registrationActive(settings.signal);
         sdkCall(() =>
-          (pending ??= new wasm.WasmResourceEntries()).push(
+          (pending ??= new wasm.WasmResourceEntries(settings.encoded)).push(
             bounded,
             jsonRaw(document),
           ),
         );
       }
-      raw = pending
-        ? sdkCall(() => pending!.build())
-        : new wasm.WasmResources();
+      registrationActive(settings.signal);
+      raw =
+        !pending && settings.encoded === undefined
+          ? new wasm.WasmResources()
+          : sdkCall(() =>
+              (pending ??= new wasm.WasmResourceEntries(
+                settings.encoded,
+              )).build(false),
+            );
     } finally {
       pending?.free();
     }
@@ -511,12 +615,22 @@ export class ExternalSchemas extends Managed {
   private static fromRaw(raw: wasm.WasmResources): ExternalSchemas {
     return new ExternalSchemas(raw, resourceToken);
   }
-  /** Return a NEW independently disposable resource-set owner with one added resource; the original and supplied document stay usable. Invalid/duplicate identity throws; no acquisition. */
-  with(uri: string, document: ExactJson): ExternalSchemas {
-    const bounded = resourceUri(uri);
+  /** Return a NEW independently disposable resource-set owner with one added resource; the original and supplied document stay usable. Invalid/duplicate identity throws; no acquisition. options selects limits and cancellation for this registration only; future preparations keep their own policies. */
+  with(
+    uri: string,
+    document: ExactJson,
+    options?: ResourceRegistrationOptions,
+  ): ExternalSchemas {
+    const settings = registrationOptions(options);
+    const bounded = resourceUri(uri, settings.maxIdentityBytes);
     return ExternalSchemas.fromRaw(
       sdkCall(() =>
-        handle<wasm.WasmResources>(this).add(bounded, jsonRaw(document)),
+        resourceRaw(this).add(
+          bounded,
+          jsonRaw(document),
+          settings.encoded,
+          isAborted(settings.signal),
+        ),
       ),
     );
   }
@@ -531,26 +645,32 @@ export class ExternalSchemas extends Managed {
     const location = schemaLocationText(at);
     return decode(sdkCall(() => resourceRaw(this).locate(location)));
   }
-  /** Prepare a resource in this set as its own JSON Schema root. uri is its retrieval identity for relative references and diagnostics; its own $id governs when present. Uses the same evaluator limits and signal options as Schema.prepare, with this set supplying the resources. An unavailable URI returns a refused preparation, never a value outcome. Ready owns an independent disposable PreparedSchema; failures and cancellation leave this set usable for retries. */
+  /** Prepare a resource in this set as its own JSON Schema root. uri is its retrieval identity for relative references and diagnostics; its own $id governs when present. Uses the same evaluator limits, preparationLimits and signal options as Schema.prepare, with this set supplying the resources. An unavailable URI returns a refused preparation, never a value outcome. Ready owns an independent disposable PreparedSchema; failures and cancellation leave this set usable for retries. */
   prepare(
     uri: string,
     options: Omit<PrepareOptions, "resources"> = {},
   ): SchemaPreparation {
     requireReady();
-    const bounded = resourceUri(uri);
     resourceRaw(this);
     if (!options || typeof options !== "object" || Array.isArray(options))
       throw new SdkError(
         "invalid-work-options",
         "Preparation options must be an object.",
       );
-    const { limits, ...work } = options;
+    const { limits, preparationLimits, ...work } = options;
     const signal = workSignal(work);
     const encoded = limits === undefined ? undefined : encodedLimits(limits);
+    const settings = preparationSettings(preparationLimits);
+    const bounded = resourceUri(uri, settings.maxIdentityBytes);
     return takePreparation(
       // Options can run caller code, so the handle is taken after them.
       sdkCall(() =>
-        resourceRaw(this).prepare(bounded, encoded, isAborted(signal)),
+        resourceRaw(this).prepare(
+          bounded,
+          encoded,
+          settings.encoded,
+          isAborted(signal),
+        ),
       ),
     );
   }
@@ -573,16 +693,19 @@ export class Schema extends Managed {
     requireReady();
     schemaRaw(this);
     // Options can run caller code, so the handle is taken after them.
-    const { resources, limits, signal } = prepareOptions(options);
+    const { resources, limits, preparationLimits, signal } =
+      prepareOptions(options);
     // Omitted resources and limits cross the bridge as absent: the engine uses
     // its shared empty set and default budgets without building either.
     const encoded = limits === undefined ? undefined : encodedLimits(limits);
+    const settings = preparationSettings(preparationLimits);
     const preparation = sdkCall(() =>
       resources === undefined
-        ? schemaRaw(this).prepare(encoded, isAborted(signal))
+        ? schemaRaw(this).prepare(encoded, settings.encoded, isAborted(signal))
         : schemaRaw(this).prepareWith(
             resourceRaw(resources),
             encoded,
+            settings.encoded,
             isAborted(signal),
           ),
     );
@@ -619,6 +742,7 @@ function takePreparation(preparation: wasm.WasmPreparation): SchemaPreparation {
 function prepareOptions(options: PrepareOptions): {
   resources?: ExternalSchemas;
   limits?: Partial<EvaluatorLimits>;
+  preparationLimits?: Partial<PreparationLimits>;
   signal?: AbortSignal;
 } {
   if (!options || typeof options !== "object" || Array.isArray(options))
@@ -626,8 +750,8 @@ function prepareOptions(options: PrepareOptions): {
       "invalid-work-options",
       "Preparation options must be an object.",
     );
-  const { resources, limits, ...work } = options;
-  return { resources, limits, signal: workSignal(work) };
+  const { resources, limits, preparationLimits, ...work } = options;
+  return { resources, limits, preparationLimits, signal: workSignal(work) };
 }
 
 /** @internal */

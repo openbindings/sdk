@@ -13,7 +13,7 @@ const expected = JSON.parse(
       "utf8",
     )
   )
-    .replace(/"source_uri":/g, '"sourceUri":')
+    .replace(/"retrieval_uri":/g, '"retrievalUri":')
     .replace(/"resource_root":/g, '"resourceRoot":')
     .replace(/"resource_uri":/g, '"resourceUri":')
     .replace(/"dynamic_lookup":/g, '"dynamicLookup":'),

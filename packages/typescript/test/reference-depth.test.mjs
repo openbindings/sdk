@@ -19,13 +19,13 @@ test("inspection reports present and missing targets at validation's depth", () 
         const reference = report.references[0];
         const holder = `/schemas/entry${"/not".repeat(depth)}`;
         assert.deepEqual(reference.location, {
-          sourceUri: null,
+          retrievalUri: null,
           pointer: `${holder}/$ref`,
         });
         if (present) {
           assert.deepEqual(reference.resolution, {
             status: "located",
-            target: { sourceUri: null, pointer: "/schemas/target" },
+            target: { retrievalUri: null, pointer: "/schemas/target" },
             dynamicLookup: false,
           });
         } else {
@@ -33,7 +33,7 @@ test("inspection reports present and missing targets at validation's depth", () 
           assert.equal(reference.resolution.detail.reason, "missing-target");
           assert.equal(reference.resolution.detail.code, "missing-target");
           assert.deepEqual(reference.resolution.detail.location, {
-            sourceUri: null,
+            retrievalUri: null,
             pointer: holder,
           });
         }

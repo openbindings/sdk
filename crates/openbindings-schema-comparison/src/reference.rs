@@ -37,6 +37,15 @@ pub(crate) struct Resources {
     index: Arc<Mutex<Index>>,
     side: crate::ComparisonSide,
 }
+fn set_bytes<K>(values: &std::collections::BTreeSet<K>) -> usize {
+    // Same occupancy estimate as backend::btree_bytes, with no mapped value.
+    let nodes = if values.is_empty() {
+        0
+    } else {
+        1 + values.len().saturating_sub(11).div_ceil(8)
+    };
+    nodes * (16 + 11 * size_of::<K>() + 2 * size_of::<usize>())
+}
 // Keep the resolved spelling for relative references and source coordinates;
 // only the lookup key uses the evaluator's URI equivalence.
 fn identity(text: &str, attempt: &mut Attempt<'_>) -> Result<(String, String), Failure> {
@@ -292,6 +301,32 @@ fn configured_top(root: JsonRef<'_>, top: JsonRef<'_>, obi: bool) -> bool {
         .is_some_and(|operations| root.get("operations").is_some_and(|v| same(v, operations)))
 }
 impl Index {
+    /// Additional storage of a context's persistent index. Every JSON value
+    /// here shares a configured source arena, counted by ComparisonContext.
+    pub(crate) fn retained_bytes(&self) -> usize {
+        use backend::{btree_bytes, vec_bytes};
+        // Detached selections have call-local indexes, never context indexes.
+        debug_assert!(self.local_root.is_none() && self.parent.is_none());
+        vec_bytes(&self.entries)
+            + btree_bytes(&self.uris)
+            + btree_bytes(&self.scopes)
+            + set_bytes(&self.cataloged)
+            + btree_bytes(&self.imports)
+            + btree_bytes(&self.anchors)
+            + set_bytes(&self.anchored)
+            + self
+                .entries
+                .iter()
+                .map(|entry| entry.base.as_ref().map_or(0, String::capacity))
+                .sum::<usize>()
+            + self.uris.keys().map(String::capacity).sum::<usize>()
+            + self
+                .anchors
+                .keys()
+                .map(|(_, anchor)| anchor.capacity())
+                .sum::<usize>()
+    }
+
     fn locate_failure(
         &self,
         mut failure: Failure,

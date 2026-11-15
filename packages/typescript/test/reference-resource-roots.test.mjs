@@ -15,7 +15,7 @@ const cases = JSON.parse(
 const camel = (value) =>
   JSON.parse(
     JSON.stringify(value)
-      .replace(/"source_uri":/g, '"sourceUri":')
+      .replace(/"retrieval_uri":/g, '"retrievalUri":')
       .replace(/"resource_root":/g, '"resourceRoot":'),
   );
 const ordered = (rows) =>

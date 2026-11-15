@@ -261,7 +261,7 @@ impl Run<'_> {
             a.instance
                 .utf16_units()
                 .cmp(b.instance.utf16_units())
-                .then_with(|| a.schema.source_uri.cmp(&b.schema.source_uri))
+                .then_with(|| a.schema.retrieval_uri.cmp(&b.schema.retrieval_uri))
                 .then_with(|| {
                     a.schema
                         .pointer
@@ -293,7 +293,7 @@ impl Run<'_> {
         let source = self.plan.environment.space().source(node.source);
         // The exact source extents bound all ancestor-name scans and final
         // writing, including UTF-16 decoding and keyword lookup. Include the
-        // original source URI's copy; no temporary ancestry is allocated.
+        // original retrieval URI's copy; no temporary ancestry is allocated.
         let work = root
             .text()
             .len()

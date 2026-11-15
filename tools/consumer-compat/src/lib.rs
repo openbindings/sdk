@@ -265,7 +265,7 @@ mod tests {
                 let decoded: JsonValue = serde_json::from_str(&encoded).unwrap();
                 assert_eq!(decoded.text(), document.text());
                 assert_eq!(root.origin().pointer, "/operations/read/input");
-                assert_eq!(root.origin().source_uri, None);
+                assert_eq!(root.origin().retrieval_uri, None);
                 let constant: JsonValue = document.get("const").unwrap().to_owned();
                 assert_eq!(constant.text(), "1e400");
                 Ok(Prepared(constant))

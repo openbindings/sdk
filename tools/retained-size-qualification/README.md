@@ -14,3 +14,12 @@ Process-wide packaged schemas are warmed before accounting, since snapshots do
 not own them. Requested allocation sizes exclude allocator overhead, as does the
 API. Clones and proofs charge the same snapshot. Dropping all owners releases
 its measured allocations. One-off measurements belong in the decision receipt.
+
+`context_bytes` also qualifies `ComparisonContext::retained_bytes()` at 10, 100
+and 500 operations, before and after comparison builds its reference indexes.
+It measures the context alone after the proof drops, including supplied resources
+and aliases sharing one source arena. The context estimate must stay within a
+factor of two of requested live bytes. This empirical qualification is not a
+universal bound. Clone stability, schema-text coverage, growth and release of
+every measured allocation are checked. The original document tolerance remains
+25%. Run with `-- --nocapture` to print each estimate beside its allocator count.

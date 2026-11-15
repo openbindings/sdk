@@ -72,6 +72,39 @@ impl ComparisonContext {
     pub fn document(&self) -> &JsonValue {
         &self.data.document
     }
+    /// Estimate heap bytes this context keeps alive now.
+    ///
+    /// Includes the complete exact source arenas of the root and supplied
+    /// resources, configured URI buffers, and completed reference indexes. Uses
+    /// existing capacities without building indexes or doing comparison work.
+    /// Each shared source arena is counted once within this context; clones
+    /// return the same estimate. Summing estimates of separate owners, including
+    /// a document and its context or two contexts sharing resources, overcounts
+    /// their shared allocations.
+    ///
+    /// This is neither resident memory nor the bytes freed by dropping one handle.
+    /// Excludes allocator overhead and Wasm memory growth. Tree node occupancy
+    /// is estimated, as in [`openbindings::Document::retained_bytes`]. Later
+    /// comparisons or source-location lookups can grow retained indexes; call
+    /// again to include that growth. Concurrent lookups can change the estimate
+    /// while it is being computed. This is not a hard memory admission bound.
+    pub fn retained_bytes(&self) -> usize {
+        use openbindings_internal_json::backend;
+        let mut arenas = std::collections::BTreeSet::new();
+        let sources = std::iter::once(&self.data.document)
+            .chain(self.data.resources.iter().map(|(_, value)| value))
+            .filter(|value| arenas.insert(backend::occurrence(value.view()).0))
+            .map(backend::retained_bytes)
+            .sum::<usize>();
+        size_of::<ContextData>()
+            + size_of::<Mutex<crate::reference::Index>>()
+            + 4 * size_of::<usize>() // Two Arc headers.
+            + sources
+            + self.data.base.as_ref().map_or(0, String::capacity)
+            + backend::vec_bytes(&self.data.resources)
+            + self.data.resources.iter().map(|(uri, _)| uri.capacity()).sum::<usize>()
+            + self.index.lock().expect("comparison index").retained_bytes()
+    }
 }
 /// One exact schema and its reusable document context. An omitted slot is None.
 #[derive(Clone)]

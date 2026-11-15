@@ -363,7 +363,7 @@ impl ExternalSchemas {
     /// URI this set does not hold (such as a packaged meta-schema's), or a
     /// pointer that names no node. Positions are computed on this call.
     pub fn locate(&self, at: &SchemaOrigin) -> Option<SourceLocation> {
-        let uri = at.source_uri.as_deref()?;
+        let uri = at.retrieval_uri.as_deref()?;
         let resources = &self.inner.resources;
         let found = resources
             .binary_search_by(|resource| resource.uri.as_str().cmp(uri))

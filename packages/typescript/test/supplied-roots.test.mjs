@@ -42,8 +42,8 @@ for (const fixture of cases) {
           assert.ok(explained.problems.length > 0);
           for (const problem of explained.problems) {
             assert.equal(
-              problem.schema.sourceUri,
-              row.source_uri ?? fixture.uri,
+              problem.schema.retrievalUri,
+              row.retrieval_uri ?? fixture.uri,
             );
             assert.equal(problem.schema.pointer, row.pointer);
             assert.ok(resources.locate(problem.schema));
@@ -88,7 +88,7 @@ test("supplied preparation distinguishes missing roots, invalid schemas, limits 
     const invalid = resources.prepare(uri);
     assert.equal(invalid.status, "refused");
     assert.equal(invalid.failure.kind, "invalid-external-schema");
-    assert.equal(invalid.failure.origin.sourceUri, uri);
+    assert.equal(invalid.failure.origin.retrievalUri, uri);
     const signal = AbortSignal.abort();
     assert.equal(
       resources.prepare(validUri, { signal }).failure.kind,

@@ -1,6 +1,5 @@
 //! Private metadata encoding for JavaScript's exact UTF-16 pointers.
 //! Ordinary Rust serialization deliberately replaces unpaired pointer units.
-use super::encoded;
 use openbindings::*;
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_json::value::RawValue;
@@ -40,21 +39,7 @@ impl Exact for Pointer {
         if let Some(text) = self.as_str() {
             return serializer.serialize_str(text);
         }
-        let mut token = String::from("\"");
-        for unit in char::decode_utf16(self.utf16_units()) {
-            match unit {
-                Ok(c) => {
-                    let quoted = encoded(c.to_string());
-                    token.push_str(&quoted[1..quoted.len() - 1]);
-                }
-                Err(unit) => {
-                    use std::fmt::Write;
-                    let _ = write!(token, "\\u{:04x}", unit.unpaired_surrogate());
-                }
-            }
-        }
-        token.push('"');
-        RawValue::from_string(token)
+        RawValue::from_string(self.to_exact_json())
             .expect("exact pointer is JSON")
             .serialize(serializer)
     }
@@ -82,7 +67,7 @@ record!(SourceLocation, v, {
     "line": v.line, "byte_column": v.byte_column,
 });
 record!(SchemaOrigin, v, {
-    "source_uri": &v.source_uri, "pointer": json(&v.pointer),
+    "retrieval_uri": &v.retrieval_uri, "pointer": json(&v.pointer),
 });
 impl Exact for Finding {
     fn exact<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -226,6 +211,7 @@ impl Exact for ValueOutcome {
 
 #[cfg(test)]
 mod tests {
+    use super::super::encoded;
     use super::*;
 
     fn agrees(value: &(impl Exact + serde::Serialize)) {

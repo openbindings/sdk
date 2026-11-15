@@ -89,12 +89,12 @@ test("missing and malformed versions inspect every reference under 0.2", () => {
     assert.equal(supplied.references.length, 5);
     assert.deepEqual(supplied.references[0].resolution, {
       status: "located",
-      target: { sourceUri: null, pointer: "/schemas/target" },
+      target: { retrievalUri: null, pointer: "/schemas/target" },
       dynamicLookup: false,
     });
     assert.deepEqual(supplied.references[1].resolution, {
       status: "located",
-      target: { sourceUri: null, pointer: "/schemas/target" },
+      target: { retrievalUri: null, pointer: "/schemas/target" },
       dynamicLookup: true,
     });
     assert.equal(supplied.references[2].resolution.status, "unresolved");
@@ -105,7 +105,7 @@ test("missing and malformed versions inspect every reference under 0.2", () => {
     assert.deepEqual(supplied.references[4].resolution, {
       status: "located",
       target: {
-        sourceUri: "https://example.test/external",
+        retrievalUri: "https://example.test/external",
         pointer: "/$defs/target",
       },
       dynamicLookup: false,

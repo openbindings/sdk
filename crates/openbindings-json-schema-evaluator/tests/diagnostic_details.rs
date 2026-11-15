@@ -108,7 +108,7 @@ fn explained_locations_exist_in_original_document_and_supplied_resources() {
             assert!(failure(&coarse).0.is_empty());
             let upstream = contract.explain(&value);
             let location = &failure(&upstream).0[0].schema;
-            assert_eq!(location.source_uri.as_deref(), external.then_some(uri));
+            assert_eq!(location.retrieval_uri.as_deref(), external.then_some(uri));
             assert_eq!(
                 location.pointer,
                 if external {
@@ -301,7 +301,7 @@ fn every_keyword_is_explained_at_its_original_location() {
         let problem = &problems[0];
         assert_eq!(problem.code, code, "{schema}");
         assert_eq!(problem.instance, instance, "{schema}");
-        assert_eq!(problem.schema.source_uri, None, "{schema}");
+        assert_eq!(problem.schema.retrieval_uri, None, "{schema}");
         assert_eq!(
             problem.schema.pointer,
             format!("/operations/op/input{pointer}"),
@@ -331,7 +331,7 @@ fn nested_coordinates_and_escaped_names_in_a_supplied_resource() {
     assert_eq!(problem.instance, "/a~1~0");
     assert_eq!(problem.schema.pointer, "/allOf/0/properties/a~1~0/minimum");
     assert_eq!(
-        problem.schema.source_uri.as_deref(),
+        problem.schema.retrieval_uri.as_deref(),
         Some("https://example.test/schema")
     );
     assert_eq!(

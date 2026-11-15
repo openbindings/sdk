@@ -361,7 +361,7 @@ pub fn run<E: SchemaEvaluator + ?Sized>(evaluator: &E) -> Report {
             for location in locations {
                 // The document and supplied resources locate their own nodes;
                 // a packaged meta-schema is read from its text.
-                let exists = match &location.source_uri {
+                let exists = match &location.retrieval_uri {
                     None => validated.locate(location).is_some(),
                     Some(uri) => {
                         resources.locate(location).is_some()
@@ -383,7 +383,7 @@ pub fn run<E: SchemaEvaluator + ?Sized>(evaluator: &E) -> Report {
                     );
                 }
                 if location
-                    .source_uri
+                    .retrieval_uri
                     .as_deref()
                     .is_some_and(|s| s.starts_with("https://sdk-program.openbindings.invalid/"))
                 {

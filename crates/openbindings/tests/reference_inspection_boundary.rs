@@ -83,7 +83,7 @@ fn missing_or_malformed_versions_inspect_under_0_2_without_a_limitation() {
     assert!(matches!(
         &complete(&supplied)[4].resolution,
         ReferenceResolution::Located { target, dynamic_lookup: false }
-            if target.source_uri.as_deref() == Some("https://example.test/external")
+            if target.retrieval_uri.as_deref() == Some("https://example.test/external")
                 && target.pointer == "/$defs/target"
     ));
     for declaration in [None, Some("1"), Some("5"), Some("null"), Some(r#""bad""#)] {
@@ -168,7 +168,7 @@ fn supplied_resource_references_are_reported_transitively_once() {
     assert_eq!(complete(&report).len(), 4);
     // Freeze every field of this existing small transitive fixture, including
     // traversal order and the separately owned unresolved location.
-    let origin = |source: Option<&str>, pointer: &str| serde_json::json!({"source_uri":source,"pointer":pointer});
+    let origin = |source: Option<&str>, pointer: &str| serde_json::json!({"retrieval_uri":source,"pointer":pointer});
     let located = |source: Option<&str>, pointer, spelling, target| {
         serde_json::json!({
             "location":origin(source, pointer),"keyword":"$ref","spelling":spelling,
@@ -201,7 +201,7 @@ fn supplied_resource_references_are_reported_transitively_once() {
     );
     let missing = &complete(&report)[3];
     assert_eq!(
-        missing.location.source_uri.as_deref(),
+        missing.location.retrieval_uri.as_deref(),
         Some("https://example.test/b")
     );
     assert_eq!(missing.location.pointer, "/allOf/1/$ref");
@@ -234,7 +234,7 @@ fn reached_supplied_schemas_report_references_beyond_256_levels() {
     assert_eq!(complete(&report).len(), 2);
     let reached = &complete(&report)[1];
     assert_eq!(
-        reached.location.source_uri.as_deref(),
+        reached.location.retrieval_uri.as_deref(),
         Some("https://example.test/a")
     );
     assert_eq!(
@@ -267,7 +267,7 @@ fn reached_supplied_sources_include_nested_identifier_scopes() {
     assert_eq!(complete(&report).len(), 2);
     let reference = &complete(&report)[1];
     assert_eq!(
-        reference.location.source_uri.as_deref(),
+        reference.location.retrieval_uri.as_deref(),
         Some("https://example.test/a")
     );
     assert_eq!(reference.location.pointer, "/properties/p/$ref");

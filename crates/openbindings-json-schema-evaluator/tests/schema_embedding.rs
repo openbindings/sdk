@@ -102,7 +102,7 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                     };
                     assert!(
                         matches!(&found.resolution, ReferenceResolution::Located { target, .. }
-                        if target.pointer == expected_target && target.source_uri.as_deref() == supplied.then_some(BASE)),
+                        if target.pointer == expected_target && target.retrieval_uri.as_deref() == supplied.then_some(BASE)),
                         "{found:?}"
                     );
                     // Retain draft reference inspection above. Evaluation uses
@@ -127,7 +127,7 @@ fn contained_draft_and_supplied_surrogate_collision_preserves_each_original_targ
                         problems
                             .iter()
                             .any(|p| p.schema.pointer == format!("{literal_pointer}/type")
-                                && p.schema.source_uri.as_deref() == Some(BASE)),
+                                && p.schema.retrieval_uri.as_deref() == Some(BASE)),
                         "{problems:?}"
                     );
                 }

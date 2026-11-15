@@ -202,7 +202,7 @@ fn located(
             dynamic_lookup,
         } => {
             assert_eq!(actual.pointer, target);
-            assert_eq!(actual.source_uri.as_deref(), source);
+            assert_eq!(actual.retrieval_uri.as_deref(), source);
             assert_eq!(dynamic_lookup, dynamic);
         }
         other => panic!("{other:?}"),
@@ -489,7 +489,7 @@ fn distinct_canonical_identity_keeps_retrieval_origin_and_reference_base() {
         let own = resources(&[(retrieval, json!({"$id":canonical,"type":"string"}))]);
         assert_eq!(
             failed_location(&ready(&proof, &own, "canonical"), "2")
-                .source_uri
+                .retrieval_uri
                 .as_deref(),
             Some(retrieval)
         );
@@ -1022,10 +1022,10 @@ fn preparations_and_retained_schema_owners_keep_independent_resource_snapshots()
     verdicts(&first, &[("2", "satisfies"), (r#""x""#, "fails")]);
     verdicts(&second, &[("true", "satisfies"), ("2", "fails")]);
     assert_eq!(
-        failed_location(&old_owner, "2").source_uri.as_deref(),
+        failed_location(&old_owner, "2").retrieval_uri.as_deref(),
         Some(U)
     );
-    assert_eq!(failed_location(&first, r#""x""#).source_uri, None);
+    assert_eq!(failed_location(&first, r#""x""#).retrieval_uri, None);
     let doc = document(
         json!({}),
         json!({"op":{"input":{"$ref":V}},"other":{"input":true}}),
@@ -1044,12 +1044,12 @@ fn preparations_and_retained_schema_owners_keep_independent_resource_snapshots()
     verdicts(&retained[1], &[("2", "fails"), (r#""x""#, "satisfies")]);
     assert_eq!(
         failed_location(&retained[0], r#""x""#)
-            .source_uri
+            .retrieval_uri
             .as_deref(),
         Some(V)
     );
     assert_eq!(
-        failed_location(&retained[1], "2").source_uri.as_deref(),
+        failed_location(&retained[1], "2").retrieval_uri.as_deref(),
         Some(V)
     );
 }
@@ -1172,9 +1172,9 @@ fn identity_refusal_location_is_optional_and_measured_before_copy() {
         )]);
         let detail = refusal(prepare(&conformant(&doc), &supplied, "op"));
         assert_eq!(detail.kind, PreparationFailureKind::InvalidExternalSchema);
-        // Source URI bytes share the allowance with the full original pointer.
+        // Retrieval URI bytes share the allowance with the full original pointer.
         if let Some(origin) = detail.origin {
-            assert_eq!(origin.source_uri.as_deref(), Some(V));
+            assert_eq!(origin.retrieval_uri.as_deref(), Some(V));
             assert_eq!(origin.pointer, format!("/properties/{key}"));
         }
     }

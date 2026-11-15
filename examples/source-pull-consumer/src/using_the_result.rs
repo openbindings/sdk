@@ -181,7 +181,7 @@ pub fn keep_part(
             let from = reference.location.pointer.as_str().unwrap_or_default();
             if let (true, ReferenceResolution::Located { target, .. }) =
                 (from.starts_with(&inside), &reference.resolution)
-                && target.source_uri.is_none()
+                && target.retrieval_uri.is_none()
             {
                 wanted.push(target.pointer.as_str().unwrap().to_owned());
             }

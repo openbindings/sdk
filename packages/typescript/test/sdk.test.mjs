@@ -504,7 +504,7 @@ test("schema resources retain every entry and release owners", () => {
     const set = new sdk.ExternalSchemas(documents.map((d, i) => [uri(i), d]));
     for (const i of [0, 31, 63])
       assert.equal(
-        set.locate({ sourceUri: uri(i), pointer: "/title" }).pointer,
+        set.locate({ retrievalUri: uri(i), pointer: "/title" }).pointer,
         "/title",
       );
     set.dispose();

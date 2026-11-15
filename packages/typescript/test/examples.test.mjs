@@ -105,7 +105,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
     assert.equal(negated.status, "updated");
     assert.equal(negated.result.status, "no-verdict");
     assert.deepEqual(negated.result.detail.location, {
-      sourceUri: null,
+      retrievalUri: null,
       pointer: "/operations/lookup/input/not/$ref",
     });
     const fragmentText =
@@ -115,7 +115,7 @@ test("source editor requires conformance and retains prepared partial snapshots"
     assert.equal(fragment.result.status, "no-verdict");
     assert.equal(fragment.result.detail.reason, "resource-unavailable");
     assert.deepEqual(fragment.result.detail.location, {
-      sourceUri: null,
+      retrievalUri: null,
       pointer: "/operations/lookup/input/$ref",
     });
     assert.match(formatEditorResult(fragment), /resource-unavailable/);
@@ -171,7 +171,7 @@ test("editor presentation quotes original pointers and reports diagnostic trunca
           {
             instance: "/id",
             schema: {
-              sourceUri: null,
+              retrievalUri: null,
               pointer: "/operations/lookup/input",
             },
             message:

@@ -17,6 +17,27 @@ arm64, Rust 1.99.0 and wasm-bindgen 0.2.129, with later dates stated locally.
 Matched candidate performance and final hosted-platform qualification require
 separate runs. The performance workflow's timing remains advisory.
 
+## Per-owner retained storage (November 2026)
+
+Rust `ComparisonContext::retained_bytes()` estimates allocations kept alive by
+the context, including complete exact source arenas and completed reference
+indexes. Like `Document::retained_bytes()`, it uses existing capacities and
+estimated tree occupancy only when called. It adds no preparation or evaluation
+work. Shared storage is counted per owner, so summing separate owner estimates
+overcounts sharing. It is neither resident memory nor what dropping a handle
+frees, and excludes allocator overhead and Wasm memory growth. Later indexing
+and source-location lookups can grow the estimate. Concurrent calls can observe
+that growth; the estimate is not an atomic heap snapshot or a hard admission cap.
+
+The [retained-size qualification tool](../tools/retained-size-qualification/README.md)
+compares context estimates with requested live allocation bytes for cold and
+warmed contexts at 10, 100 and 500 operations. The factor-two test applies only
+to those shapes. Default prepared schemas and operations do not expose this
+method: their core generic wrapper and companion validator live in different
+crates, preventing a specialized inherent method on the schema wrapper.
+There is no estimate here for allocations hidden inside `jsonschema`, and no
+estimate promised for custom evaluators.
+
 ## Limits principle (November 2026)
 
 Comparison `max_work`, preparation `max_sdk_work_units` and pull
@@ -62,10 +83,15 @@ the sandbox denied `/usr/bin/time -l` access to `sysctl kern.clockrate`.
 | Interface self-comparison | 3,000 | 42.617 | 13.708 | 3.028 |
 | Pull relationships | 1,000 | 4.957 | 9.542 | 1.843 |
 | Pull relationships | 3,000 | 13.971 | 22.386 | 3.394 |
-| Preparation, contained | 1,000 | 68.865 | 55.049 | 42.262 |
-| Preparation, contained | 3,000 | 242.370 | 165.321 | 132.582 |
-| Preparation, supplied | 1,000 | 9.235 | 19.489 | 1.739 |
-| Preparation, supplied | 3,000 | 28.023 | 48.911 | 5.288 |
+
+The former contained/supplied preparation rows could not be reproduced on
+2026-11-14: the exact generator and invocation were not found in this
+repository's `tools/`, benchmark fixtures, tests, examples or this page's
+commands. Their numbers have been removed rather than used to predict Worker
+cost. The [Workers guide](workers.md#preparation-memory) measures a separately
+specified eight-property-record workload in the built TypeScript package.
+Its supplied case prepares a contained reference to a supplied resource;
+it is not a direct `ExternalSchemas.prepare` call or a native heap measurement.
 
 The decision receipt records all release boundaries, conservative sites left
 cumulative, commands and raw samples. These observations are not a release or
@@ -260,7 +286,11 @@ The initial 10,000,000 candidate lost a valid 10 MB source-puller verdict on
 Original. The final 40,000,000 ceiling keeps all 879 corpus slots below the
 product boundary for every value the default one-million-node parser admits:
 the largest tightened coefficient is 39. At the measured 20 ns per ordinary
-application this permits about 800 ms of uncancellable compiled work. Original
+application the product is about 800 ms for that ordinary application cost,
+not an elapsed-time ceiling. A hostile pattern took 1.858 s in Node on
+2026-11-14; a timer-driven abort still took 2.018 s. Pattern work is outside
+that multiplication. Set `evaluationSdkWorkUnits` for cooperative work control;
+the [Workers guide](workers.md#limits-to-set) records the capped result. Original
 observes caller controls; its default work cap remains unset as described in
 [support.md](support.md).
 
@@ -662,6 +692,13 @@ The artifact's shadow stack starts at 1 MiB in linear memory. V8 separately
 limits native call depth, which the Original sampler cannot observe. A Wasm
 trap does not unwind Rust frames or restore their stack-pointer updates;
 continuing with that instance is not a recovery strategy.
+An allocation failure during preparation was reproduced on 2026-11-14 with
+a 64 MiB Node Wasm cap: the caller received `RuntimeError: unreachable`, not
+an `SdkError`, with no SDK code. A later integer-schema preparation also
+trapped, although small-document validation still worked. Treat this as fatal
+for the isolate. `initialize()` caches its successful instance and cannot
+replace it. Whether to translate this trap to an SDK error remains open;
+see [Workers recovery](workers.md#memory-exhaustion).
 
 Local workerd 2026-11-04 (compatibility date 2026-09-28) ran the same module
 from a plain Worker on 2026-11-07 and passed at its default stack and with
@@ -968,8 +1005,11 @@ not characterize arbitrary schema evaluation or cold compilation.
 Deeper documents require an explicit `JsonLimits::max_depth`. Historical deep
 workloads recorded below predate this cap; the diagnostic memory probe now
 selects an explicit raised depth to retain those workloads and their allowance.
-Its memory grows linearly with the document. Beyond the caller's own copy of
-the input it allocates:
+Memory depends on node count and schema/identifier shape as well as byte
+length. The [2026-11-14 Wasm measurements](workers.md#document-memory) include
+a roughly 2 MB, million-node document reaching 52.25 MiB and a roughly 32 MiB
+copied-identifier document reaching 209.438 MiB. Beyond the caller's own copy
+of the input it allocates:
 
 - The document's copy of its text, as long as the input. The owned entry
   points (`validate_document_owned`, `Document::parse_owned`, their
@@ -997,7 +1037,7 @@ the input it allocates:
   bytes per alias; and by default at most 4,096 findings
   and 8 MiB of their pointers. `ValidationLimits` selects other report-retention
   allowances without changing rule evidence. The pinned 0.2 schema's largest serialized OBI-02
-  keyword/schema/details tuple is 199 bytes (198 in TypeScript), guarded by an
+  keyword/schema/details tuple is 202 bytes (201 in TypeScript), guarded by an
   exhaustive schema test with no runtime fact-size cap. A table of 4 bytes per node (8 when an
   unpaired surrogate occurs) is built once one finding's pointer has not fitted. The
   fixed checks read every string in place: they would escape U+E000 only beside
@@ -1036,7 +1076,9 @@ The default byte limit was 64 MiB, at which the same shape peaks at
 364.9 MiB. Halving it takes about 30% off that peak, since much of the
 shape's memory is held for each of its 333,320 declarations, whatever their
 length; the ceiling is therefore not a multiple of the byte limit. The default
-is 32 MiB so that validation at the defaults fits a typical container. A host
+is 32 MiB; it does not ensure that validation fits a particular container or
+a Worker's 128 MB isolate. Set byte and node admission together using the
+[Workers profile](workers.md#limits-to-set) for that host. A host
 that admits larger documents raises `JsonLimits::max_bytes` (`limits.maxBytes`
 in TypeScript) and gives its process the memory they take.
 
@@ -1124,20 +1166,26 @@ Build the bundled asset and measure its exact and compressed byte lengths:
 
 ```sh
 npm --prefix packages/typescript run build:wasm
-python3 - <<'PY'
-from pathlib import Path
-import gzip, hashlib
-b = Path('packages/typescript/src/wasm/openbindings_wasm_bg.wasm').read_bytes()
-print('bytes', len(b), 'gzip-9', len(gzip.compress(b, compresslevel=9, mtime=0)))
-print('sha256', hashlib.sha256(b).hexdigest())
-PY
+node --input-type=module <<'JS'
+import { readFileSync } from 'node:fs';
+import { gzipSync, brotliCompressSync, constants } from 'node:zlib';
+import { createHash } from 'node:crypto';
+const b = readFileSync('packages/typescript/src/wasm/openbindings_wasm_bg.wasm');
+console.log('bytes', b.length, 'gzip-9', gzipSync(b, { level: 9 }).length,
+  'brotli-11', brotliCompressSync(b, {
+    params: { [constants.BROTLI_PARAM_QUALITY]: 11 },
+  }).length);
+console.log('sha256', createHash('sha256').update(b).digest('hex'));
+JS
 ```
 
-The built asset checked in the 2026-11-14 review is **6,809,646 bytes**.
+The 2026-11-14 build at `d02c04e9` is **6,834,247 bytes**, **1,980,832 bytes**
+with gzip level 9 and **1,231,581 bytes** with brotli quality 11 (Node v22.23.0).
+Its SHA-256 is `66c77231ed308e026b4f76ce9c28207d02c1cf6bf8ade2db691af4b4160ad5f8`.
 The earlier 2026-10-24 measurement was 6,060,275 bytes, or 1,699,844 bytes with
 gzip level 9 (`8be7fe3`: 6,010,809 and 1,681,221; `94b6991`: 7,445,434 and
 1,951,593). Those compressed lengths describe the earlier assets; rerun the
-commands above for the current compressed length and SHA-256.
+commands above after a source or toolchain change.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.
@@ -1167,8 +1215,8 @@ cap. These are bounds
 for the recorded fixtures, not all inputs. Document findings separately retain at
 most 4,096 entries and 8 MiB of source pointers by default, adjustable with
 `ValidationLimits` through `Document::validate_with_limits`. OBI-02 keyword/schema/details
-tuples have a measured maximum of 199 serialized JSON bytes in the pinned 0.2
-schema (198 in TypeScript). An exhaustive schema test guards this property;
+tuples have a measured maximum of 202 serialized JSON bytes in the pinned 0.2
+schema (201 in TypeScript). An exhaustive schema test guards this property;
 there is no runtime fact-size cap. Value explanations use Original and share its evaluation storage and work
 allowances; exhausted diagnostics preserve an established failure with
 incomplete problems. See

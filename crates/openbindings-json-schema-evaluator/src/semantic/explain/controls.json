@@ -837,7 +837,7 @@
           "type": "integer"
         }
       },
-      "schema_source_uri": "https://explain.invalid/external",
+      "schema_retrieval_uri": "https://explain.invalid/external",
       "problems_complete": true
     },
     {

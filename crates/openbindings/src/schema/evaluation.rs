@@ -233,7 +233,9 @@ pub enum NoVerdictReason {
 /// [`ConformantDocument::locate`] for the document and [`ExternalSchemas::locate`] for a
 /// supplied resource. This record contains coordinates, not source text; a
 /// prepared schema may retain immutable original sources needed by its evaluator.
-/// Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16 units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
+/// Serializes pointer fields as ordinary JSON strings, replacing unpaired UTF-16
+/// units with U+FFFD; the stored [`Pointer`] stays exact for locating and editing.
+/// Use [`Pointer::to_exact_json`] to export an exact pointer as JSON text.
 ///
 /// Custom evaluators build one with [`Self::new`] or [`SchemaNode::origin`].
 /// Later versions may add fields: read them by name and match with `..`.
@@ -242,17 +244,17 @@ pub struct SchemaOrigin {
     /// Original source's supplied retrieval URI, or the published fixed-schema URI
     /// for an OBI-02 [`Finding`]. `None` denotes the OpenBindings
     /// document. This is not the resource base established by a nested `$id`.
-    pub source_uri: Option<String>,
+    pub retrieval_uri: Option<String>,
     /// Exact RFC 6901 pointer from the source's root; an empty pointer denotes the root. Escape for presentation without changing `~0`/`~1` semantics.
     pub pointer: Pointer,
 }
 impl SchemaOrigin {
-    /// A location in the document (`source_uri` `None`) or in the supplied resource
+    /// A location in the document (`retrieval_uri` `None`) or in the supplied resource
     /// with this URI. [`SchemaNode::origin`] builds one for a schema node an
     /// evaluator was given.
-    pub fn new(source_uri: Option<String>, pointer: Pointer) -> Self {
+    pub fn new(retrieval_uri: Option<String>, pointer: Pointer) -> Self {
         Self {
-            source_uri,
+            retrieval_uri,
             pointer,
         }
     }
@@ -592,7 +594,7 @@ impl ConformantDocument {
     /// supplied resource, or a pointer that names no node in this revision.
     /// Line and column are computed on this call from the original text.
     pub fn locate(&self, at: &SchemaOrigin) -> Option<SourceLocation> {
-        if at.source_uri.is_some() {
+        if at.retrieval_uri.is_some() {
             return None;
         }
         self.document().value().locate(&at.pointer)
@@ -634,7 +636,7 @@ impl fmt::Debug for EvaluationRequest<'_> {
 }
 pub(crate) fn original_location(at: openbindings_internal_schema::Location) -> SchemaOrigin {
     SchemaOrigin {
-        source_uri: at.resource,
+        retrieval_uri: at.resource,
         pointer: at.pointer,
     }
 }

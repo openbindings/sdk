@@ -169,7 +169,7 @@ export function diagnosticPolicyCases(sdk) {
       check(
         result.status === "undefined" &&
           result.detail.code === "semantic-dependence" &&
-          result.detail.location?.sourceUri === null &&
+          result.detail.location?.retrievalUri === null &&
           result.detail.location?.pointer === "/operations/op/input",
         "a value depending on the cycle names the schema applying again",
       );
@@ -236,7 +236,7 @@ export function diagnosticPolicyCases(sdk) {
             "an invalid pattern's no-verdict provides safe actionable classification",
           );
           check(
-            state.detail.location?.sourceUri === resource &&
+            state.detail.location?.retrievalUri === resource &&
               state.detail.location?.pointer === `${pointer}/${keyword}`,
             "an invalid pattern's no-verdict maps the authored keyword location",
           );

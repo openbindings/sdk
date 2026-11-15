@@ -502,7 +502,7 @@ fn fixed_schema_facts_are_exact_and_do_not_copy_document_values() {
         assert_eq!(finding.keyword, Some(keyword));
         let origin = finding.schema.as_ref().unwrap();
         assert_eq!(
-            origin.source_uri.as_deref(),
+            origin.retrieval_uri.as_deref(),
             Some("https://openbindings.com/schema/openbindings-0.2.0.json")
         );
         assert_eq!(origin.pointer, schema);
@@ -516,7 +516,7 @@ fn fixed_schema_facts_are_exact_and_do_not_copy_document_values() {
         let facts =
             serde_json::to_string(&(&finding.keyword, &finding.schema, &finding.details)).unwrap();
         assert!(!facts.contains("PRIVATE"));
-        assert!(facts.len() <= 199);
+        assert!(facts.len() <= 202);
         assert_eq!(
             validation.report(),
             validate_document(text).unwrap().report()
@@ -552,12 +552,12 @@ fn missing_members_remain_distinct_and_many_fixed_facts_stay_bounded() {
                     serde_json::to_vec(&(&finding.keyword, &finding.schema, &finding.details))
                         .unwrap()
                         .len();
-                assert!(size <= 199);
+                assert!(size <= 202);
                 bytes += size;
             }
             assert_eq!(pair[0].location, pair[1].location);
         }
-        assert!(bytes <= 4096 * 199);
+        assert!(bytes <= 4096 * 202);
         let pointer_bytes: usize = report
             .findings
             .iter()

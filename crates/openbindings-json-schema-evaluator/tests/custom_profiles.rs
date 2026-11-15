@@ -483,7 +483,7 @@ fn preparation_diagnostics_omit_supplied_resource_values_but_retain_the_origin()
         .unwrap_err();
     assert_eq!(failure.kind, PreparationFailureKind::InvalidExternalSchema);
     assert_eq!(
-        failure.origin.as_ref().unwrap().source_uri.as_deref(),
+        failure.origin.as_ref().unwrap().retrieval_uri.as_deref(),
         Some("https://invalid.test/schema")
     );
     assert!(failure.to_string().contains("invalid external schema"));
@@ -499,7 +499,7 @@ fn preparation_diagnostics_omit_supplied_resource_values_but_retain_the_origin()
     .unwrap_err();
     assert_eq!(failure.kind, PreparationFailureKind::InvalidExternalSchema);
     assert_eq!(
-        failure.origin.as_ref().unwrap().source_uri.as_deref(),
+        failure.origin.as_ref().unwrap().retrieval_uri.as_deref(),
         Some(SCHEMA)
     );
     assert!(!failure.to_string().contains(SCHEMA));
