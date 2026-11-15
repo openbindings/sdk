@@ -13,14 +13,23 @@ struct Key<'s> {
     reference: &'s str,
 }
 
-struct Preparation<'a>(&'a dyn Control);
+struct Preparation<'a>(&'a dyn Control, usize);
 impl Ledger for Preparation<'_> {
     type Error = PreparationFailure;
     fn work(&mut self, units: usize) -> Result<(), Self::Error> {
         self.0.charge_work(units).map_err(Into::into)
     }
     fn allocation(&mut self, bytes: usize) -> Result<(), Self::Error> {
-        self.0.charge_allocation(bytes).map_err(Into::into)
+        self.0.charge_allocation(bytes)?;
+        self.1 += bytes;
+        Ok(())
+    }
+    fn release_allocation(&mut self, bytes: usize) {
+        self.1 -= bytes;
+        self.0.release_allocation(bytes);
+    }
+    fn allocated(&self) -> usize {
+        self.1
     }
     fn allocation_limit(&mut self) -> Self::Error {
         self.0.allocation_limit_reached();
@@ -45,7 +54,7 @@ impl<'s> Queries<'s> {
         reference: &'s str,
         control: &dyn Control,
     ) -> Result<ReferenceQuery, PreparationFailure> {
-        let mut ledger = Preparation(control);
+        let mut ledger = Preparation(control, 0);
         let space = self.resolver.space();
         let original = space.node(node);
         // query() reads these holder-dependent facts, then the immutable

@@ -102,7 +102,10 @@ is absent. A certificate for a known dialect can establish its root identity
 without establishing support for evaluating that dialect.
 
 The default evaluator interprets standard draft-07, 2019-09 and 2020-12 external
-resources, plus supported 2020-12 vocabulary combinations. A custom dialect is
+resources, plus supported 2020-12 vocabulary combinations. Draft-07 ignores
+assertion siblings of `$ref` during evaluation while keeping sibling schema
+positions, including `definitions`, addressable by JSON Pointer. Targets must
+still be schema values; contained OBI schemas retain their fixed 2020-12 reading. A custom dialect is
 selected through its original meta-schema and that meta-schema's own standard
 2020-12 interpretation. Consumer schemas must satisfy the actual meta-schema,
 including its authored restrictions and referenced helpers. Required unknown

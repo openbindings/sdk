@@ -82,9 +82,10 @@ plan or survives a value call, so cold and warm calls spend the same work.
 
 The evaluation ledger reserves four bytes per indexed choice, plus accounted
 entries for additional enum nodes. An index of 20,000 choices uses 80,000 bytes.
-Sort comparisons and their scratch retain the evaluation's cumulative reservation
-policy and `semantic-analysis-memory-limit` refusal. Equality remains exact for
-mathematical numbers, decoded strings and objects in any member order. Work is
+Exact comparisons release their decimal and traversal scratch reservations when
+they finish. The retained index stays charged, and a comparison whose scratch
+exceeds the available allowance still returns `semantic-analysis-memory-limit`.
+Equality remains exact for mathematical numbers, decoded strings and objects in any member order. Work is
 deterministic on wasm32 and 64-bit hosts. The compiled library lane and admission
 policy are unchanged.
 
@@ -99,9 +100,10 @@ charge the evaluation ledger. Values without collisions retain their previous
 work debits. Exact numbers, decoded UTF-16 strings, arrays and unordered member
 maps have the same equality relation as `literal_equal`.
 
-Original uses heap frames, cooperative work checks and cumulative SDK storage
-reservations. Compiled evaluation recurses in the library, with static admission
-and a conservative peak scratch estimate within the default 48 MiB allowance.
+Original uses heap frames, cooperative work checks and SDK storage reservations,
+releasing completed exact-comparison scratch. Compiled evaluation recurses in the
+library, with static admission and a conservative peak scratch estimate within
+the default 48 MiB allowance.
 Evaluation work accounting uses fixed-width arithmetic on native and Wasm.
 Without a requested work cap it cannot report a work limit from counter overflow;
 caps representable on both targets stop at the same debit. Existing cumulative cap
@@ -189,7 +191,7 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
 | `pattern_depth` | 32 | Pattern group nesting |
 | `total_pattern_bytes` | 4 MiB | Unique normalized pattern forms across values and property names |
 | `total_pattern_memory` | 64 MiB | Immutable pattern-program representation |
-| `evaluation_sdk_reservation_bytes` | 48 MiB | Original cumulative SDK storage reservations; compiled peak scratch admission at defaults |
+| `evaluation_sdk_reservation_bytes` | 48 MiB | Original SDK storage reservations, with completed comparison scratch released; compiled peak scratch admission at defaults |
 
 Each Original value invocation starts a fresh evaluation allowance. Verdict and diagnostic
 passes share what remains; diagnostic exhaustion preserves an established failure

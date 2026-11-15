@@ -1,7 +1,10 @@
 //! Call-local backing allocations with an explicit requested-size ledger.
 //! Indexed entries support bounded lookup, append/pop and in-place value access.
 use super::{Graph, NoVerdict, decision::limit};
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+};
 
 /// Borrowed per-operation accounting; the storage never retains a control or
 /// prescribes whether an exhaustion belongs to preparation or evaluation.
@@ -9,6 +12,8 @@ pub(super) trait Ledger {
     type Error;
     fn work(&mut self, units: usize) -> Result<(), Self::Error>;
     fn allocation(&mut self, bytes: usize) -> Result<(), Self::Error>;
+    fn release_allocation(&mut self, bytes: usize);
+    fn allocated(&self) -> usize;
     fn allocation_limit(&mut self) -> Self::Error;
 }
 impl Ledger for Graph<'_> {
@@ -19,8 +24,46 @@ impl Ledger for Graph<'_> {
     fn allocation(&mut self, bytes: usize) -> Result<(), Self::Error> {
         self.charge(bytes)
     }
+    fn release_allocation(&mut self, bytes: usize) {
+        self.release(bytes);
+    }
+    fn allocated(&self) -> usize {
+        Graph::allocated(self)
+    }
     fn allocation_limit(&mut self) -> Self::Error {
         limit("semantic-analysis-memory-limit")
+    }
+}
+
+/// A borrowed scratch lifetime. Only results without backing storage may leave
+/// this scope; retained indexes keep using their parent ledger directly.
+pub(super) struct Scratch<'a, L: Ledger> {
+    ledger: &'a mut L,
+    bytes: usize,
+}
+impl<'a, L: Ledger> Scratch<'a, L> {
+    pub(super) fn new(ledger: &'a mut L) -> Self {
+        let bytes = ledger.allocated();
+        Self { ledger, bytes }
+    }
+}
+impl<L: Ledger> Drop for Scratch<'_, L> {
+    fn drop(&mut self) {
+        let bytes = self.ledger.allocated() - self.bytes;
+        if bytes != 0 {
+            self.ledger.release_allocation(bytes);
+        }
+    }
+}
+impl<L: Ledger> Deref for Scratch<'_, L> {
+    type Target = L;
+    fn deref(&self) -> &L {
+        self.ledger
+    }
+}
+impl<L: Ledger> DerefMut for Scratch<'_, L> {
+    fn deref_mut(&mut self) -> &mut L {
+        self.ledger
     }
 }
 

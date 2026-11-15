@@ -149,7 +149,7 @@ pub(super) fn literal_equal(
             return Ok(false);
         }
     }
-    equal(value, literal, graph)
+    equal(value, literal, &mut storage::Scratch::new(graph))
 }
 
 fn string_hash(

@@ -151,6 +151,15 @@ impl<'a> Graph<'a> {
         }
         Ok(())
     }
+    pub(super) fn allocated(&self) -> usize {
+        self.bytes
+    }
+    pub(super) fn release(&mut self, bytes: usize) {
+        self.bytes -= bytes;
+        if let Some(attempt) = self.preparation {
+            attempt.release_allocation(bytes);
+        }
+    }
     fn node(&self, formula: Formula) -> Node {
         self.nodes[(formula - 2) as usize]
     }

@@ -125,8 +125,12 @@ fn storage_overflow_and_refused_backing_are_sticky_before_allocation() {
         let mut values = Vec::<u64>::new();
         let failure = Attempt::run(100, 0, &|| false, |attempt| {
             assert!(
-                crate::semantic::storage::reserve(&mut values, needed, &mut Preparation(attempt))
-                    .is_err()
+                crate::semantic::storage::reserve(
+                    &mut values,
+                    needed,
+                    &mut Preparation(attempt, 0)
+                )
+                .is_err()
             );
             assert!(attempt.check().is_err());
             true

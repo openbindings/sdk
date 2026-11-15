@@ -53,7 +53,8 @@ pub struct Limits {
     /// caches use each value call's separate allowance. This does not measure
     /// allocator capacities, transient dependency allocations or process memory.
     pub total_pattern_memory: usize,
-    /// Cumulative SDK evaluation storage reservations; default 48 MiB. This
+    /// SDK evaluation storage reservations; default 48 MiB. Completed exact
+    /// comparison scratch releases its reservations. This
     /// includes proof, memo, scratch, search-cache and diagnostic storage. These
     /// are SDK estimates, not allocator requests, peak live memory, immutable
     /// pattern-program size or a total process-memory bound.

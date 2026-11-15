@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- A supplied draft-07 schema whose root `$ref` points into its own `definitions`, the common shape of generated
+  draft-07 files, evaluated to undefined for every value. Draft-07 ignores the siblings of `$ref` when evaluating, but
+  they stay reachable by a pointer; the evaluator now finds them and gives the draft-07 answers, as the bundled
+  `jsonschema` does, while still ignoring sibling assertions and identifiers. 2020-12 and OBI documents are unchanged.
+- A decimal-spelled numeric `enum` could exhaust the default evaluation reservation depending on the order of the
+  values it was checked against (1,440 choices passed ascending and failed descending), because exact comparisons kept
+  their scratch charged after releasing it. Comparison scratch is now returned when each comparison ends.
 - Registering external schemas charges the preparation allowance for the storage registration holds, as preparation
   has since the previous change, where it charged estimates. The smallest allowance that registers 3,000 supplied
   records falls from 19.7 MiB to 9.6 MiB in Wasm, and from 21.7 MiB to 11.6 MiB natively, where the charge now equals

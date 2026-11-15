@@ -286,8 +286,9 @@ The common single-query counter is inline, so a single query allocates nothing
 new and adds no work debit. Other nodes use accounted entries keyed by schema
 position. No index, enum state or enum charge is added during preparation.
 
-Indexes and sorting use the evaluation's own cumulative reservation ledger and
-existing `semantic-analysis-memory-limit` refusal. A sorted index of 20,000
+Indexes and sorting use the evaluation's own reservation ledger and existing
+`semantic-analysis-memory-limit` refusal. Exact comparison scratch is released
+after each comparison; retained index storage stays charged. A sorted index of 20,000
 choices costs 80,000 bytes, plus any counter-entry storage and comparison scratch.
 Every evaluation starts fresh: retaining a prepared schema never warms an enum
 index or changes a later call's work limit boundary. No fingerprint or secret
@@ -351,12 +352,13 @@ peak proof does not cover division, equality traversal, uniqueness storage or
 recursive admission. This is a scratch selection rule, not a time bound, RSS
 measurement or total allocation traffic limit.
 
-Both lanes must agree whenever both decide. Original still charges decimal
-scratch cumulatively and can return `semantic-analysis-memory-limit` while the
-compiled lane completes within its peak allowance. A refusal from either lane
+Both lanes must agree whenever both decide. Original reserves its own proof,
+memo and scratch storage, releasing completed exact-comparison scratch. It can
+return `semantic-analysis-memory-limit` while the compiled lane completes within
+its peak allowance. A refusal from either lane
 is not a disagreement. Tests check newly admitted hostile decisions against
 independently prepared Original evaluation with a larger diagnostic allowance;
-production defaults and Original accounting are unchanged.
+production defaults are unchanged.
 
 Native release measurements on aarch64-apple-darwin with Rust 1.99.0 compare
 `53ab0d4` selection with the peak rule, retaining prepared owners and parsed

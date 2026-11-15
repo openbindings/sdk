@@ -3,6 +3,10 @@
 Implements shared fixed document/schema admission and the original-schema resource
 graph. It separates the normative contained OBI walk from external interpretation
 profiles, while retaining original identities, references and source locations.
+External draft-07 reference objects keep sibling schema positions addressable
+by JSON Pointer while ignoring those siblings during evaluation and identifier
+discovery. Pointer targets
+still need to be schema values. The contained OBI inventory remains fixed at 2020-12.
 Evaluation and comparison share this crate's `canonical_resolved_uri` normalizer
 and `normalized_hierarchical_uri_text` shortcut for JSON Schema resource equivalence.
 The `uri`

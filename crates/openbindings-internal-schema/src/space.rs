@@ -488,6 +488,7 @@ impl Layer {
                 == Some(crate::dialect::Profile::standard(
                     crate::dialect::Dialect::Draft7,
                 ))
+                && !index.ignored_identifiers(at)
                 && !profile.unwrap().reference_object(value)
                 && let Some(name) = value
                     .get("$id")
@@ -507,6 +508,7 @@ impl Layer {
                         .get(keyword)
                         .and_then(|v| v.as_str())
                         .filter(|s| profile.is_some_and(|d| d.anchor_name(s)))
+                    && !index.ignored_identifiers(at)
                 {
                     self.resource_mut(resource)
                         .anchors
