@@ -3,6 +3,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import zlib from "node:zlib";
 import os from "node:os";
+import { runtimeFiles } from "../../packages/typescript/scripts/wasm-artifacts.mjs";
+export { runtimeFiles };
 export const hash = (data) =>
   crypto.createHash("sha256").update(data).digest("hex");
 export async function fixtureSet(root) {
@@ -38,15 +40,9 @@ export async function fixtureSet(root) {
 }
 export async function identity(packageRoot) {
   const assets = {};
-  for (const name of [
-    ...(await fs.readdir(path.join(packageRoot, "dist")))
-      .filter((name) => name.endsWith(".js"))
-      .sort()
-      .map((name) => "dist/" + name),
-    "dist/wasm/openbindings_wasm.js",
-    "dist/wasm/openbindings_wasm_signature.js",
-    "dist/wasm/openbindings_wasm_bg.wasm",
-  ]) {
+  for (const name of (await runtimeFiles(packageRoot)).map(
+    (name) => "dist/" + name,
+  )) {
     const raw = await fs.readFile(path.join(packageRoot, name));
     const gzip9Bytes = zlib.gzipSync(raw, { level: 9 }).length;
     assets[name] = {

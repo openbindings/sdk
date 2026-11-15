@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { readFile, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { discoverRuntimeArtifacts } from "./wasm-artifacts.mjs";
 import {
   repository,
   packageRoot,
@@ -67,6 +68,7 @@ execFileSync(
 );
 const output = path.join(packageRoot, "src/wasm");
 await mkdir(output, { recursive: true });
+await rm(path.join(output, "snippets"), { recursive: true, force: true });
 execFileSync(
   cli,
   [
@@ -140,11 +142,7 @@ await writeFile(
     "declare const signature: readonly (readonly string[])[];\n" +
     "export default signature;\n",
 );
-const artifacts = [
-  "openbindings_wasm.js",
-  "openbindings_wasm_bg.wasm",
-  "openbindings_wasm_signature.js",
-];
+const artifacts = await discoverRuntimeArtifacts(output);
 // A builder path in the output would make its hash depend on the builder.
 for (const name of artifacts) {
   const bytes = await readFile(path.join(output, name));

@@ -87,8 +87,8 @@ def compare(directory, baseline=None):
             allowance=10000 if row['fixture'] in ['healthy','contract-wide'] else 1000000
             rows.append({'host':'native','metric':'historical-'+row['fixture']+'-'+row['lane'],'candidateMedianNs':cm,'baselineMedianNs':bm,'ratio':cm/bm,'status':'within-frozen-budget' if cm<=bm*1.15 or cm-bm<=allowance else 'failed'})
         for encoding in ['rawBytes','gzip9Bytes']:
-            current=json.loads((directory/'node.json').read_text())['package']['assets']['dist/wasm/openbindings_wasm_bg.wasm'][encoding]
-            old=json.loads((baseline/'node.json').read_text())['package']['assets']['dist/wasm/openbindings_wasm_bg.wasm'][encoding]
+            current=sum(asset[encoding] for asset in json.loads((directory/'node.json').read_text())['package']['assets'].values())
+            old=sum(asset[encoding] for asset in json.loads((baseline/'node.json').read_text())['package']['assets'].values())
             rows.append({'host':'package','metric':encoding,'ratio':current/old,'status':'within-frozen-budget' if current<=old*1.15 else 'failed'})
     return {'source':receipt['source'],'baseline':str(baseline) if baseline else None,'results':rows,'overall':'qualified frozen measured rows' if all(r['status']=='within-frozen-budget' for r in rows) else 'incomplete; inspect failed/inconclusive rows',
             'notQualified':['universal performance grade','Linux/Windows performance','native C4 HTTP timings','WAN transport','mobile/second device','deployed Cloudflare','total-memory/no-leak proof','arbitrary custom evaluators']}

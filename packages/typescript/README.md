@@ -197,6 +197,10 @@ modules load the asset relative to the package module. Hosts with compiled Wasm
 imports pass a `WebAssembly.Module` to `initialize(module)`; the asset export is
 `@openbindings/sdk/openbindings.wasm`.
 
+Preserve the generated JavaScript module layout under `dist/wasm`, including
+nested `snippets` modules. The build's `dist/wasm/build-info.json` records every
+runtime artifact by relative path and SHA-256.
+
 Hosts that restrict entropy to active requests must initialize inside an allowed
 request context. [The workerd example](examples/workerd-service.mjs) shows this.
 Initialization is shared across concurrent calls. Loading and entropy failures

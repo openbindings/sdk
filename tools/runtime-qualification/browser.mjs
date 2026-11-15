@@ -2,7 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import http from "node:http";
 import { pathToFileURL, fileURLToPath } from "node:url";
-import { fixtureSet, identity, host, save, summaries } from "./common.mjs";
+import {
+  fixtureSet,
+  identity,
+  host,
+  save,
+  summaries,
+  runtimeFiles,
+} from "./common.mjs";
 const [packageRoot, fixtureRoot, output, engine = "chromium", mode = "check"] =
   process.argv.slice(2);
 if (!output || !["chromium", "webkit"].includes(engine))
@@ -22,14 +29,7 @@ const launchOptions = {
     : {}),
 };
 const files = new Map();
-for (const name of [
-  ...(await fs.readdir(path.join(packageRoot, "dist")))
-    .filter((name) => name.endsWith(".js"))
-    .sort(),
-  "wasm/openbindings_wasm.js",
-  "wasm/openbindings_wasm_signature.js",
-  "wasm/openbindings_wasm_bg.wasm",
-])
+for (const name of await runtimeFiles(packageRoot))
   files.set(
     "/dist/" + name,
     await fs.readFile(path.join(packageRoot, "dist", name)),

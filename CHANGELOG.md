@@ -23,8 +23,6 @@
 - TypeScript `locate` returns `undefined`, not `null`, for an unavailable location, as every other optional read does.
 - TypeScript ordinary values refused at an admission limit report `byte-limit`, `node-limit` or `depth-limit`, the
   codes exact text reports for the same causes, where they reported `input-limit`.
-
-
 - Breaking: TypeScript entry reads (`operations()`, `operation(key)`, `resolveOperation(name)`, `bindings()`,
   `binding(key)`, `sources()`, `source(key)`, `dependencies()`, `dependency(key)`, and examples) return detached,
   frozen records of the entry's fields, with nothing to dispose. What needed an entry is a query on the proof by
@@ -32,14 +30,14 @@
   `bindingData`, `exampleInput`, `exampleOutput` and the `operationValue`-style queries. `acceptsKind` is a plain
   function. Schemas, exact JSON, documents, proofs, resource sets and prepared schemas stay owners, and a forgotten
   schema or exact value still keeps its whole document in Wasm memory until it is disposed or finalized.
-
-
+- The TypeScript package's generated bindings now include a nested module under `dist/wasm/snippets/`, which
+  the entry-record transport needs. A bundler or host that copies `dist/wasm` must keep that layout.
+  `build-info.json` records every runtime module by relative path and SHA-256, and the browser, workerd,
+  packaging and reproducibility tools take their file lists from it.
 - Preparation charges its allowance for the storage it actually holds, at the time it holds it, where it charged
   conservative estimates many times larger. The smallest allowance that prepares 3,000 records falls from 105 MiB
   to 6.3 MiB and 1,000 records from 36 MiB to 2.1 MiB; on its own workloads the charge is 1.0 to 1.7 times a
   counting allocator's held bytes. Defaults and lane selection are unchanged.
-
-
 - Breaking: schema comparison follows the amended schema-comparison profile 0.1 (interfaces `eafa49a`).
   Compatible is a proof of inclusion; where the profile cannot prove it, the answer is indeterminate. Incompatible
   outranks indeterminate in every summary, and no property name or rule order decides a verdict. Objects compare

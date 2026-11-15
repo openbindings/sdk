@@ -1326,6 +1326,10 @@ commands above after a source or toolchain change.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.
+Its `artifacts` map records SHA-256 hashes for every generated runtime `.js` and
+`.wasm` file, including nested wasm-bindgen snippets, keyed by sorted relative
+paths. Runtime qualification includes all these files and the facade JavaScript
+in its asset hashes and byte counts.
 
 ## Allocation bounds
 
