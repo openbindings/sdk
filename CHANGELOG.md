@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- Schema comparison could answer Compatible for a standalone draft-07 or draft-04 root, for a value that flows and
+  is refused: as the context's own document without a base, or as a separately parsed copy, the root was read as
+  2020-12. A schema outside an OBI document now keeps the dialect JSON Schema assigns it on every route, with or
+  without a base; schemas inside an OBI document are still read as 2020-12.
+- Kept `$defs` no longer hides an incompatible beside a union: kept definitions are disregarded by every directional
+  rule, as the profile says.
+- A keyword that applies only to a type the flowing schema does not allow (`maximum` beside `"type":"boolean"`, say)
+  no longer withholds an incompatible verdict from the `const`, `enum` and finite-restriction rules.
+- The comparison docs say that a schema equal to but not the same node as its document is a detached input, label
+  the recognition of an OBI document by its `openbindings` and `operations` members as SDK policy, and give the types
+  `OperationComparison::required()` and `provided()` return.
 - The default ceiling on one uncancellable pattern search no longer refuses ordinary patterns on ordinary input.
   The charge was the cost of every automaton state at every position; it now bounds what the engine actually does: a
   start-anchored pattern with a finite longest match is charged for at most that many bytes, an unanchored pattern

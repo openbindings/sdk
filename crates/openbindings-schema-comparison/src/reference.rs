@@ -213,7 +213,11 @@ impl Resources {
         let index = self.index.lock().expect("comparison index");
         let entry = &index.entries[scope];
         let root = index.entries[entry.origin].document.view();
-        if entry.origin == 0 && (is_obi(root) || self.context.data.base.is_none()) {
+        let obi = entry.origin == 0 && is_obi(root);
+        let local = (entry.origin == 0)
+            .then_some(index.local_root.as_ref())
+            .flatten();
+        if obi && local.is_none() {
             return Ok(None);
         }
         use openbindings_internal_schema::dialect::Dialect;
@@ -227,11 +231,23 @@ impl Resources {
             if backend::occurrence(node) == backend::occurrence(root) {
                 break;
             }
+            if local
+                .is_some_and(|root| backend::occurrence(node) == backend::occurrence(root.view()))
+            {
+                break;
+            }
             let Some(parent) = enclosing(node) else {
                 break;
             };
             node = parent;
         }
+        // A detached selection can resolve back into the configured document.
+        let local =
+            local.filter(|root| backend::occurrence(node) == backend::occurrence(root.view()));
+        if obi && local.is_none() {
+            return Ok(None);
+        }
+        let root = local.map_or(root, JsonValue::view);
         let mut dialect = None;
         let mut assigned = Some(Dialect::Draft202012);
         for node in ancestors.into_iter().rev() {

@@ -59,9 +59,13 @@ impl ComparisonContext {
         self
     }
     /// Select an exact schema, retaining this context independently of its owner.
+    /// Membership is by node identity, not JSON equality: a separately parsed
+    /// copy of the document or one of its schemas is a detached input.
     /// Detached schemas and selections outside configured schema positions
-    /// have private call-local declarations;
+    /// keep their own root's assigned dialect and private call-local declarations;
     /// selecting a value never adds it to the persistent document index.
+    /// Pointer references still start at the configured document unless the
+    /// selected schema declares its own resource with `$id`.
     pub fn schema(&self, schema: JsonValue) -> SchemaInput {
         SchemaInput {
             schema,
@@ -120,6 +124,9 @@ impl fmt::Debug for SchemaInput {
 impl SchemaInput {
     /// Retain a selected schema and its containing document root. For repeated
     /// comparisons, create inputs through one ComparisonContext instead.
+    /// A schema equal to but not the same node as the document is detached,
+    /// as described by [`ComparisonContext::schema`]. Clone the same `JsonValue`
+    /// for both arguments when selecting a standalone root as its own document.
     pub fn new(schema: JsonValue, document: JsonValue) -> Self {
         ComparisonContext::new(document).schema(schema)
     }

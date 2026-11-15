@@ -575,7 +575,13 @@ whole-error equality includes provenance.
 present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `finding()` accessors. `ComparisonContext::new(root)` retains a reusable document;
 `with_base` and `with_resource` configure it, and `schema(exact_value)` selects a
-`SchemaInput`. `SchemaInput::new` remains a convenience for single comparisons;
+`SchemaInput`. Membership uses node identity, not JSON equality: an equal but
+separately parsed schema gives a detached input with its own root's assigned
+dialect and private call-local declarations. Pointer references still start at
+the configured document unless a local `$id` changes scope.
+As SDK policy, roots with both `openbindings` and `operations` members are
+recognized as OBI documents without validating those values.
+`SchemaInput::new` remains a convenience for single comparisons;
 `with_base` sets the initial base of a standalone schema root and is ignored for
 an OBI root. Its document resource cannot be named by a caller URI. Followed
 references must reach schema positions; pointers into instance or carrier data
@@ -598,7 +604,9 @@ their supplied URIs as bases, including for relative references between resource
 The callback selects realized, consumed, both, or excluded for that match. Every distinct
 provided match is retained, independent of alias order, with output then input
 results including failures. `operations()`, `issues()` and each issue's
-`correspondence()` expose keys, role and slot results. `role()` returns
+`correspondence()` expose keys, role and slot results.
+`OperationComparison::required()` returns `&str`, and `provided()` returns
+`Option<&str>`. `role()` returns
 `Some(Realized)` or `Some(Consumed)` for present matches, never `Both`; an included
 missing operation has one correspondence with `None` role. Consumption reverses
 input and output flow. Allowance exhaustion remains in slots after setup;
