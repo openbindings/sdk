@@ -10,7 +10,9 @@ const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const packageRoot = path.join(repository, "packages/typescript");
 
 test("build record includes nested modules and rejects missing or altered snippets", async (t) => {
-  const wasm = path.join(packageRoot, "src/wasm");
+  // The built package's copy, which the copy step checked against every recorded hash. The generated
+  // `src/wasm` is not committed, so a test job that receives only `dist` has no other copy.
+  const wasm = path.join(packageRoot, "dist/wasm");
   const info = JSON.parse(await readFile(path.join(wasm, "build-info.json")));
   assert.deepEqual(
     Object.keys(info.artifacts),
@@ -32,10 +34,11 @@ test("build record includes nested modules and rejects missing or altered snippe
     await cp(path.join(repository, name), destination);
   }
   const fixturePackage = path.join(fixture, "packages/typescript");
-  for (const name of ["scripts", "src/wasm", "src/wasm-module.d.ts"])
+  for (const name of ["scripts", "src/wasm-module.d.ts"])
     await cp(path.join(packageRoot, name), path.join(fixturePackage, name), {
       recursive: true,
     });
+  await cp(wasm, path.join(fixturePackage, "src/wasm"), { recursive: true });
   for (const name of ["LICENSE", "NOTICE"])
     await cp(path.join(repository, name), path.join(fixture, name));
   const check = () =>
