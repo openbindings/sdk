@@ -178,7 +178,7 @@ fn merge_uses_the_published_keyword_table_without_an_invented_satisfiability_sol
     }
 }
 #[test]
-fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_values_stay_ordered() {
+fn enum_intersection_deduplicates_while_standalone_values_stay_ordered() {
     let repeated = {
         let schema = json(r#"{"enum":[1,1.0]}"#);
         SchemaInput::new(schema.clone(), schema)
@@ -210,7 +210,7 @@ fn unresolved_enum_intersection_multiplicity_is_a_failure_while_standalone_value
             &ComparisonLimits::default()
         ))
         .map_err(|failure| failure.kind()),
-        Err(ComparisonFailureKind::UnsupportedNormalization)
+        Ok(true)
     );
 }
 

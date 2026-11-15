@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "description": "An unknown-keyword payload remains verbatim data.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "unknown": {
+            "type": "string",
+            "description": "a"
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "unknown": {
+            "type": [
+              "string"
+            ],
+            "description": "b"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

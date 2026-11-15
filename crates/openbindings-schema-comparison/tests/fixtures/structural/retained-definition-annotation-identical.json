@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "description": "Annotations inside definitions within patternProperties do not change normalized identity.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "patternProperties": {
+            "^a": {
+              "$defs": {
+                "x": {
+                  "title": "t"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "patternProperties": {
+            "^a": {
+              "$defs": {
+                "x": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

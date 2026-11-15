@@ -453,7 +453,7 @@ fn published_valid_reports_pass_relationship_and_prospective_checks() {
             });
         passed += 1;
     }
-    assert_eq!(passed, 27);
+    assert_eq!(passed, 30);
 }
 
 #[test]

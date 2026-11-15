@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "The receiving type sibling rejects the integer value 5 even when union coverage is unresolved.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "anyOf": [
+            {
+              "required": [
+                "a"
+              ]
+            },
+            {
+              "required": [
+                "b"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

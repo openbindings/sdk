@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "description": "The count type failure decides despite the required id pattern; no whole-object existence procedure is required.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "required": [
+            "id",
+            "count"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "count": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "required": [
+            "id",
+            "count"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+$"
+            },
+            "count": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "description": "An unmerged authored enum retains multiplicity for structural identity.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "enum": [
+            0,
+            0
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "enum": [
+            0
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

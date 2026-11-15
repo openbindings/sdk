@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "description": "The explicit all-types receiver is Top.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {}
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": [
+            "array",
+            "boolean",
+            "integer",
+            "null",
+            "number",
+            "object",
+            "string"
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

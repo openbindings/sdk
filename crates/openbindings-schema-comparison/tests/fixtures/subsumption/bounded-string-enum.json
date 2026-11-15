@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "description": "A bounded string source leaves receiving enum inclusion unresolved even though the value \"c\" is refused.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string",
+          "enum": [
+            "a",
+            "b"
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

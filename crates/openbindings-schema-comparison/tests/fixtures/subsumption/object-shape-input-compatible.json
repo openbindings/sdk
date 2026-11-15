@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Input: the candidate may require less and accept more (fewer required fields, extra optional properties).",
+  "description": "Effective schemas compare every declared name in both directions, including candidateAddsOptional.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -135,7 +135,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "compatible"
+      "verdict": "incompatible"
     }
   }
 }

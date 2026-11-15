@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "description": "Required names are sorted and deduplicated at schema positions inside not.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "not": {
+            "required": [
+              "b",
+              "a",
+              "a"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "not": {
+            "required": [
+              "a",
+              "b"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

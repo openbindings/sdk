@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "description": "The b type failure decides despite the receiving pattern on required member a.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "required": [
+            "a"
+          ],
+          "properties": {
+            "a": {
+              "type": "string"
+            },
+            "b": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "required": [
+            "a"
+          ],
+          "properties": {
+            "a": {
+              "type": "string",
+              "pattern": "x"
+            },
+            "b": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

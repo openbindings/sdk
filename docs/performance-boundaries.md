@@ -240,8 +240,9 @@ order normalization already supplies. For combined set sizes N this needs at
 most O(N log N) comparisons; value sizes still determine each exact comparison's
 work. Single lookups and sets of at most eight values use linear scans. No
 input-value hashing or lossy serialization participates in equality. Authored
-enum order and first-failure reasons are retained. Union search stops at its
-first authored incompatible variant.
+enum order and first-failure reasons are retained. The amended profile continues
+past unresolved members and union pairs to find later eligible failures; a
+compatible counterpart may still end that variant's coverage search.
 
 The review witness compares N strings against 2N strings, with all matching
 values after a disjoint prefix. On Darwin arm64, Rust 1.99.0, release thin LTO,

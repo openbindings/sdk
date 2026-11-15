@@ -126,14 +126,14 @@ qualification scopes are recorded in [performance boundaries](docs/performance-b
 The optional [comparison companion](crates/openbindings-schema-comparison/README.md)
 implements normalized identity, directional compatibility and interface checking
 from `OB-2020-12` profile 0.1, amended in interfaces revision
-`a3c19658fc89815d7a417eae29ba31fd4e930daf`. It preserves optional
+`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. It preserves optional
 slots, exact numbers/strings, opaque keyword values and union multiplicity. Explicit
 caller roots, bases and resource records govern references; it performs no fetching
 and does not reuse core `$id` interpretation or value evaluation. Its identity answer
 is profile identity, not general schema equivalence or a verified reuse claim.
 
-The comparison fixture harness passes 30 ordinary and 10 exact identity groups,
-plus all 65 ordinary and 29 exact directional groups (including expected schema
+The comparison fixture harness passes 55 ordinary and 11 exact identity groups,
+plus all 186 ordinary and 29 exact directional groups (including expected schema
 errors), with no skipped groups. Directional verdicts distinguish compatible,
 incompatible and indeterminate; interface checking retains every operation,
 every distinct alias match, realization/consumption selected by a callback on
@@ -143,12 +143,14 @@ present correspondences expose one role through `Option<OperationRole>`.
 Cancellation returns an error; exhausted allowances remain slot failures.
 Callers choose summary treatment of failures;
 `Verdict::collapse` takes verdicts only. Reusable `ComparisonContext`s index
-documents lazily and keep completed indexing after successful work. Both-union
-positions fail closed when non-identical. Retained applicator references compare
+documents lazily and keep completed indexing after successful work. Non-identical oneOf and retained allOf positions stop directionally. Compatible
+proves inclusion; incompatible dominates indeterminate with the profile's local
+vacuity exception. Retained applicator references compare
 normalized targets, and `$defs` retention is local to each schema subtree. Reference-rule identity lets pullers
 keep same-spelled accounted references as leaves and ask whether remaining drift
 lies only behind unaccounted targets. The caller supplies accounting.
-Missing/cyclic followed references, repeated-first-enum intersection ambiguity,
+Enum intersections deduplicate exact values in first-occurrence order.
+Missing/cyclic followed references,
 resource exhaustion and cancellation are failures with no verdict. Defaults are
 no work cap (`max_work: None`), 64 MiB conservative reservations for storage held
 at once and depth 128. The caller chooses a time bound through cancellation or

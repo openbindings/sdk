@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "description": "Description inside const is instance data and is not stripped.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "not": {
+            "const": {
+              "description": "a"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "not": {
+            "const": {
+              "description": "b"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

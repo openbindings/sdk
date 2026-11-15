@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "description": "After rule 0a, receiving Top proves inclusion before the cross-form union obligation.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {}
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

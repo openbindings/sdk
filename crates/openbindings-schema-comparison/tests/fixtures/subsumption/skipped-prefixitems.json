@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "Receiving prefixItems skips items comparison and leaves the position unresolved.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 1
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "prefixItems": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

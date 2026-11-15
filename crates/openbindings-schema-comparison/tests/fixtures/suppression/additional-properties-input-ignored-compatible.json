@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Profile v0.1 does not fault additionalProperties in the input direction: a candidate closing its input object produces no finding.",
+  "description": "Input additionalProperties participates in comparison; a closing receiver rejects extra values.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -44,7 +44,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "compatible"
+      "verdict": "incompatible"
     }
   }
 }

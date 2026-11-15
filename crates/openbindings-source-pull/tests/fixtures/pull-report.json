@@ -1861,6 +1861,269 @@
         ]
       },
       "schemaValid": false
+    },
+    {
+      "description": "In this illustrative example, source data carries the offered operations and schemas. The offered input is the same reference to a recursive schemas entry listed as current in existing, so the operation is reused across sources.",
+      "interface": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Node": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "next": {
+                "$ref": "#/schemas/Node"
+              }
+            }
+          }
+        },
+        "operations": {
+          "walk": {
+            "input": {
+              "$ref": "#/schemas/Node"
+            }
+          }
+        },
+        "sources": {
+          "legacy": {
+            "kind": "example.report@1"
+          },
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "operations": {
+                "walk": {
+                  "input": {
+                    "$ref": "#/schemas/Node"
+                  }
+                }
+              },
+              "schemas": {
+                "Node": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string"
+                    },
+                    "next": {
+                      "$ref": "#/schemas/Node"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "bindings": {
+          "walk.legacy": {
+            "operation": "walk",
+            "source": "legacy"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {
+        "bindings": {
+          "walk.api": {
+            "operation": "walk",
+            "source": "api"
+          }
+        }
+      },
+      "report": {
+        "exhaustive": true,
+        "added": [
+          {
+            "binding": "walk.api",
+            "operation": "walk",
+            "reused": true
+          }
+        ],
+        "existing": [
+          {
+            "schema": "Node",
+            "status": "current"
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
+    },
+    {
+      "description": "In this illustrative example, source data carries the offered operations and schemas. The offered input is the same reference to the same recursive schemas entry, but the source does not offer that entry and neither the offered additions nor the report account for it. Following it reaches a cycle, so the operation is omitted as implementation-unsupported.",
+      "interface": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Node": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "next": {
+                "$ref": "#/schemas/Node"
+              }
+            }
+          }
+        },
+        "operations": {
+          "walk": {
+            "input": {
+              "$ref": "#/schemas/Node"
+            }
+          }
+        },
+        "sources": {
+          "legacy": {
+            "kind": "example.report@1"
+          },
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "operations": {
+                "walk": {
+                  "input": {
+                    "$ref": "#/schemas/Node"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "bindings": {
+          "walk.legacy": {
+            "operation": "walk",
+            "source": "legacy"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "omitted": [
+          {
+            "status": "implementation-unsupported",
+            "reasonCode": "example.reference-cycle",
+            "message": "The schema comparison cannot finish because it reaches an unaccounted reference cycle.",
+            "item": "operations/walk",
+            "existing": "operations/walk"
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": false
+    },
+    {
+      "description": "In this illustrative example, source data carries the offered operations and schemas. The offered input is the same reference to an accounted recursive schemas entry, but the entry differs in a property type. The schema is stale and the operation is omitted as a conflict through that target, not reused.",
+      "interface": {
+        "openbindings": "0.2.0",
+        "schemas": {
+          "Node": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "next": {
+                "$ref": "#/schemas/Node"
+              }
+            }
+          }
+        },
+        "operations": {
+          "walk": {
+            "input": {
+              "$ref": "#/schemas/Node"
+            }
+          }
+        },
+        "sources": {
+          "legacy": {
+            "kind": "example.report@1"
+          },
+          "api": {
+            "kind": "example.report@1",
+            "data": {
+              "operations": {
+                "walk": {
+                  "input": {
+                    "$ref": "#/schemas/Node"
+                  }
+                }
+              },
+              "schemas": {
+                "Node": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "integer"
+                    },
+                    "next": {
+                      "$ref": "#/schemas/Node"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "bindings": {
+          "walk.legacy": {
+            "operation": "walk",
+            "source": "legacy"
+          }
+        }
+      },
+      "source": "api",
+      "additions": {},
+      "report": {
+        "exhaustive": true,
+        "added": [],
+        "existing": [
+          {
+            "schema": "Node",
+            "status": "stale",
+            "change": "breaking",
+            "message": "The offered schema changes a property type.",
+            "proposal": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "integer"
+                  },
+                  "next": {
+                    "$ref": "#/schemas/Node"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "omitted": [
+          {
+            "status": "conflict",
+            "reasonCode": "example.schema-conflict",
+            "message": "The offered operation needs a schema whose shape differs from the existing entry.",
+            "item": "operations/walk",
+            "existing": "operations/walk",
+            "offered": {
+              "input": {
+                "$ref": "#/schemas/Node"
+              }
+            },
+            "through": [
+              "schemas/Node"
+            ]
+          }
+        ]
+      },
+      "schemaValid": true,
+      "completePull": true
     }
   ]
 }

@@ -103,7 +103,7 @@ resources. The attempt token is useful for detached work and synchronous loops
 that stop cooperatively. The SDK does not undo effects already performed.
 
 This unpublished companion applies interface version `0.1.0` at revision
-`a3c19658fc89815d7a417eae29ba31fd4e930daf`, alongside the OpenBindings 0.2 document
+`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`, alongside the OpenBindings 0.2 document
 model. Interface and SDK versions are independent. No TypeScript interface API is
 claimed.
 

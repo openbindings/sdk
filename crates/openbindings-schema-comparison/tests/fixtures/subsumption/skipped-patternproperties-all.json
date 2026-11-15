@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "description": "Receiving additionalProperties is skipped for remaining names beside patternProperties.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "": {}
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

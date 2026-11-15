@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "description": "An absent flowing lower endpoint is exempt from the integer endpoint guard; 0 witnesses rejection.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

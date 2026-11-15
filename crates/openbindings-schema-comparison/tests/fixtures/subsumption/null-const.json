@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "description": "The null source against a null constant remains unresolved without a finite-domain inclusion proof.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "null"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": null
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

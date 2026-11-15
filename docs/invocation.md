@@ -208,3 +208,14 @@ absence versus null. Only current interface/kind-owned codes have portable meani
 Provider-supplied operation-layer resolution/validation codes are rejected at the
 provider boundary; `ERR_BINDING_NOT_FOUND` belongs to the binding interface and is
 allowed. Local evidence and resource-policy findings never become portable data.
+
+An application that keeps runtime context for reuse keys each value by the exact
+source entry it was acquired for: its source key, kind and exact data, preserving
+absent data as distinct from JSON null. A change starts with no kept context and
+requires acquiring what the producer asks for again. The two-kind host example's
+[context store](../examples/kind-adapter/tests/host/context.rs) follows this rule.
+
+`ERR_REFUSED` asserts that no observable effect of the requested operation occurred.
+It may carry a reason whose shape the source's kind defines. Use
+`InvocationError::new("ERR_REFUSED", Some(reason))` to attach exact reason data;
+the no-effect assertion and caller retry policy still apply.

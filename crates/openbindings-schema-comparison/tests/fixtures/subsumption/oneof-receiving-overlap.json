@@ -1,0 +1,45 @@
+{
+  "version": "1.0",
+  "description": "Identity-only oneOf guard applies to the receiving side before any branch coverage.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string",
+              "maxLength": 9
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

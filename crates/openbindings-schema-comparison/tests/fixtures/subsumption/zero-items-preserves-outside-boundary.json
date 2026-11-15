@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "description": "Zero item capacity does not erase the receiving prefixItems boundary.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 0
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "array",
+          "prefixItems": [
+            {}
+          ],
+          "items": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

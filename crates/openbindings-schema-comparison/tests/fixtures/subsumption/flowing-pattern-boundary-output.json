@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "description": "A flowing output pattern stops the position before the receiving type can reject.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "string",
+          "pattern": "x"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

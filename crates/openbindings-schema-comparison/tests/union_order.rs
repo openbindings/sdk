@@ -45,25 +45,43 @@ fn minimized_definite_failure_dominates_uncertainty_and_keeps_authored_index() {
                     &ComparisonLimits::default(),
                 )
                 .unwrap();
-                assert_eq!(result.verdict(), Verdict::Incompatible);
-                let index = usize::from(reverse);
-                let side = if direction == Direction::Input {
-                    "target"
-                } else {
-                    "candidate"
-                };
-                let other = if direction == Direction::Input {
-                    "candidate"
-                } else {
-                    "target"
-                };
+                assert_eq!(result.verdict(), Verdict::Indeterminate);
+                assert_eq!(result.finding(), Some("outside-profile"));
                 assert_eq!(
                     result.reason(),
-                    Some(
-                        format!("{key}: {side} variant {index} has no compatible {other} variant")
-                            .as_str()
-                    )
+                    Some("outside-profile: differing position has no profile decision rule")
                 );
+                if key == "anyOf" {
+                    let choices = json!({"anyOf":[{"type":"string"}]});
+                    let (a, b) = if direction == Direction::Input {
+                        (&flow, &choices)
+                    } else {
+                        (&choices, &flow)
+                    };
+                    let result = compare(
+                        direction,
+                        &schema(a),
+                        &schema(b),
+                        &ComparisonLimits::default(),
+                    )
+                    .unwrap();
+                    assert_eq!(result.verdict(), Verdict::Incompatible);
+                    let index = usize::from(reverse);
+                    let (side, other) = if direction == Direction::Input {
+                        ("target", "candidate")
+                    } else {
+                        ("candidate", "target")
+                    };
+                    assert_eq!(
+                        result.reason(),
+                        Some(
+                            format!(
+                                "anyOf: {side} variant {index} has no compatible {other} variant"
+                            )
+                            .as_str()
+                        )
+                    );
+                }
             }
         }
     }

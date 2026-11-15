@@ -1,0 +1,1 @@
+[{"type":"object","properties":{"a":{"type":["string","integer"],"const":5},"b":{"type":"integer","minimum":0.5},"c":{"type":"boolean"}}},{"properties":{"a":{"type":"integer"},"b":{"minimum":1},"c":{"enum":[true,false]}}}]

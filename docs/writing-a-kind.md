@@ -15,7 +15,7 @@ The SDK supplies checked calls and exact JSON. Applications supply kind-specific
 transports, credential storage and routing, and decide retries.
 
 This page targets the current unpublished `0.2.0-alpha.1` SDK and its interface
-revision `a3c19658fc89815d7a417eae29ba31fd4e930daf`. The document model is
+revision `eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. The document model is
 OpenBindings 0.2. The [example crate](../examples/kind-adapter/README.md) contains
 every Rust block below, with tests. Its fictional in-memory protocol needs no
 network. It builds for native Rust and `wasm32-unknown-unknown`.
@@ -394,7 +394,7 @@ for each existing binding of the selected source. A recognized binding with
 added Boolean operation schemas is stale
 and gets a removal proposal. Unrecognized binding data is unmatched.
 
-In the [Report contract](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/source-puller/README.md#report),
+In the [Report contract](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/source-puller/README.md#report),
 omitted `item` labels are `operations/<key>` or `schemas/<key>` using offered
 keys; `existing` uses document primary keys in those forms, or
 `operations/<key>/input` or `operations/<key>/output` for identifier declarations. A conflict
@@ -651,11 +651,15 @@ schemas of properties named `const`; never rewrite instance data inside `const`,
 `enum` or examples just because it contains a member named `$ref`.
 
 Hoist a recursive definition to a document-level `schemas` entry and include
-that entry in the pull report, so existing-entry comparison can account for its
+that entry in the pull report, so reuse and existing-entry comparison can account for its
 references as leaves. A target inside an operation's own `$defs` is not the
-operation's input/output slot and has no separate report entry. This accounting
-rule is for existing entries; it does not make ordinary identical-mode comparison
-for cross-source reuse succeed on recursive schemas.
+operation's input/output slot and has no separate report entry. The same accounted-reference rule governs reuse: compare the offered operation
+and existing operation under the report accounting. An unaccounted recursive
+reference still supplies no identity answer.
+
+An application that keeps context keys it by the exact source entry: source key,
+kind and exact data, with absent data distinct from JSON null. Changing any of
+these starts with no kept context; acquire what the producer asks for again.
 
 Secrets never go in documents or diagnostics. Keep credentials and approvals
 in separately supplied runtime `Context`, or host configuration with a clear
@@ -675,7 +679,7 @@ Use `ERR_EXECUTION_FAILED` when no more specific governed meaning applies.
 | Code | Adapter obligation |
 | --- | --- |
 | `CONTEXT_REQUIRED` | Supply a valid challenge, before every output and every observable effect of the requested operation. |
-| `ERR_REFUSED` | Assert no observable operation effect occurred. Use `InvocationError::refused()` only when that is true. |
+| `ERR_REFUSED` | Assert no observable operation effect occurred. Use `InvocationError::refused()` only when that is true. It may carry a reason whose shape the source's kind defines, using `InvocationError::new("ERR_REFUSED", Some(reason))`. |
 | `ERR_CANCELLED` | Report caller cancellation, without promising rollback or remote termination. |
 | `ERR_EXECUTION_FAILED` | Report failure with no cause, retry or dispatch-state claim. |
 | `ERR_TRANSPORT_CLOSED` | The outer invocation transport ended before its terminal arrived. An ordinary underlying protocol failure does not automatically have this meaning. |
@@ -695,14 +699,14 @@ object-form schema for the next attempt's context; mark secret properties
 `writeOnly`. The challenge is a request, not permission to release credentials.
 Use titled `oneOf` branches for alternatives and the optional `oauth2` annotation
 on an access-token property, as the pinned context interface defines in
-[the challenge](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/context/README.md#the-challenge)
-and [the annotation](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/context/README.md#the-oauth2-annotation).
+[the challenge](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/context/README.md#the-challenge)
+and [the annotation](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/context/README.md#the-oauth2-annotation).
 The application acquires values, decides whether to disclose them and starts a
 new attempt. The SDK never acquires context or retries for you.
 
 A provider that makes no prediction can use the one-line body
 `ready(Ok(None))` with `Ready<Result<Option<ContextChallenge>, InvocationError>>`.
-The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/binding-invoker/README.md)
+The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/binding-invoker/README.md)
 states that `null` is always conformant, even when invocation will need context.
 `None` means no prediction; it does not promise that invocation will proceed.
 
@@ -940,8 +944,8 @@ nothing read corresponds to it; a partial read does not prove removal.
 `stale` requires a proposal and a `breaking`, `dangerous` or `non-breaking`
 change judgment. Use `dangerous` when classification is uncertain.
 
-Source and binding data compare as JSON values. Existing-entry schema comparison
-also needs report context: a reference to a target accounted for by the report
+Source and binding data compare as JSON values. Reuse and existing-entry schema comparison
+both need report context: a reference to a target accounted for by the report
 stays a leaf, so its target's drift is reported once at that target. Other
 references are followed; a difference only through a target the report does not
 account for makes the entry unassessed. Use the comparison companion's
@@ -1442,7 +1446,7 @@ Run both native and Wasm builds and exercise any actual host transport separatel
 - Build for Wasm, then verify the host imports and local-future requirements.
 
 For the full current contracts, read the pinned
-[binding invocation](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/binding-invoker/README.md),
-[kind description](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/kind-descriptor/README.md) and
-[source pull](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/source-puller/README.md)
+[binding invocation](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/binding-invoker/README.md),
+[kind description](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/kind-descriptor/README.md) and
+[source pull](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/source-puller/README.md)
 publications. Interface and SDK versions are independent.

@@ -104,6 +104,15 @@
       ]
     },
     {
+      "path": "profile/retained-reference-target-differs-indeterminate.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
       "path": "profile/schema-2020-12-stripped-compatible.json",
       "mode": "subsume",
       "direction": "input",
@@ -111,7 +120,65 @@
       "findings": []
     },
     {
+      "path": "profile/union-both-keywords-identity-compatible.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "profile/union-both-keywords-indeterminate.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
       "path": "structural/boolean-true-empty-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/boolean-property-retention-identity.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/enum-intersection-discarded-duplicates.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/enum-intersection-literal-array-order.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/enum-intersection-sibling-first.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/enum-intersection-single-branch.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/enum-intersection-stable-dedup.json",
       "mode": "identical",
       "direction": "input",
       "verdict": "compatible",
@@ -175,22 +242,6 @@
       ]
     },
     {
-      "path": "structural/normalize-allof-union-retained-identical.json",
-      "mode": "identical",
-      "direction": "input",
-      "verdict": "compatible",
-      "findings": []
-    },
-    {
-      "path": "structural/normalize-allof-union-retained-incompatible.json",
-      "mode": "identical",
-      "direction": "input",
-      "verdict": "incompatible",
-      "findings": [
-        "identity"
-      ]
-    },
-    {
       "path": "structural/normalize-allof-flatten-identical.json",
       "mode": "identical",
       "direction": "input",
@@ -219,6 +270,22 @@
       "findings": []
     },
     {
+      "path": "structural/normalize-allof-union-retained-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/normalize-allof-union-retained-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
       "path": "structural/normalize-annotations-stripped-identical.json",
       "mode": "identical",
       "direction": "input",
@@ -240,6 +307,13 @@
       "findings": [
         "identity"
       ]
+    },
+    {
+      "path": "structural/normalize-defs-unused-beside-other-retained-keyword-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "structural/normalize-ref-inline-identical.json",
@@ -334,6 +408,76 @@
       ]
     },
     {
+      "path": "structural/boolean-definitions-identity.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/summary-incompatible-dominates-reversed.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "type",
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "structural/summary-incompatible-dominates.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "type",
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "structural/retained-array-order.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/retained-reference-target-difference-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/retained-reference-target-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/standalone-enum-multiplicity-retained.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/standalone-enum-order-retained.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
       "path": "structural/verdict-collapse-incompatible-dominates.json",
       "mode": "subsume",
       "direction": "input",
@@ -346,10 +490,10 @@
       "path": "structural/verdict-collapse-indeterminate-dominates.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "indeterminate",
+      "verdict": "incompatible",
       "findings": [
-        "outside-profile",
-        "type"
+        "type",
+        "outside-profile"
       ]
     },
     {
@@ -403,6 +547,15 @@
       ]
     },
     {
+      "path": "subsumption/boolean-enum-receiving-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "enum"
+      ]
+    },
+    {
       "path": "subsumption/bounds-input-compatible.json",
       "mode": "subsume",
       "direction": "input",
@@ -435,6 +588,103 @@
         "numeric-bounds",
         "length-bounds"
       ]
+    },
+    {
+      "path": "subsumption/required-finite-member.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/required-empty-integer-domain.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/bounded-finite-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "enum"
+      ]
+    },
+    {
+      "path": "subsumption/bounded-string-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "enum"
+      ]
+    },
+    {
+      "path": "subsumption/flowing-union-type.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/inapplicable-pattern-boundary.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/integer-exclusive-gap.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "numeric-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/integer-unbounded-exclusive.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "numeric-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/number-fraction-singleton.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/number-halfline-integer.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/receiving-top-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "subsumption/const-enum-input-compatible.json",
@@ -471,6 +721,151 @@
       ]
     },
     {
+      "path": "subsumption/cross-form-single-string.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/cross-form-string-null.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/oneof-before-top.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/effective-pattern-const-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/effective-property-outside-indeterminate.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/effective-source-closed-compatible.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-const-before-type.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/finite-enum-absent-type.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/finite-enum-before-type.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/finite-length-bound.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "length-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/finite-numeric-bound-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "numeric-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/finite-real-type-failure.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/flowing-multipleof.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/input-additional-properties-inclusion.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "additionalProperties"
+      ]
+    },
+    {
+      "path": "subsumption/input-candidate-only-property.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/integer-endpoint-equivalence.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "numeric-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/items-no-positive-length.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
       "path": "subsumption/nested-structures-input-compatible.json",
       "mode": "subsume",
       "direction": "input",
@@ -485,6 +880,13 @@
       "findings": [
         "properties"
       ]
+    },
+    {
+      "path": "subsumption/nonflowing-numeric-bound.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "subsumption/object-input-incompatible.json",
@@ -510,8 +912,10 @@
       "path": "subsumption/object-shape-input-compatible.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "compatible",
-      "findings": []
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
     },
     {
       "path": "subsumption/object-shape-output-compatible.json",
@@ -519,6 +923,300 @@
       "direction": "output",
       "verdict": "compatible",
       "findings": []
+    },
+    {
+      "path": "subsumption/oneof-disjoint-inclusion-indeterminate.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/oneof-exclusivity-input-indeterminate.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/oneof-exclusivity-output-indeterminate.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/oneof-receiving-overlap.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/optional-forbidden-legacy.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/additional-top-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/boolean-maximum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/const-minimum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "numeric-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/definitions-false-receiver.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/definitions-only.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/definitions-top-control.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/definitions-true-receiver.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/filtered-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "enum"
+      ]
+    },
+    {
+      "path": "subsumption/integer-exclusive.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "numeric-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/null-const.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "const"
+      ]
+    },
+    {
+      "path": "subsumption/number-singleton-integer.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/number-zero-integer-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/output-declared-property-additional-schema.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/output-target-only-property.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/empty-string-domain-before-type.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/receiving-pattern-type-failure.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/flowing-pattern-boundary.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/flowing-not-boundary.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/independent-member-failure.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/independent-member-failure-renamed.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/required-empty-member-independent-failure.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/length-failure-after-member-uncertainty.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "length-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/receiving-pattern-type-failure-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "incompatible",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/flowing-pattern-boundary-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/receiver-only-anyof-siblings.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/receiving-pattern-empty-source.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/receiving-patternproperties-declared.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/receiving-patternproperties-skipped.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/receiving-prefixitems-bound.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "length-bounds"
+      ]
     },
     {
       "path": "subsumption/ref-resolution-input-incompatible.json",
@@ -535,6 +1233,94 @@
       "direction": "output",
       "verdict": "compatible",
       "findings": []
+    },
+    {
+      "path": "subsumption/required-identical-empty.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/required-receiving-only-pattern.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
+    },
+    {
+      "path": "subsumption/retained-allof-receiving.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/empty-string-domain-before-bound.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/nested-oneof-before-type.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/finite-const-nested-patternproperties.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/finite-const-nested-prefixitems.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/receiving-enum-without-type.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "enum"
+      ]
+    },
+    {
+      "path": "subsumption/root-false.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/required-pattern-independent-member-failure.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "properties"
+      ]
     },
     {
       "path": "subsumption/schemas-root-per-side-input-compatible.json",
@@ -569,6 +1355,65 @@
       ]
     },
     {
+      "path": "subsumption/skipped-patternproperties-all.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/skipped-patternproperties-x1.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/skipped-patternproperties-xa.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/skipped-prefixitems.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/top-receiving-nullable.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/top-seven-types.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/top-zero-length.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
       "path": "subsumption/trivial-top-input-compatible.json",
       "mode": "subsume",
       "direction": "input",
@@ -581,7 +1426,7 @@
       "direction": "input",
       "verdict": "incompatible",
       "findings": [
-        "top"
+        "type"
       ]
     },
     {
@@ -597,7 +1442,7 @@
       "direction": "output",
       "verdict": "incompatible",
       "findings": [
-        "top"
+        "type"
       ]
     },
     {
@@ -633,6 +1478,103 @@
       ]
     },
     {
+      "path": "subsumption/union-conjunctive-siblings.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-empty-variant.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/union-shared-enum-witness.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-shared-type-witness.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-split-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-split-integer-bounds.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-split-typed-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-split-types.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-uncovered-variant-input-incompatible.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/union-uncovered-variant-output-incompatible.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "subsumption/union-undecided-variant-input-indeterminate.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
       "path": "subsumption/union-variants-input-compatible.json",
       "mode": "subsume",
       "direction": "input",
@@ -645,7 +1587,6 @@
       "direction": "input",
       "verdict": "incompatible",
       "findings": [
-        "length-bounds",
         "union"
       ]
     },
@@ -662,16 +1603,24 @@
       "direction": "output",
       "verdict": "incompatible",
       "findings": [
-        "length-bounds",
         "union"
       ]
+    },
+    {
+      "path": "subsumption/zero-string-bound.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "suppression/additional-properties-input-ignored-compatible.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "compatible",
-      "findings": []
+      "verdict": "incompatible",
+      "findings": [
+        "additionalProperties"
+      ]
     },
     {
       "path": "suppression/property-unconstrained-input-compatible.json",
@@ -695,23 +1644,74 @@
       "findings": []
     },
     {
-      "path": "profile/union-both-keywords-indeterminate.json",
+      "path": "subsumption/top-empty-properties.json",
       "mode": "subsume",
-      "direction": "output",
-      "verdict": "indeterminate",
-      "findings": [
-        "outside-profile"
-      ]
-    },
-    {
-      "path": "profile/union-both-keywords-identity-compatible.json",
-      "mode": "subsume",
-      "direction": "output",
+      "direction": "input",
       "verdict": "compatible",
       "findings": []
     },
     {
-      "path": "profile/retained-reference-target-differs-indeterminate.json",
+      "path": "subsumption/top-additional-true.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/top-empty-required-items.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/zero-array-lower-bound.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/empty-array-domain-before-type.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/empty-string-domain-mixed-types.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/cross-form-flowing-union.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/union-shared-type-with-opaque-counterpart.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "subsumption/zero-items-preserves-length-failure.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "length-bounds"
+      ]
+    },
+    {
+      "path": "subsumption/zero-items-preserves-outside-boundary.json",
       "mode": "subsume",
       "direction": "input",
       "verdict": "indeterminate",
@@ -720,14 +1720,135 @@
       ]
     },
     {
-      "path": "structural/retained-reference-target-identical.json",
+      "path": "structural/retained-description-identical.json",
       "mode": "identical",
       "direction": "input",
       "verdict": "compatible",
       "findings": []
     },
     {
-      "path": "structural/retained-reference-target-difference-incompatible.json",
+      "path": "subsumption/retained-description-subsume.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/retained-extension-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/retained-extension-subsume.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/retained-scalar-type-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/retained-scalar-type-subsume.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/retained-definition-annotation-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/retained-definition-annotation-subsume.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/retained-required-order-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/retained-required-order-subsume.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/comment-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/comment-subsume.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/retained-comment-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/retained-comment-subsume.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/single-retained-allof-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/single-retained-allof-subsume.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/single-allof-union.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/single-allof-oneof-still-boundary.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
+    },
+    {
+      "path": "structural/single-allof-kept-context.json",
       "mode": "identical",
       "direction": "input",
       "verdict": "incompatible",
@@ -736,38 +1857,119 @@
       ]
     },
     {
-      "path": "structural/normalize-defs-unused-beside-other-retained-keyword-identical.json",
+      "path": "structural/retained-instance-annotations-stay-data.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/unknown-keyword-payload-stays-data.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "structural/empty-summary.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/all-skipped-summary.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/structural-subtype-difference.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "structural/additional-boolean-true-identical.json",
       "mode": "identical",
       "direction": "input",
       "verdict": "compatible",
       "findings": []
     },
     {
-      "path": "subsumption/union-uncovered-variant-input-incompatible.json",
+      "path": "structural/additional-boolean-false-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/empty-string-domain-before-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/empty-string-domain-before-union.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/union-partial-source-sibling.json",
       "mode": "subsume",
       "direction": "input",
       "verdict": "incompatible",
       "findings": [
-        "union"
+        "numeric-bounds"
       ]
     },
     {
-      "path": "subsumption/union-uncovered-variant-output-incompatible.json",
-      "mode": "subsume",
-      "direction": "output",
-      "verdict": "incompatible",
-      "findings": [
-        "union"
-      ]
-    },
-    {
-      "path": "subsumption/union-undecided-variant-input-indeterminate.json",
+      "path": "subsumption/top-six-types.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "indeterminate",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/top-nested-items.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/top-nested-additional-properties.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/required-empty-length-member.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
       "findings": [
-        "outside-profile"
+        "type"
       ]
+    },
+    {
+      "path": "structural/retained-prefixitems-required-order.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
     }
   ]
 }

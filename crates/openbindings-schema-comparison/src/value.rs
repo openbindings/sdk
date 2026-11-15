@@ -11,6 +11,8 @@ pub(crate) type Name = Vec<u16>;
 pub(crate) type Object = BTreeMap<Name, Value>;
 pub(crate) enum Value {
     Shared(std::sync::Arc<Value>),
+    // Opaque schema plus assigned dialect and complete supplied context.
+    Foreign(Box<Value>),
     Reference(Box<Value>, Box<Value>),
     Null,
     Boolean(bool),
@@ -52,6 +54,10 @@ pub(crate) fn copy(
                 Box::new(copy(a, depth + 1, attempt)?),
                 Box::new(copy(b, depth + 1, attempt)?),
             )
+        }
+        Value::Foreign(value) => {
+            attempt.allocate(std::mem::size_of::<Value>())?;
+            Value::Foreign(Box::new(copy(value, depth + 1, attempt)?))
         }
         Value::Null => Value::Null,
         Value::Boolean(b) => Value::Boolean(*b),
@@ -178,6 +184,16 @@ pub(crate) fn numbers(
     Ok(order)
 }
 
+pub(crate) fn integer(value: &JsonValue, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    let text = value
+        .view()
+        .number_text()
+        .ok_or(FailureKind::InvalidSchema)?;
+    attempt.work(text.len().saturating_mul(16).saturating_add(1))?;
+    attempt.allocate(text.len().saturating_mul(16).saturating_add(512))?;
+    Ok(Decimal::parse(text).is_integer())
+}
+
 pub(crate) fn equal(
     left: &Value,
     right: &Value,
@@ -202,6 +218,7 @@ fn equal_scratch(
         (Value::Reference(a, at), Value::Reference(b, bt)) => {
             equal(a, b, depth + 1, attempt)? && equal(at, bt, depth + 1, attempt)?
         }
+        (Value::Foreign(a), Value::Foreign(b)) => equal(a, b, depth + 1, attempt)?,
         (Value::Null, Value::Null) => true,
         (Value::Boolean(a), Value::Boolean(b)) => a == b,
         (Value::Number(a), Value::Number(b)) => numbers(a, b, attempt)? == Ordering::Equal,

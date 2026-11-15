@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbindings.com/interfaces/conformance/comparison/fixture.schema.json",
+  "title": "Schema-Comparison Conformance Fixture",
+  "description": "JSON Schema describing the format of a schema-comparison conformance fixture file: a pair of embedded OpenBindings interface documents compared under the schema-comparison profile, with the expected summary verdict.",
+  "type": "object",
+  "required": ["version", "description", "mode", "options", "left", "right", "expected"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": "1.0",
+      "description": "Fixture-format version (the manifest's conventionVersion)."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable statement of the rule this fixture pins, ideally byte-faithful to the schema-comparison profile's prose."
+    },
+    "mode": {
+      "enum": ["subsume", "identical"],
+      "description": "Comparison mode. 'subsume': pair operations and run directional compatibility, collapsing by incompatible > indeterminate > compatible. 'identical': compare normalized schema structure under exact instance equality and the profile's union-permutation rule, never lossy canonical strings."
+    },
+    "options": {
+      "type": "object",
+      "required": ["profile"],
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "const": "OB-2020-12",
+          "description": "The comparison profile the fixture is authored against (the schema-comparison profile's identifier)."
+        }
+      }
+    },
+    "left": { "$ref": "#/$defs/interfaceDocument" },
+    "right": { "$ref": "#/$defs/interfaceDocument" },
+    "expected": {
+      "type": "object",
+      "required": ["summary"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "object",
+          "required": ["verdict"],
+          "additionalProperties": false,
+          "properties": {
+            "verdict": {
+              "enum": ["compatible", "incompatible", "indeterminate"],
+              "description": "The collapsed summary verdict a conforming implementation must reach. Must equal the manifest entry's verdict."
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "interfaceDocument": {
+      "type": "object",
+      "required": ["openbindings", "operations"],
+      "description": "A complete, valid OpenBindings interface document, embedded inline (left = target/contract side, right = candidate side). CI validates these against the OBI meta-schema. Operation input/output schemas may use the object form, the boolean form, or be absent (unspecified)."
+    }
+  }
+}

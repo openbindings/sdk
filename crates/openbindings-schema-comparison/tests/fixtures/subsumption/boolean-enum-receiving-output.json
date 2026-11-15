@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "description": "Missing source enum is not a counterexample; no boolean-universe inclusion rule is added.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "enum": [
+            true,
+            false
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

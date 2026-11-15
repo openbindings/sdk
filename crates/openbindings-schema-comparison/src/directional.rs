@@ -60,13 +60,13 @@ pub enum Direction {
 pub enum Verdict {
     /// The candidate can stand in for the target in this direction.
     Compatible,
-    /// A profile rule rejects the substitution.
-    Incompatible,
-    /// A differing position is outside the profile's decision procedure.
+    /// Inclusion is unresolved, including boundaries and ineligible failures.
     Indeterminate,
+    /// A profile rule rejects substitution, subject to the profile vacuity exception.
+    Incompatible,
 }
 impl Verdict {
-    /// Collapse outcomes using indeterminate > incompatible > compatible.
+    /// Collapse outcomes using incompatible > indeterminate > compatible.
     /// An empty collection is compatible. Normalization failures are not verdicts.
     pub fn collapse(verdicts: impl IntoIterator<Item = Self>) -> Self {
         verdicts.into_iter().max().unwrap_or(Self::Compatible)
@@ -77,6 +77,7 @@ impl Verdict {
 pub struct Comparison {
     verdict: Verdict,
     reason: Option<String>,
+    boundary: bool,
 }
 impl fmt::Debug for Comparison {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -105,12 +106,17 @@ impl Comparison {
     }
     /// The profile finding for an indeterminate answer.
     pub fn finding(&self) -> Option<&'static str> {
-        (self.verdict == Verdict::Indeterminate).then_some("outside-profile")
+        (self.verdict == Verdict::Indeterminate).then_some(if self.boundary {
+            "outside-profile"
+        } else {
+            "unresolved"
+        })
     }
     fn compatible() -> Self {
         Self {
             verdict: Verdict::Compatible,
             reason: None,
+            boundary: false,
         }
     }
 }
@@ -175,6 +181,7 @@ fn answer(
     Ok(Comparison {
         verdict,
         reason: Some(reason),
+        boundary: false,
     })
 }
 fn reject(reason: &str, attempt: &mut Attempt<'_>) -> Result<Comparison, Failure> {
@@ -234,6 +241,68 @@ fn covers(map: &Object, name: &[u16], attempt: &mut Attempt<'_>) -> Result<bool,
     }
     Ok(false)
 }
+fn boundary(attempt: &mut Attempt<'_>) -> Result<Comparison, Failure> {
+    let mut result = answer(
+        Verdict::Indeterminate,
+        "outside-profile: differing position has no profile decision rule".into(),
+        attempt,
+    )?;
+    result.boundary = true;
+    Ok(result)
+}
+fn unresolved(
+    mut result: Comparison,
+    why: &str,
+    attempt: &mut Attempt<'_>,
+) -> Result<Comparison, Failure> {
+    result.verdict = Verdict::Indeterminate;
+    result.boundary = false;
+    if let Some(reason) = result.reason.take() {
+        result.reason = Some(report!(attempt, "{reason}; unresolved: {why}"));
+    }
+    Ok(result)
+}
+fn fold(current: &mut Comparison, result: Comparison) {
+    if result.verdict > current.verdict {
+        *current = result;
+    }
+}
+fn finite(map: &Object) -> bool {
+    get(map, "const").is_some() || get(map, "enum").is_some()
+}
+fn guard(
+    result: Comparison,
+    flow: &Object,
+    attempt: &mut Attempt<'_>,
+) -> Result<Comparison, Failure> {
+    if result.verdict != Verdict::Incompatible {
+        return Ok(result);
+    }
+    if finite(flow) {
+        return unresolved(
+            result,
+            "flowing const or enum may exclude the failure",
+            attempt,
+        );
+    }
+    if get(flow, "anyOf").is_some() {
+        return unresolved(result, "flowing anyOf requires union evidence", attempt);
+    }
+    Ok(result)
+}
+fn recurse(
+    direction: Direction,
+    flow: &Value,
+    accepts: &Value,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<Comparison, Failure> {
+    if direction == Direction::Input {
+        walk(direction, flow, accepts, depth, attempt)
+    } else {
+        walk(direction, accepts, flow, depth, attempt)
+    }
+}
 fn walk(
     direction: Direction,
     target: &Value,
@@ -241,63 +310,157 @@ fn walk(
     depth: usize,
     attempt: &mut Attempt<'_>,
 ) -> Result<Comparison, Failure> {
+    walk_position(direction, target, candidate, depth, true, attempt)
+}
+fn walk_position(
+    direction: Direction,
+    target: &Value,
+    candidate: &Value,
+    depth: usize,
+    coverage: bool,
+    attempt: &mut Attempt<'_>,
+) -> Result<Comparison, Failure> {
     attempt.depth(depth)?;
     if value::equal(target, candidate, depth, attempt)? {
         return Ok(Comparison::compatible());
     }
-    let (t, c) = (object(target)?, object(candidate)?);
-    if outside(t, depth, attempt)?
-        || outside(c, depth, attempt)?
-        || get(t, "allOf").is_some()
-        || get(c, "allOf").is_some()
-        || (get(t, "oneOf").is_some() && get(t, "anyOf").is_some())
-        || (get(c, "oneOf").is_some() && get(c, "anyOf").is_some())
-    {
-        return answer(
-            Verdict::Indeterminate,
-            "outside-profile: differing position has no profile decision rule".into(),
-            attempt,
-        );
+    if matches!(target.view(), Value::Foreign(_)) || matches!(candidate.view(), Value::Foreign(_)) {
+        return boundary(attempt);
     }
+    let (t, c) = (object(target)?, object(candidate)?);
     let input = direction == Direction::Input;
-    if (input && c.is_empty()) || (!input && t.is_empty()) {
+    let (flow, accepts, receiver) = if input {
+        (t, c, candidate)
+    } else {
+        (c, t, target)
+    };
+    if outside(flow, depth, attempt)?
+        || [t, c]
+            .iter()
+            .any(|m| get(m, "allOf").is_some() || get(m, "oneOf").is_some())
+    {
+        return boundary(attempt);
+    }
+    let receiver_outside = outside(accepts, depth, attempt)?;
+    if !receiver_outside && crate::normalize::top(receiver, depth, attempt)? {
         return Ok(Comparison::compatible());
     }
-    if input && t.is_empty() {
-        return reject(
-            "top: target accepts anything but candidate is constrained",
-            attempt,
+    // Emptiness is local to this position and precedes all failure sources.
+    if all_lengths_empty(flow, attempt)? {
+        return if receiver_outside {
+            boundary(attempt)
+        } else {
+            Ok(Comparison::compatible())
+        };
+    }
+    // A union covers whole counterparts. In particular a nominally untyped
+    // flowing union must not fail the plain receiver's type after coverage.
+    if coverage && (union(flow).is_some() || union(accepts).is_some()) {
+        return unions(direction, t, c, depth, attempt);
+    }
+    let flowing_value = if input { target } else { candidate };
+    let mut result = Comparison::compatible();
+    if crate::normalize::top(flowing_value, depth, attempt)?
+        && !length_only_top(accepts, depth, attempt)?
+    {
+        fold(
+            &mut result,
+            answer(
+                Verdict::Indeterminate,
+                "top: inclusion in constrained receiver is unresolved".into(),
+                attempt,
+            )?,
         );
     }
-    if !input && c.is_empty() {
-        return reject(
-            "top: candidate may produce anything but target is constrained",
-            attempt,
-        );
+    fold(&mut result, types(direction, t, c, attempt)?);
+    if let Some(values) = values(direction, t, c, depth, attempt)? {
+        fold(&mut result, values);
     }
-    let (flow, accepts) = if input { (t, c) } else { (c, t) };
-    let all_types;
-    let types = if get(flow, "type").is_some() {
-        array(flow, "type")
-    } else {
-        all_types = {
-            let mut types = attempt.vector(7)?;
-            for name in [
-                "array", "boolean", "integer", "null", "number", "object", "string",
-            ] {
-                types.push(Value::String(value::literal(name, attempt)?));
+    if includes(flow, "object") {
+        let objects = objects(direction, flow, accepts, depth, attempt)?;
+        fold(&mut result, guard(objects, flow, attempt)?);
+    }
+    if includes(flow, "array") && !length_empty(flow, "minItems", "maxItems", attempt)? {
+        let items = if get(accepts, "prefixItems").is_some() {
+            boundary(attempt)?
+        } else if zero_items(flow, attempt)? {
+            Comparison::compatible()
+        } else {
+            let top = Value::Object(Object::new());
+            nested(
+                "items",
+                recurse(
+                    direction,
+                    get(flow, "items").unwrap_or(&top),
+                    get(accepts, "items").unwrap_or(&top),
+                    depth + 1,
+                    attempt,
+                )?,
+                attempt,
+            )?
+        };
+        fold(&mut result, guard(items, flow, attempt)?);
+    }
+    if includes(flow, "number") || includes(flow, "integer") {
+        for (key, exclusive, lower) in [
+            ("minimum", "exclusiveMinimum", true),
+            ("maximum", "exclusiveMaximum", false),
+        ] {
+            let tb = bound(t, key, Some(exclusive), lower, attempt)?;
+            let cb = bound(c, key, Some(exclusive), lower, attempt)?;
+            if let Some(mut failure) = bounds(direction, key, tb, cb, lower, attempt)? {
+                let (fb, rb) = if input { (tb, cb) } else { (cb, tb) };
+                if !includes(flow, "number") && !integer_endpoint(fb, rb, attempt)? {
+                    failure = unresolved(
+                        failure,
+                        "integer endpoint does not establish a failure",
+                        attempt,
+                    )?;
+                }
+                fold(&mut result, guard(failure, flow, attempt)?);
             }
-            types
-        };
-        &all_types
-    };
-    for ty in types {
-        let Value::String(name) = ty else {
-            return Err(Failure::from(FailureKind::InvalidSchema));
-        };
-        if !covers(accepts, name, attempt)? {
-            let ty = render(ty, depth, attempt)?;
-            return answer(
+        }
+    }
+    for (ty, min, max) in [
+        ("string", "minLength", "maxLength"),
+        ("array", "minItems", "maxItems"),
+    ] {
+        if includes(flow, ty) && !length_empty(flow, min, max, attempt)? {
+            for (key, lower) in [(min, true), (max, false)] {
+                let tb = length_bound(t, key, lower, attempt)?;
+                let cb = length_bound(c, key, lower, attempt)?;
+                if let Some(failure) = bounds(direction, key, tb, cb, lower, attempt)? {
+                    fold(&mut result, guard(failure, flow, attempt)?);
+                }
+            }
+        }
+    }
+    if receiver_outside {
+        fold(&mut result, boundary(attempt)?);
+    }
+    Ok(result)
+}
+const TYPES: [&str; 7] = [
+    "array", "boolean", "integer", "null", "number", "object", "string",
+];
+fn types(
+    direction: Direction,
+    t: &Object,
+    c: &Object,
+    attempt: &mut Attempt<'_>,
+) -> Result<Comparison, Failure> {
+    let input = direction == Direction::Input;
+    let (flow, accepts) = if input { (t, c) } else { (c, t) };
+    let mut result = Comparison::compatible();
+    for name in TYPES {
+        attempt.work(1)?;
+        if !includes(flow, name) || excluded_length(flow, name, attempt)? {
+            continue;
+        }
+        let encoded = value::literal(name, attempt)?;
+        if !covers(accepts, &encoded, attempt)? {
+            let ty = quote(&encoded, attempt)?;
+            let mut failure = answer(
                 Verdict::Incompatible,
                 if input {
                     report!(attempt, "type: candidate does not allow {ty}")
@@ -308,20 +471,60 @@ fn walk(
                     )
                 },
                 attempt,
-            );
+            )?;
+            if name == "number"
+                && includes(accepts, "integer")
+                && singleton_interval(flow, attempt)?
+            {
+                failure = unresolved(
+                    failure,
+                    "flowing interval admits at most one number",
+                    attempt,
+                )?;
+            }
+            fold(&mut result, guard(failure, flow, attempt)?);
         }
     }
-    if let Some(result) = values(direction, t, c, depth, attempt)? {
-        return Ok(result);
+    Ok(result)
+}
+fn member(
+    direction: Direction,
+    flow: &Value,
+    accepts: &Value,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<Comparison, Failure> {
+    if crate::normalize::empty_member(flow) || crate::normalize::top(accepts, depth, attempt)? {
+        return Ok(Comparison::compatible());
     }
-    if includes(t, "object") || includes(c, "object") {
-        let (needed, supplied) = if input { (c, t) } else { (t, c) };
-        for name in array(needed, "required") {
-            if !contains_sorted(array(supplied, "required"), name, depth + 1, attempt)? {
-                let name = render(name, depth, attempt)?;
-                return answer(
+    if crate::normalize::top(flow, depth, attempt)? && crate::normalize::empty_member(accepts) {
+        return reject(
+            if direction == Direction::Input {
+                "additionalProperties: candidate forbids but target allows"
+            } else {
+                "additionalProperties: target forbids but candidate allows"
+            },
+            attempt,
+        );
+    }
+    recurse(direction, flow, accepts, depth, attempt)
+}
+fn objects(
+    direction: Direction,
+    flow: &Object,
+    accepts: &Object,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<Comparison, Failure> {
+    let mut result = Comparison::compatible();
+    for name in array(accepts, "required") {
+        if !contains_sorted(array(flow, "required"), name, depth + 1, attempt)? {
+            let name = render(name, depth, attempt)?;
+            fold(
+                &mut result,
+                answer(
                     Verdict::Incompatible,
-                    if input {
+                    if direction == Direction::Input {
                         report!(
                             attempt,
                             "required: candidate requires {name} but target does not"
@@ -333,128 +536,209 @@ fn walk(
                         )
                     },
                     attempt,
-                );
-            }
+                )?,
+            );
         }
-        let (tp, cp) = (properties(t), properties(c));
-        // Merge traversal charges every property and name comparison; no map probe
-        // or hostile common-prefix comparison runs outside the allowance.
-        let mut ti = tp.into_iter().flat_map(|m| m.iter()).peekable();
-        let mut ci = cp.into_iter().flat_map(|m| m.iter()).peekable();
-        while ti.peek().is_some() || ci.peek().is_some() {
-            attempt.work(1)?;
-            let order = match (ti.peek(), ci.peek()) {
-                (Some((a, _)), Some((b, _))) => {
-                    attempt.work(a.len().min(b.len()).saturating_add(1))?;
-                    a.cmp(b)
+    }
+    let top = Value::Object(Object::new());
+    let (fp, rp) = (properties(flow), properties(accepts));
+    let fa = get(flow, "additionalProperties").unwrap_or(&top);
+    let ra = get(accepts, "additionalProperties").unwrap_or(&top);
+    let skipped = get(accepts, "patternProperties").is_some();
+    let mut fi = fp.into_iter().flat_map(|m| m.iter()).peekable();
+    let mut ri = rp.into_iter().flat_map(|m| m.iter()).peekable();
+    while fi.peek().is_some() || ri.peek().is_some() {
+        attempt.work(1)?;
+        let order = match (fi.peek(), ri.peek()) {
+            (Some((a, _)), Some((b, _))) => {
+                attempt.work(a.len().min(b.len()).saturating_add(1))?;
+                a.cmp(b)
+            }
+            (Some(_), None) => Ordering::Less,
+            _ => Ordering::Greater,
+        };
+        let (name, f, r) = match order {
+            Ordering::Less => {
+                let (name, f) = fi.next().expect("flowing property");
+                if skipped {
+                    continue;
                 }
-                (Some(_), None) => Ordering::Less,
-                _ => Ordering::Greater,
+                (name, f, ra)
+            }
+            Ordering::Greater => {
+                let (name, r) = ri.next().expect("receiving property");
+                (name, fa, r)
+            }
+            Ordering::Equal => {
+                let (name, f) = fi.next().expect("flowing property");
+                let (_, r) = ri.next().expect("receiving property");
+                (name, f, r)
+            }
+        };
+        let comparison = if order == Ordering::Less
+            && crate::normalize::empty_member(r)
+            && crate::normalize::top(f, depth + 1, attempt)?
+        {
+            reject(
+                if direction == Direction::Output {
+                    "candidate property not allowed by target"
+                } else {
+                    "target property not allowed by candidate"
+                },
+                attempt,
+            )?
+        } else {
+            member(direction, f, r, depth + 1, attempt)?
+        };
+        if comparison.verdict != Verdict::Compatible {
+            let name = quote(name, attempt)?;
+            fold(
+                &mut result,
+                nested(&report!(attempt, "properties[{name}]"), comparison, attempt)?,
+            );
+        }
+    }
+    if skipped {
+        fold(&mut result, boundary(attempt)?);
+    } else {
+        fold(
+            &mut result,
+            nested(
+                "additionalProperties",
+                member(direction, fa, ra, depth + 1, attempt)?,
+                attempt,
+            )?,
+        );
+    }
+    Ok(result)
+}
+fn zero() -> &'static openbindings::JsonValue {
+    static ZERO: std::sync::OnceLock<openbindings::JsonValue> = std::sync::OnceLock::new();
+    ZERO.get_or_init(|| openbindings::JsonValue::parse("0").expect("zero"))
+}
+fn length_bound<'a>(
+    map: &'a Object,
+    key: &str,
+    lower: bool,
+    attempt: &mut Attempt<'_>,
+) -> Result<Option<Bound<'a>>, Failure> {
+    let bound = bound(map, key, None, lower, attempt)?;
+    let below_zero = if let Some(b) = bound {
+        value::numbers(b.value, zero(), attempt)? == Ordering::Less
+    } else {
+        true
+    };
+    if lower && below_zero {
+        // The default lower endpoint is zero, not negative infinity.
+        return Ok(Some(Bound {
+            value: zero(),
+            exclusive: false,
+        }));
+    }
+    Ok(bound)
+}
+fn length_empty(
+    map: &Object,
+    min: &str,
+    max: &str,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
+    let lower = length_bound(map, min, true, attempt)?.expect("length minimum");
+    let upper = length_bound(map, max, false, attempt)?;
+    Ok(if let Some(upper) = upper {
+        value::numbers(lower.value, upper.value, attempt)? == Ordering::Greater
+    } else {
+        false
+    })
+}
+fn excluded_length(map: &Object, name: &str, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    match name {
+        "array" => length_empty(map, "minItems", "maxItems", attempt),
+        "string" => length_empty(map, "minLength", "maxLength", attempt),
+        _ => Ok(false),
+    }
+}
+fn all_lengths_empty(map: &Object, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    for name in TYPES {
+        if includes(map, name) && !excluded_length(map, name, attempt)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+fn length_only_top(map: &Object, depth: usize, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    for (key, value) in map {
+        attempt.work(512)?;
+        if is(key, "$defs") {
+            continue;
+        }
+        if is(key, "minLength") || is(key, "minItems") {
+            let Value::Number(n) = value else {
+                return Ok(false);
             };
-            match order {
-                Ordering::Less => {
-                    ti.next();
-                }
-                Ordering::Greater => {
-                    let (name, _) = ci.next().expect("candidate property");
-                    if !input
-                        && matches!(get(t, "additionalProperties"), Some(Value::Boolean(false)))
-                    {
-                        let name = quote(name, attempt)?;
-                        return answer(
-                            Verdict::Incompatible,
-                            report!(
-                                attempt,
-                                "properties[{name}]: candidate property not allowed by target"
-                            ),
-                            attempt,
-                        );
-                    }
-                }
-                Ordering::Equal => {
-                    let (name, tv) = ti.next().expect("target property");
-                    let (_, cv) = ci.next().expect("candidate property");
-                    let result = walk(direction, tv, cv, depth + 1, attempt)?;
-                    if result.verdict != Verdict::Compatible {
-                        let name = quote(name, attempt)?;
-                        return nested(&report!(attempt, "properties[{name}]"), result, attempt);
-                    }
-                }
+            if value::numbers(n, zero(), attempt)? == Ordering::Greater {
+                return Ok(false);
             }
-        }
-        if !input {
-            match (
-                get(t, "additionalProperties"),
-                get(c, "additionalProperties"),
-            ) {
-                (Some(Value::Boolean(false)), Some(Value::Boolean(false))) => {}
-                (Some(Value::Boolean(false)), _) => {
-                    return reject(
-                        "additionalProperties: target forbids but candidate allows",
-                        attempt,
-                    );
-                }
-                (Some(Value::Object(_)), Some(Value::Boolean(false))) => {}
-                (Some(tv @ Value::Object(_)), Some(cv @ Value::Object(_))) => {
-                    let result = walk(direction, tv, cv, depth + 1, attempt)?;
-                    if result.verdict != Verdict::Compatible {
-                        return nested("additionalProperties", result, attempt);
-                    }
-                }
-                (Some(Value::Object(_)), _) => {
-                    return reject(
-                        "additionalProperties: target constrains but candidate allows anything",
-                        attempt,
-                    );
-                }
-                _ => {}
-            }
+        } else if !crate::normalize::top_keyword(key, value, depth, attempt)? {
+            return Ok(false);
         }
     }
-    if includes(t, "array") || includes(c, "array") {
-        let top = Value::Object(Object::new());
-        let result = walk(
-            direction,
-            get(t, "items").unwrap_or(&top),
-            get(c, "items").unwrap_or(&top),
-            depth + 1,
-            attempt,
-        )?;
-        if result.verdict != Verdict::Compatible {
-            return nested("items", result, attempt);
+    Ok(true)
+}
+fn zero_items(map: &Object, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    Ok(if let Some(Value::Number(max)) = get(map, "maxItems") {
+        value::numbers(max, zero(), attempt)? == Ordering::Equal
+    } else {
+        false
+    })
+}
+fn singleton_interval(map: &Object, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    let lo = bound(map, "minimum", Some("exclusiveMinimum"), true, attempt)?;
+    let hi = bound(map, "maximum", Some("exclusiveMaximum"), false, attempt)?;
+    Ok(if let (Some(lo), Some(hi)) = (lo, hi) {
+        value::numbers(lo.value, hi.value, attempt)? != Ordering::Less
+    } else {
+        false
+    })
+}
+fn integer_endpoint(
+    flow: Option<Bound<'_>>,
+    receives: Option<Bound<'_>>,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
+    let Some(f) = flow else { return Ok(true) };
+    let Some(r) = receives else { return Ok(true) };
+    if !value::integer(f.value, attempt)? || !value::integer(r.value, attempt)? {
+        return Ok(false);
+    }
+    Ok((!f.exclusive && !r.exclusive)
+        || (!f.exclusive
+            && r.exclusive
+            && value::numbers(f.value, r.value, attempt)? == Ordering::Equal))
+}
+fn only(map: &Object, keys: &[&str], attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    for key in map.keys() {
+        attempt.work(512)?;
+        if !is(key, "$defs") && !keys.iter().any(|k| is(key, k)) {
+            return Ok(false);
         }
     }
-    if includes(t, "number")
-        || includes(t, "integer")
-        || includes(c, "number")
-        || includes(c, "integer")
-    {
-        for (key, exclusive, lower) in [
-            ("minimum", "exclusiveMinimum", true),
-            ("maximum", "exclusiveMaximum", false),
-        ] {
-            let tb = bound(t, key, Some(exclusive), lower, attempt)?;
-            let cb = bound(c, key, Some(exclusive), lower, attempt)?;
-            if let Some(result) = bounds(direction, key, tb, cb, lower, attempt)? {
-                return Ok(result);
-            }
+    Ok(true)
+}
+fn typed_value(map: &Object, v: &Value, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    let ty = match v.view() {
+        Value::Null => "null",
+        Value::Boolean(_) => "boolean",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+        Value::Number(n) => {
+            return Ok(includes(map, "number")
+                || (includes(map, "integer") && value::integer(n, attempt)?));
         }
-    }
-    for (ty, keys) in [
-        ("string", [("minLength", true), ("maxLength", false)]),
-        ("array", [("minItems", true), ("maxItems", false)]),
-    ] {
-        if includes(t, ty) || includes(c, ty) {
-            for (key, lower) in keys {
-                let tb = bound(t, key, None, lower, attempt)?;
-                let cb = bound(c, key, None, lower, attempt)?;
-                if let Some(result) = bounds(direction, key, tb, cb, lower, attempt)? {
-                    return Ok(result);
-                }
-            }
-        }
-    }
-    unions(direction, t, c, depth, attempt)
+        _ => return Err(FailureKind::InvalidSchema.into()),
+    };
+    Ok(includes(map, ty))
 }
 fn values(
     direction: Direction,
@@ -464,36 +748,51 @@ fn values(
     attempt: &mut Attempt<'_>,
 ) -> Result<Option<Comparison>, Failure> {
     let input = direction == Direction::Input;
-    let (flow, accepts) = if input { (t, c) } else { (c, t) };
-    let (side, other) = if input {
-        ("target", "candidate")
+    let (flow, accepts, side, other) = if input {
+        (t, c, "target", "candidate")
     } else {
-        ("candidate", "target")
+        (c, t, "candidate", "target")
     };
-    let (key, constraint) = if let Some(v) = get(accepts, "const") {
-        ("const", v)
-    } else if let Some(v) = get(accepts, "enum") {
-        ("enum", v)
-    } else {
+    if !finite(accepts) {
         return Ok(None);
-    };
+    }
     let source = if let Some(v) = get(flow, "const") {
         std::slice::from_ref(v)
-    } else if get(flow, "enum").is_some() {
-        array(flow, "enum")
     } else {
-        return reject(
+        array(flow, "enum")
+    };
+    let mut result = Comparison::compatible();
+    if !finite(flow) {
+        let key = if get(accepts, "const").is_some() {
+            "const"
+        } else {
+            "enum"
+        };
+        let failure = reject(
             &report!(
                 attempt,
                 "{key}: {side} is unconstrained but {other} has {key}"
             ),
             attempt,
-        )
-        .map(Some);
-    };
-    let membership = if key == "enum" {
+        )?;
+        let eligible = only(flow, &["type"], attempt)?
+            && ["string", "number", "integer", "array", "object"]
+                .iter()
+                .any(|ty| includes(flow, ty));
+        return Ok(Some(if eligible {
+            failure
+        } else {
+            unresolved(
+                failure,
+                "finite restriction has no eligible flowing value",
+                attempt,
+            )?
+        }));
+    }
+    let clean = only(flow, &["type", "const", "enum"], attempt)?;
+    let source_enum = if get(flow, "const").is_some() && get(flow, "enum").is_some() {
         Some(Membership::new(
-            array(accepts, "enum"),
+            array(flow, "enum"),
             source.len(),
             depth + 1,
             attempt,
@@ -501,17 +800,40 @@ fn values(
     } else {
         None
     };
-    for v in source {
-        let admitted = if key == "const" {
-            value::equal(v, constraint, depth + 1, attempt)?
-        } else {
-            membership
-                .as_ref()
-                .expect("enum membership")
-                .contains(v, depth + 1, attempt)?
+    for key in ["const", "enum"] {
+        let Some(constraint) = get(accepts, key) else {
+            continue;
         };
-        if !admitted {
-            let v = render(v, depth + 1, attempt)?;
+        let membership = if key == "enum" {
+            Some(Membership::new(
+                array(accepts, "enum"),
+                source.len(),
+                depth + 1,
+                attempt,
+            )?)
+        } else {
+            None
+        };
+        for v in source {
+            let admitted = if key == "const" {
+                value::equal(v, constraint, depth + 1, attempt)?
+            } else {
+                membership
+                    .as_ref()
+                    .expect("enum membership")
+                    .contains(v, depth + 1, attempt)?
+            };
+            if admitted {
+                continue;
+            }
+            let eligible = clean
+                && typed_value(flow, v, attempt)?
+                && if let Some(index) = &source_enum {
+                    index.contains(v, depth + 1, attempt)?
+                } else {
+                    true
+                };
+            let rendered = render(v, depth + 1, attempt)?;
             let reason = if key == "const" && get(flow, "const").is_some() {
                 let cv = render(get(c, "const").expect("const"), depth + 1, attempt)?;
                 let tv = render(get(t, "const").expect("const"), depth + 1, attempt)?;
@@ -523,31 +845,30 @@ fn values(
                 let constraint = render(constraint, depth + 1, attempt)?;
                 report!(
                     attempt,
-                    "const: {side} value {v} does not match {other} const {constraint}"
+                    "const: {side} value {rendered} does not match {other} const {constraint}"
                 )
             } else {
-                report!(attempt, "enum: {side} value {v} not in {other} enum")
+                report!(attempt, "enum: {side} value {rendered} not in {other} enum")
             };
-            return answer(Verdict::Incompatible, reason, attempt).map(Some);
-        }
-    }
-    // A const and enum together are separate constraints. Check both rather than
-    // allowing one to erase the other when a caller supplies both keywords.
-    if key == "const" && get(accepts, "enum").is_some() {
-        let membership = Membership::new(array(accepts, "enum"), source.len(), depth + 1, attempt)?;
-        for v in source {
-            if !membership.contains(v, depth + 1, attempt)? {
-                let v = render(v, depth + 1, attempt)?;
-                return answer(
-                    Verdict::Incompatible,
-                    report!(attempt, "enum: {side} value {v} not in {other} enum"),
-                    attempt,
-                )
-                .map(Some);
+            let failure = answer(Verdict::Incompatible, reason, attempt)?;
+            fold(
+                &mut result,
+                if eligible {
+                    failure
+                } else {
+                    unresolved(
+                        failure,
+                        "authored value does not establish a flowing failure",
+                        attempt,
+                    )?
+                },
+            );
+            if result.verdict == Verdict::Incompatible {
+                return Ok(Some(result));
             }
         }
     }
-    Ok(None)
+    Ok(Some(result))
 }
 #[derive(Clone, Copy)]
 struct Bound<'a> {
@@ -660,16 +981,100 @@ fn bounds(
     };
     answer(Verdict::Incompatible, reason, attempt).map(Some)
 }
-fn union(map: &Object) -> Option<(&'static str, &[Value])> {
-    if get(map, "oneOf").is_some() && get(map, "anyOf").is_some() {
-        return None;
+fn union(map: &Object) -> Option<&[Value]> {
+    match get(map, "anyOf") {
+        Some(Value::Union(v)) => Some(v),
+        _ => None,
     }
-    for key in ["oneOf", "anyOf"] {
-        if let Some(Value::Union(v)) = get(map, key) {
-            return Some((key, v));
+}
+fn siblings(map: &Object, depth: usize, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
+    let mut result = Object::new();
+    for (key, v) in map {
+        attempt.work(1)?;
+        if is(key, "anyOf") {
+            continue;
+        }
+        attempt.allocate(key.len().saturating_mul(2))?;
+        value::insert(
+            &mut result,
+            key.clone(),
+            value::copy(v, depth + 1, attempt)?,
+            attempt,
+        )?;
+    }
+    Ok(Value::Object(result))
+}
+fn conjoined(
+    variant: &Value,
+    siblings: &Value,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<Option<Value>, Failure> {
+    if matches!(siblings,Value::Object(m) if m.is_empty()) {
+        return Ok(Some(value::copy(variant, depth, attempt)?));
+    }
+    let mut branches = attempt.vector(2)?;
+    branches.push(value::copy(siblings, depth + 1, attempt)?);
+    branches.push(value::copy(variant, depth + 1, attempt)?);
+    match crate::merge::all_of(Object::new(), branches, depth + 1, attempt) {
+        Ok(value) => Ok(Some(value)),
+        // This conjunction is an evidence probe, not an authored allOf. A local
+        // empty merge supplies no counterexample and is not a schema error.
+        Err(e)
+            if matches!(
+                e.kind(),
+                FailureKind::UnsatisfiableMerge | FailureKind::UnsupportedNormalization
+            ) =>
+        {
+            Ok(None)
+        }
+        Err(e) => Err(e),
+    }
+}
+fn common_type_failure(
+    flow: &Value,
+    choices: &[Value],
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
+    let Value::Object(flow) = flow.view() else {
+        return Ok(false);
+    };
+    if finite(flow)
+        || get(flow, "anyOf").is_some()
+        || get(flow, "oneOf").is_some()
+        || get(flow, "allOf").is_some()
+        || outside(flow, depth, attempt)?
+    {
+        return Ok(false);
+    }
+    for ty in TYPES {
+        if !includes(flow, ty) || excluded_length(flow, ty, attempt)? {
+            continue;
+        }
+        let name = value::literal(ty, attempt)?;
+        let mut excluded = true;
+        for choice in choices {
+            let Value::Object(receiver) = choice.view() else {
+                excluded = false;
+                break;
+            };
+            if get(receiver, "oneOf").is_some()
+                || get(receiver, "allOf").is_some()
+                || covers(receiver, &name, attempt)?
+                || (ty == "number"
+                    && includes(receiver, "integer")
+                    && singleton_interval(flow, attempt)?)
+            {
+                excluded = false;
+                break;
+            }
+        }
+        if excluded {
+            return Ok(true);
         }
     }
-    None
+    Ok(false)
 }
 fn unions(
     direction: Direction,
@@ -678,73 +1083,117 @@ fn unions(
     depth: usize,
     attempt: &mut Attempt<'_>,
 ) -> Result<Comparison, Failure> {
-    let (tu, cu) = (union(t), union(c));
-    let (Some((tk, tv)), Some((ck, cv))) = (tu, cu) else {
-        if let Some((key, _)) = tu.or(cu) {
-            return reject(
-                &report!(
-                    attempt,
-                    "{key}: only one side is a union; no cross-form rule"
-                ),
-                attempt,
-            );
-        }
-        return Ok(Comparison::compatible());
-    };
     let input = direction == Direction::Input;
-    let (flow, choices, key, side, other) = if input {
-        (tv, cv, tk, "target", "candidate")
+    let (flow, accepts, side, other) = if input {
+        (t, c, "target", "candidate")
     } else {
-        (cv, tv, ck, "candidate", "target")
+        (c, t, "candidate", "target")
     };
-    let mut indeterminate = None;
-    for (index, variant) in flow.iter().enumerate() {
-        attempt.work(1)?;
-        let mut uncertain = None;
-        let mut found = false;
-        for choice in choices {
-            let result = if input {
-                walk(direction, variant, choice, depth + 1, attempt)?
-            } else {
-                walk(direction, choice, variant, depth + 1, attempt)?
-            };
-            match result.verdict {
-                Verdict::Compatible => {
-                    found = true;
-                    break;
-                }
-                Verdict::Indeterminate => {
-                    if uncertain.is_none() {
-                        uncertain = Some(result)
-                    }
-                }
-                Verdict::Incompatible => {}
-            }
-        }
-        if !found {
-            if let Some(result) = uncertain {
-                if indeterminate.is_none() {
-                    indeterminate = Some(nested(
-                        &report!(attempt, "{key}: {side} variant {index}"),
-                        result,
-                        attempt,
-                    )?);
-                }
-                continue;
-            }
-            return answer(
-                Verdict::Incompatible,
-                report!(
+    let flow_whole = Value::Object(copy_map(flow, depth, attempt)?);
+    let receiver_whole = Value::Object(copy_map(accepts, depth, attempt)?);
+    let variants = union(flow).unwrap_or_else(|| std::slice::from_ref(&flow_whole));
+    let choices = union(accepts).unwrap_or_else(|| std::slice::from_ref(&receiver_whole));
+    let flow_siblings = if union(flow).is_some() {
+        siblings(flow, depth, attempt)?
+    } else {
+        Value::Object(Object::new())
+    };
+    let mut result = Comparison::compatible();
+    if union(accepts).is_some() {
+        let receiving_siblings = siblings(accepts, depth, attempt)?;
+        if !matches!(&receiving_siblings,Value::Object(m) if m.is_empty()) {
+            let mut sibling_result = if input {
+                walk_position(
+                    direction,
+                    &flow_whole,
+                    &receiving_siblings,
+                    depth + 1,
+                    false,
                     attempt,
-                    "{key}: {side} variant {index} has no compatible {other} variant"
-                ),
-                attempt,
-            );
+                )?
+            } else {
+                walk_position(
+                    direction,
+                    &receiving_siblings,
+                    &flow_whole,
+                    depth + 1,
+                    false,
+                    attempt,
+                )?
+            };
+            if sibling_result.verdict != Verdict::Compatible {
+                let evidence = recurse(
+                    direction,
+                    &flow_whole,
+                    &receiving_siblings,
+                    depth + 1,
+                    attempt,
+                )?;
+                if evidence.verdict == Verdict::Incompatible {
+                    fold(&mut sibling_result, evidence);
+                }
+            }
+            fold(&mut result, sibling_result);
         }
     }
-    // Flow is universal: a definite failure dominates uncertainty. Retain
-    // the first authored index within the deciding class for diagnostics.
-    Ok(indeterminate.unwrap_or_else(Comparison::compatible))
+    for (index, variant) in variants.iter().enumerate() {
+        let mut covered = false;
+        for choice in choices {
+            attempt.work(1)?;
+            if recurse(direction, variant, choice, depth + 1, attempt)?.verdict
+                == Verdict::Compatible
+            {
+                covered = true;
+                break;
+            }
+        }
+        if covered {
+            continue;
+        }
+        let evidence = conjoined(variant, &flow_siblings, depth + 1, attempt)?;
+        let mut failed = false;
+        if let Some(evidence) = &evidence {
+            if choices.len() == 1 {
+                let comparison = recurse(direction, evidence, &choices[0], depth + 1, attempt)?;
+                if comparison.verdict == Verdict::Incompatible {
+                    failed = true;
+                }
+            } else if common_type_failure(evidence, choices, depth + 1, attempt)? {
+                failed = true;
+            }
+        }
+        let reason = report!(
+            attempt,
+            "anyOf: {side} variant {index} has no compatible {other} variant"
+        );
+        let comparison = if failed {
+            // Keep the profile's union prefix and real authored index.
+            answer(Verdict::Incompatible, reason, attempt)?
+        } else {
+            let comparison = answer(Verdict::Indeterminate, reason, attempt)?;
+            unresolved(
+                comparison,
+                "pairwise coverage does not establish inclusion or a common failure",
+                attempt,
+            )?
+        };
+        fold(&mut result, comparison);
+    }
+    Ok(result)
+}
+fn copy_map(map: &Object, depth: usize, attempt: &mut Attempt<'_>) -> Result<Object, Failure> {
+    let mut result = Object::new();
+    for (key, v) in map {
+        attempt.work(key.len().saturating_add(1))?;
+        attempt.allocate(key.len().saturating_mul(2))?;
+        value::insert(
+            &mut result,
+            key.clone(),
+            value::copy(v, depth + 1, attempt)?,
+            attempt,
+        )?;
+    }
+    Ok(result)
 }
 // Exact JSON diagnostics. Non-scalar UTF-16 units are escaped, never replaced.
 fn quote(name: &[u16], attempt: &mut Attempt<'_>) -> Result<String, Failure> {
@@ -777,6 +1226,7 @@ fn render(v: &Value, depth: usize, attempt: &mut Attempt<'_>) -> Result<String, 
     match v.view() {
         Value::Shared(_) => unreachable!("shared values contain an owned tree"),
         Value::Reference(authored, _) => return render(authored, depth + 1, attempt),
+        Value::Foreign(value) => return render(value, depth + 1, attempt),
         Value::Null => out.push_str("null"),
         Value::Boolean(b) => out.push_str(if *b { "true" } else { "false" }),
         Value::Number(n) => {

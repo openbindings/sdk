@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "description": "A receiving effective pattern remains opaque although the literal abc actually matches.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^a"
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "additionalProperties": false,
+          "properties": {
+            "p": {
+              "const": "abc"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

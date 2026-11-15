@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "Boolean true and an empty object schema impose the same additional-property constraint on output.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

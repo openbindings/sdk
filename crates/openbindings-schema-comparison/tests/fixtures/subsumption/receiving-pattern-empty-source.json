@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "description": "Empty string domain removes type failure; receiving outside-profile content still prevents compatible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 3
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer",
+          "pattern": "x"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

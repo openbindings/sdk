@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Input: a candidate allowing fewer types than the target (integer does not cover number; a missing type means all types) is breaking.",
+  "description": "Untyped finite flow against a type restriction is indeterminate; the independent ordinary type failures keep this group incompatible.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"

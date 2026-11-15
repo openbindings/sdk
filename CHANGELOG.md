@@ -39,6 +39,22 @@
   to 6.3 MiB and 1,000 records from 36 MiB to 2.1 MiB; on its own workloads the charge is 1.0 to 1.7 times a
   counting allocator's held bytes. Defaults and lane selection are unchanged.
 
+
+- Breaking: schema comparison follows the amended schema-comparison profile 0.1 (interfaces `eafa49a`).
+  Compatible is a proof of inclusion; where the profile cannot prove it, the answer is indeterminate. Incompatible
+  outranks indeterminate in every summary, and no property name or rule order decides a verdict. Objects compare
+  every member's effective schema in both directions; a non-identical `oneOf` position stops as indeterminate; rules
+  apply only to the types that can flow; finite values, unions, integer endpoints and empty length domains withhold
+  failures that are not counterexamples. `Comparison::finding()` tells an unresolved obligation from an
+  outside-profile boundary. Four of the 95 earlier corpus groups change summary; all 241 pass.
+- Breaking: normalization maps Boolean schemas at every schema position, strips annotations, `x-` members and
+  `$comment` inside retained content, canonicalizes `type` and `required` there, unwraps a single-branch `allOf`, and
+  keeps each value of an `enum` intersection once. A schema reached through an external URI keeps the dialect JSON
+  Schema assigns it.
+- The interfaces pin moves to `eafa49a`: an application keys a kept context value by the exact source entry, the
+  source-puller reference rule governs reuse as well as existing entries, and `ERR_REFUSED` may carry a reason whose
+  shape the source's kind defines. The guides say so.
+
 ### Added
 
 - `SchemaValidator::retained_bytes()`, defaulting to `None`, with `PreparedSchema::retained_bytes()` and

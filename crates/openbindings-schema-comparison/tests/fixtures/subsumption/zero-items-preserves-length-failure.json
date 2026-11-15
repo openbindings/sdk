@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "description": "Zero capacity skips item comparison, but the receiving positive minimum still refuses the empty array.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 0
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

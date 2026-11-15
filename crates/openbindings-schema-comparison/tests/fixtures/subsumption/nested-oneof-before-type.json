@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "description": "The non-identical nested oneOf stops its position before the sibling type rule.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": {
+            "a": 5
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "properties": {
+            "a": {
+              "type": "string",
+              "oneOf": [
+                {
+                  "minLength": 1
+                },
+                {
+                  "maxLength": 0
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

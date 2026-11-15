@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Output: a candidate variant no target variant covers decides incompatible, whether it is written before or after a variant the profile cannot decide.",
+  "description": "Every operation carries non-identical oneOf and is indeterminate.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -61,7 +61,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "incompatible"
+      "verdict": "indeterminate"
     }
   }
 }

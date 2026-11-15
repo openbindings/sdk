@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "description": "Boolean mapping precedes retention inside definitions, so false and its not-object spelling normalize alike.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "$defs": {
+            "d": false
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "$defs": {
+            "d": {
+              "not": {}
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

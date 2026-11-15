@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "description": "The empty string branch is covered by the length-domain proof, so union coverage succeeds.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 5,
+              "maxLength": 3
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "integer"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

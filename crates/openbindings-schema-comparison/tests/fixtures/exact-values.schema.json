@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbindings.com/interfaces/conformance/comparison/exact-values.schema.json",
+  "title": "Exact-value cases for the optional schema-comparison profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "scope", "profile", "profileVersion", "description", "cases"],
+  "properties": {
+    "formatVersion": {"const": "1.0.0"},
+    "scope": {"const": "comparison-profile"},
+    "profile": {"const": "OB-2020-12"},
+    "profileVersion": {"const": "0.1"},
+    "description": {"type": "string", "minLength": 1},
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "tokens": {"type": "array", "items": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?$"}},
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "rule", "mode", "direction", "leftJSON", "rightJSON", "expected", "numberTokens"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+        "rule": {"type": "string", "minLength": 1},
+        "mode": {"enum": ["subsume", "identical"]},
+        "direction": {"enum": ["input", "output"]},
+        "leftJSON": {"type": "string", "minLength": 1, "description": "Exact JSON text of the target OBI; never parse to binary64 and reserialize before the test."},
+        "rightJSON": {"type": "string", "minLength": 1, "description": "Exact JSON text of the candidate OBI."},
+        "expected": {
+          "oneOf": [
+            {"type": "object", "required": ["verdict"], "additionalProperties": false, "properties": {"verdict": {"enum": ["compatible", "incompatible", "indeterminate"]}}},
+            {"type": "object", "required": ["error"], "additionalProperties": false, "properties": {"error": {"const": "schema"}}}
+          ]
+        },
+        "numberTokens": {
+          "type": "object", "required": ["left", "right"], "additionalProperties": false,
+          "properties": {"left": {"$ref": "#/$defs/tokens"}, "right": {"$ref": "#/$defs/tokens"}, "witness": {"$ref": "#/$defs/tokens"}}
+        },
+        "witness": {
+          "type": "object", "required": ["instanceJSON", "targetValid", "candidateValid"], "additionalProperties": false,
+          "properties": {"instanceJSON": {"type": "string", "minLength": 1}, "targetValid": {"type": "boolean"}, "candidateValid": {"type": "boolean"}}
+        },
+        "reason": {"type": "string", "minLength": 1, "description": "Additional official Go/TS diagnostic alignment assertion; third parties need only the profile's deciding-keyword floor."},
+        "leftUnionConstOrder": {"$ref": "#/$defs/tokens"}
+      },
+      "dependentRequired": {"witness": ["numberTokens"]}
+    }
+  }
+}

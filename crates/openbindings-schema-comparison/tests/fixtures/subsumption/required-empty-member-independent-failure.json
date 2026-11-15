@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "description": "The independent b failure decides under the vacuity exception despite the known-empty required a member.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "required": [
+            "a"
+          ],
+          "properties": {
+            "a": {
+              "not": {}
+            },
+            "b": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string"
+            },
+            "b": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

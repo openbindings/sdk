@@ -333,6 +333,13 @@ impl Inventory {
     ) -> Result<(), Failure> {
         attempt.depth(depth)?;
         let scope = self.resources.enter(schema, scope, attempt)?;
+        if self
+            .resources
+            .foreign(schema, scope, depth, attempt)?
+            .is_some()
+        {
+            return Ok(());
+        }
         for (keyword, dynamic) in [("$ref", false), ("$dynamicRef", true)] {
             if let Some(reference) = schema.get(keyword) {
                 let text = reference.as_str().ok_or(FailureKind::InvalidReference)?;
@@ -346,7 +353,12 @@ impl Inventory {
         }
         // Paths distinguish reference occurrences at different schema positions.
         // Following a reference is transparent at its current position.
-        for keyword in ["properties", "dependentSchemas", "patternProperties"] {
+        for keyword in [
+            "properties",
+            "dependentSchemas",
+            "patternProperties",
+            "$defs",
+        ] {
             if let Some(properties) = schema.get(keyword).and_then(|v| v.members()) {
                 for property in properties {
                     let mut child =

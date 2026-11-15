@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "description": "The enum value 3 is refused by both counterparts, but unrelated pairwise failures do not establish a union rejection.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "anyOf": [
+            {
+              "enum": [
+                1,
+                2,
+                3
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "anyOf": [
+            {
+              "const": 1
+            },
+            {
+              "const": 2
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

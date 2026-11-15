@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "description": "Conjoining the flowing minimum with its union branch leaves an eligible lower-bound failure witnessed by 3.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "minimum": 3,
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer",
+          "minimum": 5
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

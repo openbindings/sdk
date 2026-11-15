@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "description": "The same independent member failure decides after renaming; names do not choose the verdict.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "b": {
+              "pattern": "x"
+            },
+            "a": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "b": {
+              "pattern": "y"
+            },
+            "a": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

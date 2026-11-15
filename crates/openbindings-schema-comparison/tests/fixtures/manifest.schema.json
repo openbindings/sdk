@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openbindings.com/interfaces/conformance/comparison/manifest.schema.json",
+  "title": "Schema-Comparison Conformance Manifest",
+  "description": "JSON Schema describing the comparison corpus manifest: the index of fixture files with their mode, direction, and expected verdict. Harnesses iterate the manifest, never the directory.",
+  "type": "object",
+  "required": ["conventionVersion", "profile", "exactValues", "files"],
+  "additionalProperties": false,
+  "properties": {
+    "exactValues": {"const": "exact-values.json", "description": "Additional JSON-text carriage cases for the same profile; required, not a second profile or an optional pass."},
+    "conventionVersion": {
+      "const": "1.0",
+      "description": "Fixture-format version. Every fixture file's 'version' field carries the same value."
+    },
+    "profile": {
+      "const": "OB-2020-12",
+      "description": "The comparison profile the corpus is authored against (the schema-comparison profile's identifier)."
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["path", "mode", "direction", "verdict", "findings"],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(profile|structural|subsumption|suppression)/[a-z0-9]+(-[a-z0-9]+)*\\.json$",
+            "description": "Fixture file path relative to the comparison corpus root, in one of the four categories: profile/ (the profile boundary: fail-closed keywords, annotations, extensions, boolean false), structural/ (normalization equivalence and document-level structure: pairing, removal, verdict collapse), subsumption/ (directional input/output rules), suppression/ (situations where the profile deliberately reports no finding)."
+          },
+          "mode": {
+            "enum": ["subsume", "identical"],
+            "description": "Comparison mode; must equal the fixture file's mode."
+          },
+          "direction": {
+            "enum": ["input", "output"],
+            "description": "Which operation schema slot the fixture compares."
+          },
+          "verdict": {
+            "enum": ["compatible", "incompatible", "indeterminate"],
+            "description": "The collapsed summary verdict; must equal the fixture's expected.summary.verdict."
+          },
+          "findings": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "operation-removed",
+                "top",
+                "type",
+                "const",
+                "enum",
+                "required",
+                "properties",
+                "additionalProperties",
+                "items",
+                "union",
+                "identity",
+                "unspecified",
+                "numeric-bounds",
+                "length-bounds",
+                "outside-profile"
+              ]
+            },
+            "description": "Informative labels for the deciding rule families behind a non-compatible verdict (empty for compatible fixtures). Harnesses assert verdicts, not findings; the labels exist for corpus navigation and coverage accounting."
+          }
+        }
+      }
+    }
+  }
+}

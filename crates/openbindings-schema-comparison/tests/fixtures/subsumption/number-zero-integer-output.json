@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "The zero-only output number interval leaves number-to-integer inclusion unresolved.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

@@ -85,7 +85,7 @@ complete dependencies.
 `openbindings-schema-comparison` implements the adopted profile's normalized
 identity, directional input/output comparison and interface-level checking with
 explicit required/provided roles. Each side retains its original reference
-context. Indeterminate dominates incompatible when verdicts collapse; comparison
+context. Incompatible dominates indeterminate when verdicts collapse; comparison
 failures stay separate from verdicts and remain available per operation. Identity
 is a structural claim rather than general schema equivalence. Existing-binding drift uses the kind's would-write comparison under the
 pinned source-puller rules: a difference only in annotations the identity profile

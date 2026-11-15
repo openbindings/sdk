@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "description": "Separate receiving integer constants cover the flowing enum collectively, but no single counterpart covers its whole branch.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "enum": [
+                1,
+                2
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "const": 1
+            },
+            {
+              "type": "integer",
+              "const": 2
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

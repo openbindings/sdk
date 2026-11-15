@@ -61,6 +61,7 @@ pub(crate) fn stripped(name: &[u16]) -> bool {
             "readOnly",
             "writeOnly",
             "$schema",
+            "$comment",
             "format",
             "discriminator",
         ]
@@ -101,6 +102,10 @@ fn keep_defs_scratch(schema: JsonRef<'_>, attempt: &mut Attempt<'_>) -> Result<b
     let mut pending = attempt.vector(1)?;
     pending.push(schema.to_owned());
     while let Some(schema) = pending.pop() {
+        attempt.work(1)?;
+        if schema.view().as_bool() == Some(false) {
+            return Ok(true);
+        }
         if let Some(members) = schema.view().members() {
             for member in members {
                 let key = value::name(member.name, attempt)?;
@@ -320,7 +325,15 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         depth: usize,
         attempt: &mut Attempt<'_>,
     ) -> Result<Value, Failure> {
-        if is(key, "dependentSchemas") || is(key, "patternProperties") || is(key, "properties") {
+        if [
+            "dependentSchemas",
+            "patternProperties",
+            "properties",
+            "$defs",
+        ]
+        .iter()
+        .any(|s| is(key, s))
+        {
             let mut object = Object::new();
             for member in raw.members().ok_or(FailureKind::InvalidSchema)? {
                 let name = value::name(member.name, attempt)?;
@@ -344,7 +357,11 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             for child in elements {
                 children.push(self.child(child, scope, depth + 1, (key, None), true, attempt)?);
             }
-            Ok(Value::Array(children))
+            Ok(if is(key, "oneOf") || is(key, "anyOf") {
+                Value::Union(children)
+            } else {
+                Value::Array(children)
+            })
         } else {
             self.child(raw, scope, depth, (key, None), true, attempt)
         }
@@ -383,13 +400,23 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         depth: usize,
         attempt: &mut Attempt<'_>,
     ) -> Result<Value, Failure> {
-        if schema.as_bool().is_some() {
-            return value::import(schema, depth, attempt);
+        if let Some(foreign) = self.resources.foreign(schema, scope, depth, attempt)? {
+            return Ok(foreign);
+        }
+        if let Some(boolean) = schema.as_bool() {
+            return boolean_schema(boolean, attempt);
         }
         let mut object = Object::new();
         for member in schema.members().ok_or(FailureKind::InvalidSchema)? {
             let key = value::name(member.name, attempt)?;
-            let child = if is(&key, "$ref") || is(&key, "$dynamicRef") {
+            if stripped(&key) {
+                continue;
+            }
+            let child = if is(&key, "type") {
+                strings(member.value, true, attempt)?
+            } else if is(&key, "required") {
+                strings(member.value, false, attempt)?
+            } else if is(&key, "$ref") || is(&key, "$dynamicRef") {
                 if self.keep_reference(schema, scope, is(&key, "$dynamicRef"), attempt)? {
                     value::import(member.value, depth + 1, attempt)?
                 } else {
@@ -398,6 +425,7 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
             } else if retained_applicator(&key)
                 || [
                     "properties",
+                    "$defs",
                     "items",
                     "additionalProperties",
                     "allOf",
@@ -422,13 +450,11 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
         depth: usize,
         attempt: &mut Attempt<'_>,
     ) -> Result<Value, Failure> {
+        if let Some(foreign) = self.resources.foreign(schema, scope, depth, attempt)? {
+            return Ok(foreign);
+        }
         if let Some(boolean) = schema.as_bool() {
-            let mut object = Object::new();
-            if !boolean {
-                let key = value::literal("not", attempt)?;
-                value::insert(&mut object, key, Value::Object(Object::new()), attempt)?;
-            }
-            return Ok(Value::Object(object));
+            return boolean_schema(boolean, attempt);
         }
         let members = schema.members().ok_or(FailureKind::InvalidSchema)?;
         let mut raw = BTreeMap::new();
@@ -477,12 +503,10 @@ impl<const REFERENCES: bool> Engine<'_, REFERENCES> {
                     value::insert(&mut properties, name, child, attempt)?;
                 }
                 Value::Object(properties)
-            } else if is(&key, "items")
-                || (is(&key, "additionalProperties") && raw.kind() == JsonKind::Object)
-            {
+            } else if is(&key, "items") || is(&key, "additionalProperties") {
                 self.child(raw, scope, depth + 1, (&key, None), false, attempt)?
-            } else if is(&key, "additionalProperties") {
-                Value::Boolean(raw.as_bool().ok_or(FailureKind::InvalidSchema)?)
+            } else if is(&key, "$defs") {
+                self.retained_keyword(&key, raw, scope, depth + 1, attempt)?
             } else if is(&key, "allOf") || is(&key, "oneOf") || is(&key, "anyOf") {
                 let elements = raw.elements().ok_or(FailureKind::InvalidSchema)?;
                 if elements.len() == 0 {
@@ -593,4 +617,64 @@ fn strings(raw: JsonRef<'_>, types: bool, attempt: &mut Attempt<'_>) -> Result<V
         result.push(Value::String(name));
     }
     Ok(Value::Array(result))
+}
+
+fn boolean_schema(boolean: bool, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
+    let mut object = Object::new();
+    if !boolean {
+        let key = value::literal("not", attempt)?;
+        value::insert(&mut object, key, Value::Object(Object::new()), attempt)?;
+    }
+    Ok(Value::Object(object))
+}
+
+// Definitions are identity context. These equivalences apply directionally,
+// including recursively at effective members, without rewriting identity.
+pub(crate) fn top(value: &Value, depth: usize, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    attempt.depth(depth)?;
+    let Value::Object(map) = value.view() else {
+        return Ok(false);
+    };
+    for (key, value) in map {
+        if !top_keyword(key, value, depth, attempt)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+pub(crate) fn top_keyword(
+    key: &[u16],
+    value: &Value,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<bool, Failure> {
+    attempt.work(512)?;
+    if is(key, "$defs") {
+        return Ok(true);
+    }
+    if is(key, "type") {
+        let Value::Array(types) = value else {
+            return Ok(false);
+        };
+        return Ok(["array", "boolean", "null", "number", "object", "string"]
+            .iter()
+            .all(|name| {
+                types
+                    .iter()
+                    .any(|v| matches!(v,Value::String(s) if is(s,name)))
+            }));
+    }
+    if is(key, "properties") {
+        return Ok(matches!(value,Value::Object(m) if m.is_empty()));
+    }
+    if is(key, "required") {
+        return Ok(matches!(value,Value::Array(v) if v.is_empty()));
+    }
+    if is(key, "items") || is(key, "additionalProperties") {
+        return top(value, depth + 1, attempt);
+    }
+    Ok(false)
+}
+pub(crate) fn empty_member(value: &Value) -> bool {
+    matches!(value.view(), Value::Object(m) if m.keys().all(|k| is(k,"not") || is(k,"$defs")) && matches!(get_value(m,"not"),Some(Value::Object(n)) if n.is_empty()))
 }

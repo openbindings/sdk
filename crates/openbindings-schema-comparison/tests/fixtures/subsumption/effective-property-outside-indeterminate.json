@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "description": "A candidate-declared property must meet the target additional schema; an unsupported pattern makes the comparison indeterminate.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "additionalProperties": {
+            "pattern": "^a"
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "additionalProperties": false,
+          "properties": {
+            "p": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

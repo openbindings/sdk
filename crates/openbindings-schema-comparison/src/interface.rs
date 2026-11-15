@@ -76,9 +76,9 @@ pub enum InterfaceIssueKind {
     /// Realized: provided operation does not accept every required input.
     /// Consumed: provided input is not acceptable to the required operation.
     InputIncompatible,
-    /// Output comparison in the selected value-flow direction reached a differing outside-profile position.
+    /// Output comparison in the selected value-flow direction left inclusion unresolved.
     OutputIndeterminate,
-    /// Input comparison in the selected value-flow direction reached a differing outside-profile position.
+    /// Input comparison in the selected value-flow direction left inclusion unresolved.
     InputIndeterminate,
     /// Output normalization or comparison in the selected value-flow direction failed without a verdict.
     OutputFailure,

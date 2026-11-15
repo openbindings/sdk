@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "description": "Kept identity context prevents singleton unwrapping; the normalized structures differ.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "$id": "urn:example:kept-context",
+          "$defs": {
+            "x": {
+              "type": "string"
+            }
+          },
+          "allOf": [
+            {
+              "$dynamicRef": "#/$defs/x"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "$id": "urn:example:kept-context",
+          "$defs": {
+            "x": {
+              "type": "string"
+            }
+          },
+          "$dynamicRef": "#/$defs/x"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

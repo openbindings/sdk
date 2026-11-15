@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "description": "Incompatible dominates indeterminate across independent operations, in both sort orders.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "a": {
+        "input": {
+          "type": "string"
+        }
+      },
+      "z": {
+        "input": {
+          "pattern": "x"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "a": {
+        "input": {
+          "type": "integer"
+        }
+      },
+      "z": {
+        "input": {
+          "pattern": "y"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

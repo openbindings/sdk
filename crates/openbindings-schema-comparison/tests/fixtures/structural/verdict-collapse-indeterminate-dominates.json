@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Verdict collapse dominance: indeterminate > incompatible > compatible.",
+  "description": "Incompatible dominates indeterminate in the summary; the historical path is retained.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -41,7 +41,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "indeterminate"
+      "verdict": "incompatible"
     }
   }
 }

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Output: a candidate with variants the target does not cover \u2014 or a union candidate against a non-union target \u2014 is breaking.",
+  "description": "The anyOf branch has an eligible type failure against its sole counterpart; the oneOf operation remains indeterminate, and incompatible wins the summary.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"

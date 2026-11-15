@@ -2,7 +2,7 @@
 
 Exact context objects and `{message, schema}` challenges shared by the optional
 interface companions. This applies the [context document at the pinned interface
-revision](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/context/README.md).
+revision](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/context/README.md).
 
 ```rust
 use openbindings::JsonValue;
@@ -55,3 +55,8 @@ and depends only on the core's exact JSON API. It adds no OBI document fields.
 Borrow an admitted carrier's exact object with `value()`; use `value().clone()`
 when an owned object is needed. On interface carriers, `to_json` means bounded
 encoding, as on invocation errors and requests.
+
+Applications that keep context for reuse key each value by the exact source entry:
+source key, kind and exact data. Absent data differs from JSON null. If any of
+these changes, the changed entry starts with no kept context and the application
+acquires what the producer asks for again. Context never becomes source data.

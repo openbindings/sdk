@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "description": "Extension members are stripped at schema positions inside not, making the two schemas identical.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "not": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "not": {
+            "type": "string",
+            "x-note": "x"
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

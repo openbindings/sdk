@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "The source endpoint is present and differs from the exclusive receiving endpoint; the guard withholds the failure although 0 is a witness.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer",
+          "exclusiveMinimum": 1
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

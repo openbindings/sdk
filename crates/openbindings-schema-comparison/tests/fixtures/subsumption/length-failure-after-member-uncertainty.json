@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "description": "A string of length one decides the later bound failure independently of object members.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": [
+            "object",
+            "string"
+          ],
+          "properties": {
+            "a": {
+              "pattern": "x"
+            }
+          },
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": [
+            "object",
+            "string"
+          ],
+          "properties": {
+            "a": {
+              "pattern": "y"
+            }
+          },
+          "minLength": 5
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}
