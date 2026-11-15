@@ -115,7 +115,7 @@ pub enum KindError<E> {
     Cancelled,
     /// The response names a different kind from the request.
     KindMismatch,
-    /// A configured carrier handoff bound was reached.
+    /// A configured carrier handoff bound was reached. Formatting omits the label; match to read it.
     LimitExceeded(&'static str),
 }
 impl<E> KindError<E> {
@@ -138,10 +138,7 @@ impl<E> fmt::Debug for KindError<E> {
             Self::Provider(_) => f.write_str("KindError::Provider { .. }"),
             Self::Cancelled => f.write_str("KindError::Cancelled"),
             Self::KindMismatch => f.write_str("KindError::KindMismatch"),
-            Self::LimitExceeded(resource) => f
-                .debug_tuple("KindError::LimitExceeded")
-                .field(resource)
-                .finish(),
+            Self::LimitExceeded(_) => f.write_str("KindError::LimitExceeded { .. }"),
         }
     }
 }
@@ -153,10 +150,9 @@ impl<E: fmt::Display> fmt::Display for KindError<E> {
             }
             Self::Cancelled => f.write_str("the caller cancelled the request"),
             Self::KindMismatch => f.write_str("the response names a different kind"),
-            Self::LimitExceeded(resource) => write!(
-                f,
-                "the carrier exceeds the configured handoff limit {resource:?}"
-            ),
+            Self::LimitExceeded(_) => {
+                f.write_str("the carrier exceeds the configured handoff limit")
+            }
         }
     }
 }

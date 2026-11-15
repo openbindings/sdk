@@ -92,3 +92,21 @@ fn public_category_labels_are_never_formatted_and_conversion_has_no_location() {
         }
     }
 }
+
+#[test]
+fn public_handoff_limit_labels_remain_matchable_without_being_formatted() {
+    let error = openbindings_kind_description::KindError::<std::convert::Infallible>::LimitExceeded(
+        "PRIVATE_CALLER_LABEL",
+    );
+    assert!(matches!(
+        error,
+        openbindings_kind_description::KindError::LimitExceeded("PRIVATE_CALLER_LABEL")
+    ));
+    for diagnostic in [
+        format!("{error}"),
+        format!("{error:?}"),
+        format!("{error:#?}"),
+    ] {
+        assert!(!diagnostic.contains("PRIVATE_CALLER_LABEL"));
+    }
+}

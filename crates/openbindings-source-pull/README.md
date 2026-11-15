@@ -87,7 +87,10 @@ labels, including caller-constructed labels; inspect them through `kind()`.
 exact row, such as `/report/added/2`, including nested proposal and label checks.
 Conflicting report rows identify the later row. A missing coverage row or an
 addition with no corresponding report row has no pointer. `Display` omits
-locations. Failure mapping preserves both category and pointer.
+locations. `PullValidationError::source()` exposes the relationship cause, as it
+does edit and version errors. Failure mapping preserves both category and pointer.
+`RequestError::Shape` and `PullValidationError::LimitExceeded` also omit caller-built
+labels from formatting; match the variant to read its label.
 
 `PullResult::validate_for` also checks an already supplied result and returns the
 prospective conformant document. That establishes core conformance, not offered

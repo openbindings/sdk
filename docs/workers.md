@@ -239,7 +239,7 @@ reservations for preparation storage and evaluation work units for work.
 
 ## Memory exhaustion
 
-A Wasm runtime trap, including allocation failure, throws `SdkError` with code
+A trap from SDK Wasm execution, including allocation failure, throws `SdkError` with code
 `wasm-trap` and the fixed message `The OpenBindings WebAssembly instance trapped
 and can no longer be used.` The SDK marks this module instance unusable: every
 later SDK operation, including validation and preparation, fails immediately with

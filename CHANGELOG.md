@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-15 review repairs (unreleased)
+
+### Fixed
+
+- TypeScript `initialize()` stays retryable when the caller's input or the host's loading rejects with a
+  `WebAssembly.RuntimeError`. Only a trap raised while SDK Wasm runs marks the instance unusable.
+- `KindError::LimitExceeded` no longer prints its label in `Display` or `Debug`, and `RequestError::Shape`,
+  `PullValidationError::LimitExceeded` and `ComparisonFailureKind::LimitExceeded` no longer print theirs in `Debug`.
+  Each label stays reachable by matching.
+- `PullValidationError::source()` returns the `RelationshipError` for a relationship refusal.
+- The evaluator test-support runner compares explanations exactly, so two pointers that differ only in unpaired UTF-16
+  units are no longer judged equal.
+- TypeScript reports a malformed or inherited options object with the option's own `SdkError` code (for example
+  `invalid-preparation-limits`) where some routes threw `TypeError` `invalid-json-object`. What is accepted is
+  unchanged.
+- A TypeScript registration refusal for a limit reads `external schema registration exceeded a preparation limit`,
+  without naming a Rust type. The code stays `resource`.
+
+### Added
+
+- A regression that a provider's `ERR_REFUSED` reason, an explicit `null` reason and no reason each reach the caller
+  unchanged through checked binding and operation invocation and preflight.
+
 ## 2026-11-14 owner rulings (unreleased)
 
 ### Changed

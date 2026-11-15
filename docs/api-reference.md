@@ -53,7 +53,10 @@ nested disclosures and support indices relative to the admitted carrier; opaque
 context failures locate `/context`. Both role crates keep labels inspectable
 through `kind()` while omitting them from `Display` and `Debug`.
 
-`PullValidationError::Relationship` carries a `RelationshipError` struct.
+`PullValidationError::Relationship` carries a `RelationshipError` struct and
+exposes it through `Error::source()`. Caller-built labels in `KindError::LimitExceeded`,
+`RequestError::Shape`, `PullValidationError::LimitExceeded`, and
+`ComparisonFailureKind::LimitExceeded` remain matchable but are omitted from formatting.
 `kind()` returns a Copy, non-exhaustive `RelationshipErrorKind`; `pointer()` borrows
 an optional exact provider-report row such as `/report/existing/2`. Conflicting
 rows identify the later row. Missing coverage and additions with no report row
@@ -303,6 +306,9 @@ module instance becomes unusable. All later SDK operations fail immediately with
 that code; `initialize()` rejects and cannot replace it. Disposal remains safe
 and idempotent, skips Wasm after a trap, and finalizers never throw. The original
 runtime error is not attached as a cause. Resume work in a fresh module instance.
+A rejection from the caller's initialization promise, even a
+`WebAssembly.RuntimeError`, is a retryable `wasm-initialization` error with its
+cause retained.
 
 ## Schemas and value results
 

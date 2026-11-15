@@ -32,6 +32,7 @@ fn terminal(event: Option<OutputEvent>) -> InvocationError {
 }
 struct Provider<'a> {
     code: Option<&'a str>,
+    data: Option<JsonValue>,
     output: Arc<Mutex<Option<ProviderOutput>>>,
     hooks: Arc<std::sync::atomic::AtomicUsize>,
 }
@@ -39,6 +40,7 @@ impl<'a> Provider<'a> {
     fn new(code: Option<&'a str>) -> Self {
         Self {
             code,
+            data: None,
             output: Arc::default(),
             hooks: Arc::default(),
         }
@@ -63,7 +65,7 @@ impl BindingInvoker for Provider<'_> {
         let (_, output) = io.split();
         *self.output.lock().unwrap() = Some(output);
         ready(self.code.map_or(Ok(()), |code| {
-            Err(InvocationError::new(code, None).unwrap())
+            Err(InvocationError::new(code, self.data.clone()).unwrap())
         }))
     }
     fn handle_preflight<'a>(
@@ -78,7 +80,7 @@ impl BindingInvoker for Provider<'_> {
                     ContextChallenge::try_from(json(r#"{"message":"Context needed","schema":{}}"#))
                         .unwrap(),
                 )),
-                |code| Err(InvocationError::new(code, None).unwrap()),
+                |code| Err(InvocationError::new(code, self.data.clone()).unwrap()),
             ),
         )
     }
@@ -210,6 +212,60 @@ async fn independent_provider_output_after_settlement_reports_the_terminal() {
         "ERR_REFUSED"
     );
 }
+#[tokio::test]
+async fn refused_reason_data_is_preserved_through_checked_invoke_and_preflight() {
+    for data in [
+        Some(json(
+            r#"{"reason":"quota","remaining":9007199254740993,"detail":"\ud800"}"#,
+        )),
+        Some(json("null")),
+        None,
+    ] {
+        let mut provider = Provider::new(Some("ERR_REFUSED"));
+        provider.data = data.clone();
+        let operation = DefaultOperationInvoker::new(
+            &provider,
+            DefaultEvaluator::default(),
+            ExternalSchemas::default(),
+        );
+        let (_, mut binding_output) = provider.invoke(request(), cancel()).unwrap().split();
+        let (_, mut operation_output) = operation
+            .invoke(OperationRequest::binding(doc("{}"), "b"), cancel())
+            .unwrap()
+            .split();
+        for error in [
+            terminal(binding_output.next().await),
+            provider
+                .preflight(request(), cancel())
+                .unwrap()
+                .await
+                .unwrap_err(),
+            terminal(operation_output.next().await),
+            operation
+                .preflight(OperationRequest::binding(doc("{}"), "b"), cancel())
+                .unwrap()
+                .await
+                .unwrap_err(),
+        ] {
+            assert_eq!(error.code(), "ERR_REFUSED");
+            assert_eq!(
+                error.data().map(JsonValue::text),
+                data.as_ref().map(JsonValue::text)
+            );
+            assert_eq!(
+                error
+                    .to_json()
+                    .unwrap()
+                    .get("data")
+                    .map(|value| value.text().to_owned()),
+                data.as_ref().map(|value| value.text().to_owned())
+            );
+        }
+        assert!(binding_output.next().await.is_none());
+        assert!(operation_output.next().await.is_none());
+    }
+}
+
 #[tokio::test]
 async fn only_current_operation_owned_codes_are_reserved_at_provider_boundary() {
     for code in [

@@ -7,7 +7,9 @@ recursion and relative references to another supplied resource, plus a missing
 URI that must produce a `ResourceUnavailable` preparation refusal. An evaluator
 that refuses supplied roots cannot qualify.
 Every value is checked and explained. Failure explanations are also exercised
-under cancellation and as a value nested inside a larger exact input.
+under cancellation and as a value nested inside a larger exact input. These
+comparisons use exact outcome equality, preserving distinct unpaired UTF-16
+pointer units and literal U+FFFD.
 
 ```rust
 use openbindings::SchemaEvaluator;

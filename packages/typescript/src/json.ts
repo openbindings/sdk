@@ -46,20 +46,33 @@ function invalidLimits(message: string): never {
   throw new SdkError("invalid-json-limits", message);
 }
 
-// A plain object of enumerable data properties, or invalid-json-limits.
-function plainEntries(value: unknown, what: string): [string, unknown][] {
+/** Validate an options object's shape without reading its properties. @internal */
+export function optionsObject(
+  value: unknown,
+  code: string,
+  what: string = "Options",
+): asserts value is object {
   if (
     !value ||
     typeof value !== "object" ||
     Array.isArray(value) ||
     ![null, Object.prototype].includes(Object.getPrototypeOf(value))
   )
-    invalidLimits(`${what} must be a plain object.`);
+    throw new SdkError(code, `${what} must be a plain object.`);
+}
+
+/** Read plain option data with the caller's configuration error category. @internal */
+export function optionEntries(
+  value: unknown,
+  what: string,
+  code: string = "invalid-json-limits",
+): [string, unknown][] {
+  optionsObject(value, code, what);
   const entries: [string, unknown][] = [];
-  for (const key of Reflect.ownKeys(value as object)) {
+  for (const key of Reflect.ownKeys(value)) {
     const d = Object.getOwnPropertyDescriptor(value, key)!;
     if (typeof key === "symbol" || !d.enumerable || !("value" in d))
-      invalidLimits(`${what} must hold enumerable data properties.`);
+      throw new SdkError(code, `${what} must hold enumerable data properties.`);
     entries.push([key as string, d.value]);
   }
   return entries;
@@ -71,7 +84,7 @@ function admissionLimits(limits: unknown): Uint32Array | undefined {
   if (limits === undefined) return undefined;
   const [maxBytes, maxNodes, maxDepth] = jsonDefaults();
   const complete: Record<string, number> = { maxBytes, maxNodes, maxDepth };
-  for (const [key, value] of plainEntries(limits, "JSON limits")) {
+  for (const [key, value] of optionEntries(limits, "JSON limits")) {
     if (
       !Object.hasOwn(complete, key) ||
       typeof value !== "number" ||
@@ -96,7 +109,7 @@ function admissionLimits(limits: unknown): Uint32Array | undefined {
 /** @internal */
 export function limitsOption(options: unknown): Uint32Array | undefined {
   let limits: unknown;
-  for (const [key, value] of plainEntries(options, "Options")) {
+  for (const [key, value] of optionEntries(options, "Options")) {
     if (key !== "limits") invalidLimits("Unknown option; expected limits.");
     limits = value;
   }

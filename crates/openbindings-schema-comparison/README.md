@@ -88,7 +88,8 @@ merge involving multiple sources. Unknown ancestry leaves the origin absent;
 global allowance exhaustion and cancellation also have no operand side. Location
 storage is bounded by the attempt's allocation allowance, retained across slots,
 and limited to an 8 MiB exact pointer. A pointer exceeding that cap is omitted;
-an exhausted attempt allowance returns `LimitExceeded`. Debug and Display never
+an exhausted attempt allowance returns `LimitExceeded`. Its label remains available
+by matching, including caller-built labels, but is omitted from formatting. Debug and Display never
 include supplied values; inspect `origin()` explicitly for editor diagnostics.
 
 References resolve within their containing schema resource, including nested `$id`

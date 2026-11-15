@@ -35,7 +35,10 @@ test("resource staging stops at the first count or URI byte overflow", () => {
     const bytes = resourceFailure(
       () => new sdk.ExternalSchemas(tooManyBytes()),
     );
-    assert.match(bytes.message, /max_identity_bytes/);
+    assert.equal(
+      bytes.message,
+      "external schema registration exceeded a preparation limit",
+    );
     // add() calls Rust registration on the same prefix followed by this entry.
     assert.deepEqual(
       bytes,
@@ -46,7 +49,10 @@ test("resource staging stops at the first count or URI byte overflow", () => {
       throw new Error("iteration continued after the resource count limit");
     }
     const count = resourceFailure(() => new sdk.ExternalSchemas(tooMany()));
-    assert.match(count.message, /max_schema_nodes/);
+    assert.equal(
+      count.message,
+      "external schema registration exceeded a preparation limit",
+    );
     new sdk.ExternalSchemas([["urn:healthy", schema]]).dispose();
   } finally {
     prefix.dispose();

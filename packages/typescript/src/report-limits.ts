@@ -1,6 +1,6 @@
 /** Shared checks for caller-selected report retention. */
 import { SdkError } from "./diagnostics.js";
-import { ownEntries } from "./json.js";
+import { optionEntries } from "./json.js";
 
 /** @internal */
 export function reportLimits<T extends object>(
@@ -10,9 +10,7 @@ export function reportLimits<T extends object>(
 ): T {
   const complete = { ...defaults };
   if (overrides === undefined) return complete;
-  if (!overrides || typeof overrides !== "object" || Array.isArray(overrides))
-    throw new SdkError(code, "Report limits must be an object.");
-  for (const [key, value] of ownEntries(overrides)) {
+  for (const [key, value] of optionEntries(overrides, "Report limits", code)) {
     if (
       !Object.hasOwn(complete, key) ||
       typeof value !== "number" ||

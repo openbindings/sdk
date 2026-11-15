@@ -193,6 +193,21 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
 }
 #[test]
 fn public_diagnostic_formatting_does_not_disclose_report_data() {
+    let kind = ComparisonFailureKind::LimitExceeded("PRIVATE_CALLER_LABEL");
+    assert!(matches!(
+        kind,
+        ComparisonFailureKind::LimitExceeded("PRIVATE_CALLER_LABEL")
+    ));
+    let failure = openbindings_schema_comparison::ComparisonFailure::from(kind);
+    assert_eq!(failure.kind(), kind);
+    for diagnostic in [
+        format!("{kind:?}"),
+        format!("{kind:#?}"),
+        format!("{failure}"),
+        format!("{failure:?}"),
+    ] {
+        assert!(!diagnostic.contains("PRIVATE_CALLER_LABEL"));
+    }
     let required =
         doc(r#"{"openbindings":"0.2.0","operations":{"sentinel":{"input":{"const":"sentinel"}}}}"#);
     let provided =

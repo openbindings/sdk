@@ -206,9 +206,10 @@ request context. [The workerd example](examples/workerd-service.mjs) shows this.
 Initialization is shared across concurrent calls. Loading and entropy failures
 reject with `SdkError`, as does a WebAssembly module that is not this package's,
 which is refused before it is instantiated; retry after correcting the host
-condition.
+condition. A rejected caller input promise, including a `WebAssembly.RuntimeError`,
+is a retryable `wasm-initialization` failure with its cause retained.
 
-A `WebAssembly.RuntimeError`, including an allocation trap, becomes `SdkError`
+A `WebAssembly.RuntimeError` from SDK Wasm execution, including an allocation trap, becomes `SdkError`
 with code `wasm-trap` and fixed text: `The OpenBindings WebAssembly instance
 trapped and can no longer be used.` Every later SDK operation immediately fails
 with that code. `initialize()` cannot replace the trapped instance. Disposal is
@@ -304,6 +305,10 @@ Past the depth cap, `validateDocument` is undetermined with `depth-limit`;
 raise `maxDepth` to validate deeper documents. Validation memory
 grows with the document, so raise them only where the process has the memory.
 Malformed limits or options throw `SdkError` with code `invalid-json-limits`.
+Other validated core options and budgets likewise use their own `invalid-*-options`
+or `invalid-*-limits` category for malformed objects, including inherited options.
+Use plain objects or objects with a null prototype. Registration limit refusals
+use fixed TypeScript-facing text and retain code `resource`.
 A document keeps the limits it was parsed with (`limits`): its edits
 apply them to the edited document, as Rust's do, whatever route writes
 the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body

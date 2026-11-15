@@ -340,7 +340,7 @@ pub fn run<E: SchemaEvaluator + ?Sized>(evaluator: &E) -> Report {
                 let wrapper = JsonValue::parse(format!("{{\"value\":{}}}", case.value))
                     .expect("packaged instance JSON");
                 let nested = contract.explain(&wrapper.get("value").expect("wrapped").to_owned());
-                if serde_json::to_string(&nested).ok() != serde_json::to_string(&explanation).ok() {
+                if nested != explanation {
                     failures
                         .push("an explanation of the value within a larger text differs".into());
                 }
@@ -459,7 +459,8 @@ fn interrupted<V: SchemaValidator>(
 /// makes. Before its verdict an evaluator may answer no verdict. An interrupted
 /// explanation never reaches another verdict; once one answers fails, every
 /// later one does, since cutting detail work short never undoes an established
-/// failure; and the last reproduces the uninterrupted explanation.
+/// failure; and the last reproduces the uninterrupted explanation exactly,
+/// including each pointer's unpaired UTF-16 units.
 pub fn judge_interruptions(
     explanation: &ValueOutcome,
     interrupted: &[(usize, ValueOutcome)],
@@ -477,16 +478,9 @@ pub fn judge_interruptions(
             _ => failures.push("an interrupted explanation reached another verdict".to_owned()),
         }
     }
-    // Outcomes compare by their serialized text, which carries every field,
-    // including pointers through names with unpaired units.
-    let same = |a: &ValueOutcome, b: &ValueOutcome| {
-        serde_json::to_string(a)
-            .ok()
-            .is_some_and(|a| serde_json::to_string(b).ok() == Some(a))
-    };
     if interrupted
         .last()
-        .is_some_and(|(_, last)| !same(last, explanation))
+        .is_some_and(|(_, last)| last != explanation)
     {
         failures.push("an explanation allowed every observation differs from the first".into());
     }

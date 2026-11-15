@@ -65,10 +65,15 @@ for (const { field, value, code } of fixture.cases) {
         () =>
           f.resources.with("urn:extra", f.value, { limits: preparationLimits }),
       ])
-        assert.throws(
-          register,
-          (error) => error instanceof sdk.SdkError && error.code === "resource",
-        );
+        assert.throws(register, (error) => {
+          assert.ok(error instanceof sdk.SdkError);
+          assert.equal(error.code, "resource");
+          assert.equal(
+            error.message,
+            "external schema registration exceeded a preparation limit",
+          );
+          return true;
+        });
       const retry = f.schema.prepare();
       assert.equal(retry.status, "ready");
       try {
