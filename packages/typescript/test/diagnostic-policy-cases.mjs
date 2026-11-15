@@ -127,10 +127,10 @@ export function diagnosticPolicyCases(sdk) {
       "missing operation is a selection outcome",
     );
     check(
-      own(proof.resolveOperation("empty")).input() === undefined,
+      proof.inputSchema("empty") === undefined,
       "absent input declares no contract",
     );
-    const declared = own(own(proof.resolveOperation("op")).input());
+    const declared = own(proof.inputSchema("op"));
     const prepared = declared.prepare();
     check(
       prepared.status === "ready",

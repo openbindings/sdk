@@ -231,7 +231,19 @@ console.log("Installed README discovery block compiled and ran verbatim with sim
   assert(!readdirSync(join(installed, "dist")).includes("internal.js"));
   assert.doesNotMatch(declaration, /interpretationCode/);
   assert.match(declaration, /readonly inputPointer: string \| null/);
-  assert.match(declaration, /export declare class Operation\b/);
+  for (const name of [
+    "Operation",
+    "Binding",
+    "Source",
+    "Dependency",
+    "Example",
+  ]) {
+    assert.match(declaration, new RegExp(`export interface ${name}\\b`));
+    assert.doesNotMatch(
+      declaration,
+      new RegExp(`export declare class ${name}\\b`),
+    );
+  }
   writeFileSync(
     join(temporary, "consumer.mjs"),
     `
@@ -248,6 +260,8 @@ import { diagnosticBudgetCases } from "./diagnostic-budget-cases.mjs";
 import { diagnosticDetailsCases } from "./diagnostic-details-cases.mjs";
 import { inspectEditExampleCases } from "./inspect-edit-example-cases.mjs";
 import * as inspectionEditing from "./readme-build/inspect-edit.js";
+for (const name of ["Operation", "Binding", "Source", "Dependency", "Example"])
+  assert(!Object.hasOwn(sdk, name), "Entry types have no runtime constructors");
 assert(!Object.hasOwn(sdk, "liveStorageOwners"));
 assert(!Object.hasOwn(http, "liveStorageOwners"));
 assert.deepEqual(Object.keys(testing), ["liveStorageOwners"]);

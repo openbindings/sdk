@@ -182,10 +182,17 @@ rule evidence intact.
 
 ## Canonical entries
 
-`Operation`, `Source`, `Binding`, `Dependency` and `Example` retain their exact
-original declaration and the conformant document that proves it. They are read
-owners, not detached authoring structures. Rust clones and TypeScript `retain()`
-share immutable storage; dropping a parent does not invalidate its acquired children.
+Rust `Operation`, `Source`, `Binding`, `Dependency` and `Example` retain their
+exact original declaration and the conformant document that proves it. Rust clones
+share immutable storage; dropping a parent does not invalidate acquired children.
+
+In TypeScript these names are readonly record types. Every canonical entry read
+returns fresh, detached, runtime-frozen records containing only declared scalar
+fields and frozen string arrays. They have no methods, handle, document reference,
+cache or lazy fields, remain readable after proof disposal and need no disposal.
+Navigation and exact payload queries use a live `ConformantDocument` and primary keys.
+Reusing a key with another proof selects that proof's revision; records confer no
+authority to query a disposed proof.
 
 | Read | Meaning |
 | --- | --- |
@@ -194,12 +201,84 @@ share immutable storage; dropping a parent does not invalidate its acquired chil
 | `resolve_operation(name)` / `resolveOperation(name)` | Primary key or declared alias in the proved shared namespace. |
 | `bindings()`, `sources()`, `dependencies()` | Optional canonical collections in lexical key order. Absence differs from present-empty. |
 | `binding(key)`, `source(key)`, `dependency(key)` | Exact namespace lookup. |
-| `schemas()`, `schema(key)` | Contextual named schemas; reading performs no preparation. |
-| `Operation::input`, `output` | Optional contextual `Schema`; absent never means a fabricated true schema. |
-| `Operation::bindings` | Associated canonical bindings in lexical order, without preference ranking or selection. |
-| `Binding::operation`, `source`; `Dependency::operation` | The referenced canonical entry from the same immutable proof snapshot. Separate key getters expose the declared primary keys. |
-| `Operation::examples`, `example(key)` | Canonical examples with operation-local keys. Reading does not validate an example instance. |
-| Source/binding `data`; example `input`, `output` | Optional exact JSON owners. Absence differs from explicit null, and wide numbers retain their tokens. |
+| `schemas()`, `schema(key)` | Contextual named schema owners; reading performs no preparation. |
+| Rust `Operation::input`, `output`; TypeScript `proof.inputSchema(key)`, `outputSchema(key)` | Optional contextual `Schema`; missing operations and absent fields yield `undefined` in TypeScript; false stays a schema. |
+| Rust `Operation::bindings`; TypeScript `proof.operationBindings(key)` | Bindings in lexical order, without preference ranking. TypeScript returns `undefined` for a missing operation, an empty array for no bindings. |
+| Rust `Binding::operation`, `source`; `Dependency::operation` | The related entry from the same snapshot. TypeScript uses `proof.operation(record.operationKey)` and `proof.source(binding.sourceKey)`. |
+| Rust `Operation::examples`, `example`; TypeScript `proof.examples(operationKey)`, `example(operationKey, exampleKey)` | Examples with operation-local keys, without instance validation. Missing entries or absent examples yield `undefined`; a declared empty collection stays empty. |
+| Rust source/binding `data`, example `input`/`output`; TypeScript `sourceData`, `bindingData`, `exampleInput`/`exampleOutput` on the proof | Optional exact JSON owners. Missing entries or absent fields yield `undefined`; explicit null and wide number tokens remain exact values. |
+| Rust entry `value`; TypeScript `operationValue`, `bindingValue`, `sourceValue`, `dependencyValue`, `exampleValue` on the proof | Exact original declarations including extension fields. TypeScript returns `undefined` for missing entries. |
+
+The TypeScript record declarations are:
+
+```ts
+export interface Operation {
+  readonly key: string;
+  readonly description?: string;
+  readonly deprecated?: boolean;
+  readonly aliases?: readonly string[];
+  readonly tags?: readonly string[];
+}
+export interface Binding {
+  readonly key: string;
+  readonly description?: string;
+  readonly operationKey: string;
+  readonly sourceKey: string;
+  readonly preference?: number;
+  readonly idempotent?: boolean;
+  readonly deprecated?: boolean;
+}
+export interface Source {
+  readonly key: string;
+  readonly description?: string;
+  readonly kind: string;
+}
+export interface Dependency {
+  readonly key: string;
+  readonly description?: string;
+  readonly operationKey: string;
+  readonly kinds?: readonly string[];
+}
+export interface Example {
+  readonly key: string;
+  readonly description?: string;
+}
+export declare function acceptsKind(dependency: Dependency, kind: string): boolean;
+```
+
+`acceptsKind` is pure and needs neither initialization nor a live proof. An absent
+filter accepts any string, including an unpaired UTF-16 unit; a present filter uses
+exact string equality. Non-string kinds throw `TypeError`.
+
+The emitted `ConformantDocument` class includes these signatures. Every key is
+primary except the argument to `resolveOperation`; example keys are local to the
+named operation. All queries require a live proof and reject invalid scalar strings.
+
+```ts
+operations(): readonly Operation[];
+operation(key: string): Operation | undefined;
+resolveOperation(name: string): Operation | undefined;
+bindings(): readonly Binding[] | undefined;
+binding(key: string): Binding | undefined;
+sources(): readonly Source[] | undefined;
+source(key: string): Source | undefined;
+dependencies(): readonly Dependency[] | undefined;
+dependency(key: string): Dependency | undefined;
+operationBindings(operationKey: string): readonly Binding[] | undefined;
+examples(operationKey: string): readonly Example[] | undefined;
+example(operationKey: string, exampleKey: string): Example | undefined;
+inputSchema(operationKey: string): Schema | undefined;
+outputSchema(operationKey: string): Schema | undefined;
+operationValue(key: string): ExactJson | undefined;
+bindingValue(key: string): ExactJson | undefined;
+sourceValue(key: string): ExactJson | undefined;
+dependencyValue(key: string): ExactJson | undefined;
+exampleValue(operationKey: string, exampleKey: string): ExactJson | undefined;
+sourceData(key: string): ExactJson | undefined;
+bindingData(key: string): ExactJson | undefined;
+exampleInput(operationKey: string, exampleKey: string): ExactJson | undefined;
+exampleOutput(operationKey: string, exampleKey: string): ExactJson | undefined;
+```
 
 Optional scalar fields remain optional: `None` in Rust, `undefined` in TypeScript.
 Absent boolean flags do not become false. Declared preference is an optional
@@ -210,11 +289,12 @@ OBI-01 proves scalar strings throughout a conformant document. Unpaired UTF-16
 remains representable in raw JSON, findings and external instances, not in a proof
 that would violate that rule.
 
-TypeScript collection methods acquire a fresh owner for every returned entry.
-Dispose each element, including every schema-map value. Scalar getters acquire no
-owner. `value()` and `document()` do acquire owners. Exact traversal cursors and each
-yielded member/value also have independent lifetimes. Finalizers are best effort;
-disposal is not a promise that process RSS or Wasm capacity shrinks.
+TypeScript documents, proofs, schemas, exact JSON, resource sets and prepared schemas
+remain independently disposable owners. Dispose each schema-map value and each exact
+traversal cursor and yielded member/value. A forgotten `Schema` or `ExactJson` from
+a document keeps its whole document in Wasm memory even after proof disposal, until
+disposed or finalized. Entry records retain no Wasm storage. Finalizers are best
+effort; disposal does not promise that process RSS or Wasm capacity shrinks.
 
 TypeScript catches `WebAssembly.RuntimeError` at its Wasm boundary, including
 allocation traps, and throws `SdkError` with code `wasm-trap` and fixed text:

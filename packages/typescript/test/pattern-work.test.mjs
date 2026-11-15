@@ -15,7 +15,7 @@ test("a pattern charge above 2^32 needs a caller-selected work cap", () => {
   ).value;
   const proof = document.validate().document;
   const operation = proof.operation("op");
-  const schema = operation.input();
+  const schema = proof.inputSchema(operation.key);
   // Fail the anchored pattern at its first byte. Its length-times-program
   // charge exceeds 2^32 while the real search finishes immediately.
   const value = "b" + "a".repeat(20_000);
@@ -40,7 +40,6 @@ test("a pattern charge above 2^32 needs a caller-selected work cap", () => {
     }
   } finally {
     schema.dispose();
-    operation.dispose();
     proof.dispose();
     document.dispose();
   }
@@ -55,12 +54,11 @@ function usingSchema(pattern, body) {
   ).value;
   const proof = document.validate().document;
   const operation = proof.operation("op");
-  const schema = operation.input();
+  const schema = proof.inputSchema(operation.key);
   try {
     body(schema);
   } finally {
     schema.dispose();
-    operation.dispose();
     proof.dispose();
     document.dispose();
   }

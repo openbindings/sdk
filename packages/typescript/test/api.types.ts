@@ -55,8 +55,10 @@ async function caller(
     const proof = document.validate();
     if (proof.status !== "conformant") return undefined;
     using validated = proof.document;
-    using operation = validated.resolveOperation("run");
-    using contract = operation?.input();
+    const operation = validated.resolveOperation("run");
+    using contract = operation
+      ? validated.inputSchema(operation.key)
+      : undefined;
     if (!contract) return undefined;
     const prepared = contract.prepare({
       resources,
@@ -225,11 +227,12 @@ void outcomeDiscriminant;
 // Check actual emitted declarations.
 import {
   ExactMember,
-  Operation,
-  Binding,
-  Source,
-  Dependency,
-  Example,
+  type Operation,
+  type Binding,
+  type Source,
+  type Dependency,
+  type Example,
+  acceptsKind,
   type JsonInput,
   type ExactIterator,
 } from "../dist/index.js";
@@ -251,27 +254,33 @@ function roundOneTypes(proof: ConformantDocument) {
   }
   using elements = root.elements();
   if (elements) for (using element of elements) element.text satisfies string;
-  for (using metadata of proof.operations()) {
+  for (const metadata of proof.operations()) {
     metadata.tags satisfies readonly string[] | undefined;
     metadata.deprecated satisfies boolean | undefined;
     // @ts-expect-error Immutable metadata is not editable input data.
     metadata.tags?.push("x");
   }
-  using source = proof.source("a");
-  using binding = proof.binding("b");
-  using dependency = proof.dependency("d");
+  const source = proof.source("a");
+  const binding = proof.binding("b");
+  const dependency = proof.dependency("d");
   if (source) {
     source.kind satisfies string;
-    using content = source.data();
+    using content = proof.sourceData(source.key);
   }
   if (binding) {
     binding.preference satisfies number | undefined;
-    using retained = binding.retain();
+    const copied: Binding = { ...binding };
+    copied.sourceKey satisfies string;
   }
   if (dependency) dependency.kinds satisfies readonly string[] | undefined;
-  using operation = proof.resolveOperation("run");
-  using example = operation?.example("example");
-  using exampleInput = example?.input();
+  const operation = proof.resolveOperation("run");
+  const example = operation
+    ? proof.example(operation.key, "example")
+    : undefined;
+  using exampleInput =
+    operation && example
+      ? proof.exampleInput(operation.key, example.key)
+      : undefined;
   example?.description satisfies string | undefined;
   document.set("/operations/" + "added", {
     aliases: ["alias"],
@@ -377,10 +386,11 @@ function validatedReads(proof: ConformantDocument, parsed: Document) {
   for (const value of schemas?.values() ?? []) value.dispose();
   using editor = proof.asDocument();
   // Conformance excludes ambiguity: selection is the view or undefined.
-  using conformantOperation = proof.resolveOperation("run");
-  using retainedOperation = conformantOperation?.retain();
-  retainedOperation?.input()?.dispose();
-  using contract = conformantOperation?.input();
+  const conformantOperation = proof.resolveOperation("run");
+  using retainedProof = proof.retain();
+  const record =
+    conformantOperation && retainedProof.operation(conformantOperation.key);
+  using contract = record ? retainedProof.inputSchema(record.key) : undefined;
   using schema = contract?.json();
   schema satisfies ExactJson | undefined;
   // @ts-expect-error the contract already names its field; prepare takes options only
@@ -429,41 +439,58 @@ function exhaustiveValueOutcome(value: ValueOutcome): string {
   }
 }
 
-// Canonical names denote owned proved entries, not detached authoring records.
+// Canonical names denote detached readonly records. Payload queries need a live proof.
 function namedParts(document: ConformantDocument) {
-  for (using operation of document.operations()) {
+  for (const operation of document.operations()) {
     operation satisfies Operation;
-    using owner = operation.document();
-    using input = operation.input();
-    using output = operation.output();
+    using input = document.inputSchema(operation.key);
+    using output = document.outputSchema(operation.key);
+    using exact = document.operationValue(operation.key);
     operation.tags satisfies readonly string[] | undefined;
     operation.aliases satisfies readonly string[] | undefined;
     operation.deprecated satisfies boolean | undefined;
-    for (using binding of operation.bindings()) {
+    for (const binding of document.operationBindings(operation.key) ?? []) {
       binding satisfies Binding;
-      using relatedOperation = binding.operation();
-      using source = binding.source();
-      source satisfies Source;
-      using data = source.data();
+      const relatedOperation = document.operation(binding.operationKey);
+      const source = document.source(binding.sourceKey);
+      source satisfies Source | undefined;
+      using data = document.sourceData(binding.sourceKey);
+      using bindingData = document.bindingData(binding.key);
+      using bindingValue = document.bindingValue(binding.key);
+      using sourceValue = document.sourceValue(binding.sourceKey);
       binding.operationKey satisfies string;
       binding.sourceKey satisfies string;
       binding.preference satisfies number | undefined;
       binding.idempotent satisfies boolean | undefined;
     }
-    for (using example of operation.examples() ?? []) {
+    for (const example of document.examples(operation.key) ?? []) {
       example satisfies Example;
-      using input = example.input();
-      using output = example.output();
+      using input = document.exampleInput(operation.key, example.key);
+      using output = document.exampleOutput(operation.key, example.key);
+      using value = document.exampleValue(operation.key, example.key);
     }
+    // @ts-expect-error Detached records have no disposable handle.
+    operation.dispose();
+    // @ts-expect-error Retain a proof when later navigation is needed.
+    operation.retain();
+    // @ts-expect-error Detached metadata cannot acquire a document.
+    operation.document();
+    // @ts-expect-error Query the live proof by primary key for schemas.
+    operation.input();
+    // @ts-expect-error Detached records cannot be bound with using.
+    using owned = operation;
   }
-  for (using dependency of document.dependencies() ?? []) {
+  for (const dependency of document.dependencies() ?? []) {
     dependency satisfies Dependency;
-    dependency.acceptsKind("kind") satisfies boolean;
-    using operation = dependency.operation();
+    acceptsKind(dependency, "kind") satisfies boolean;
+    const operation = document.operation(dependency.operationKey);
+    using exact = document.dependencyValue(dependency.key);
   }
-  // @ts-expect-error Canonical entries cannot be forged as document-shaped records.
-  const forged: Operation = { input: true };
-  void forged;
+  const record: Operation = { key: "local", tags: ["tag"] };
+  // @ts-expect-error Readonly fields cannot be assigned.
+  record.key = "changed";
+  // @ts-expect-error Schema payloads are queried from the proof, not record fields.
+  const payload: Operation = { key: "local", input: true };
 }
 void namedParts;
 // @ts-expect-error retired part name has no alias

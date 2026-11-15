@@ -91,7 +91,7 @@ test("consuming proof revokes all aliases while retained proofs and editable cop
   assert.deepEqual(retained.toBytes(), initial);
   const retainedOperation = retained.operation("run");
   assert.equal(retainedOperation.key, "run");
-  retainedOperation.dispose();
+  assert.ok(Object.isFrozen(retainedOperation));
   for (const owner of [document, proof, retained, independent, editable])
     owner.dispose();
 });
@@ -130,7 +130,7 @@ test("one batch preserves decimal spelling and every untouched byte", () => {
   }
 });
 
-test("failed batches preserve bytes and retained canonical entries", () => {
+test("failed batches preserve bytes and detached canonical records", () => {
   let document = open(text);
   const proof = document.validate().document,
     operation = proof.operation("run"),
@@ -155,8 +155,7 @@ test("failed batches preserve bytes and retained canonical entries", () => {
   assert.equal(changed.description, "changed");
   assert.equal(operation.description, oldDescription);
   assert.deepEqual(proof.toBytes(), before);
-  for (const owner of [changed, current, operation, proof, document])
-    owner.dispose();
+  for (const owner of [current, proof, document]) owner.dispose();
 });
 
 test("coalesced insertions, escaped keys and explicit namespace edits construct one document", () => {
@@ -174,7 +173,7 @@ test("coalesced insertions, escaped keys and explicit namespace edits construct 
   const populated = document.validate().document,
     entries = populated.operations();
   assert.equal(entries.length, 1000);
-  for (const entry of entries) entry.dispose();
+  for (const entry of entries) assert.ok(Object.isFrozen(entry));
   populated.dispose();
   document = replaceDocument(
     document,
@@ -537,15 +536,7 @@ test("edits return distinct owners while the original snapshot and proof remain 
     assert.equal(removedRoot.get("description"), undefined);
     removedRoot.dispose();
   } finally {
-    for (const owner of [
-      original,
-      proof,
-      operation,
-      revised,
-      removed,
-      empty,
-      value,
-    ])
+    for (const owner of [original, proof, revised, removed, empty, value])
       owner.dispose();
   }
   assert.equal(liveStorageOwners(), baseline);

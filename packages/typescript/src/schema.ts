@@ -699,7 +699,7 @@ export class ExternalSchemas extends Managed {
   }
 }
 
-/** An original contextual schema, not yet prepared. Obtain it from Operation.input(), output(), or ConformantDocument.schema(); it retains its proved revision and survives operation and document disposal. Each prepare() returns an independent prepared owner; retain the PreparedSchema for repeated evaluation. */
+/** An original contextual schema, not yet prepared. Obtain it from ConformantDocument.inputSchema(), outputSchema(), or schema(); it retains its whole proved document until disposed or finalized, even after proof and document disposal. Each prepare() returns an independent prepared owner; retain the PreparedSchema for repeated evaluation. */
 export class Schema extends Managed {
   private constructor(raw: wasm.WasmSchema) {
     super(raw);

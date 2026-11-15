@@ -131,9 +131,9 @@ export async function apiQualityCases(sdk, http) {
       '{"openbindings":"0.2.0","operations":{"run":{"aliases":["execute"],"input":{"type":"integer"}},"empty":{},"never":{"input":false},"object":{"input":{"const":{"n":9007199254740993}}},"remote":{"input":{"$ref":"https://schema.test/id"}}}}',
     );
     const inspected = own(document.validate().document);
-    const operation = own(inspected.resolveOperation("execute"));
-    check(operation instanceof sdk.Operation, "canonical selected operation");
-    check(operation.aliases === operation.aliases, "frozen scalar list cache");
+    const operation = inspected.resolveOperation("execute");
+    check(Object.isFrozen(operation), "frozen canonical selected operation");
+    check(operation.aliases === operation.aliases, "stable frozen array field");
     throws(
       () => {
         operation.key = "edit";
@@ -195,7 +195,7 @@ export async function apiQualityCases(sdk, http) {
     check(validated.status === "conformant", "document proof");
     const conformant = own(validated.document);
     check(
-      own(conformant.resolveOperation("empty")).input() === undefined,
+      conformant.inputSchema("empty") === undefined,
       "absent contract setup",
     );
     check(
@@ -220,7 +220,7 @@ export async function apiQualityCases(sdk, http) {
     );
     const cancelled = new AbortController();
     cancelled.abort();
-    const runContract = own(own(conformant.resolveOperation("run")).input());
+    const runContract = own(conformant.inputSchema("run"));
     const beforeCancel = testing.liveStorageOwners();
     const cancelledSetup = runContract.prepare({ signal: cancelled.signal });
     check(
@@ -459,9 +459,10 @@ export async function apiQualityCases(sdk, http) {
     conformant.dispose();
     runContract.dispose();
     resources.dispose();
-    check(operation.key === "run", "retained selected owner");
-    const child = own(operation.value());
-    operation.dispose();
+    check(operation.key === "run", "detached selected record");
+    const child = own(inspected.operationValue(operation.key));
+    inspected.dispose();
+    check(operation.key === "run", "detached record survives proof disposal");
     check(child.text.includes("execute"), "retained exact child");
     check(a.evaluate(7).status === "satisfies", "retained ready resource");
     const held = own(input.retain());

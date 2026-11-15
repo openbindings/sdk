@@ -52,7 +52,7 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   document.validate({ unexpected: true });
   // @ts-expect-error Validation retention accepts only known budgets.
   document.validate({ limits: { unexpected: 0 } });
-  // Every access returns its own owner; this one is scoped independently.
+  // Exact reads return owners; this one is scoped independently.
   using original = document.value();
   const copy: Uint8Array = original.bytes;
   const proof: DocumentValidation = document.validate();
@@ -62,9 +62,9 @@ export async function referenceExample(wasmBytes: Uint8Array, source: string) {
   if (proof.status !== "conformant") return proof;
   using validated = proof.document;
   using publication = new DiscoveryPublication(validated);
-  using operation = validated.resolveOperation("run"); // primary name or alias
+  const operation = validated.resolveOperation("run"); // primary name or alias
   if (!operation) return { status: "operation-missing" as const };
-  using input = operation.input();
+  using input = validated.inputSchema(operation.key);
   if (!input) return { status: "no-schema" as const };
   const setup: SchemaPreparation = input.prepare({
     limits: { evaluationSdkWorkUnits: 2000000 },

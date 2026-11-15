@@ -57,13 +57,10 @@ function checkInput(input: JsonInput) {
   const checked = document.validate();
   if (checked.status !== "conformant") return checked;
   using proof = checked.document;
-  const entries = proof.operations(); // independently owned canonical entries
-  let operations;
-  try { operations = entries.map(entry => ({ key: entry.key, aliases: entry.aliases })); }
-  finally { for (const entry of entries) entry.dispose(); }
-  using operation = proof.resolveOperation("find"); // primary name or alias
+  const operations = proof.operations(); // detached frozen records, safe to return
+  const operation = proof.resolveOperation("find"); // primary name or alias
   if (!operation) return { status: "operation-missing" } as const;
-  using schema = operation.input();
+  using schema = proof.inputSchema(operation.key);
   if (!schema) return { status: "no-input-schema" } as const;
   const setup = schema.prepare();
   if (setup.status !== "ready") return setup;
@@ -107,7 +104,7 @@ function checkInput(input) {
     proof = checked.document;
     operation = proof.resolveOperation("find");
     if (!operation) return { status: "operation-missing" };
-    schema = operation.input();
+    schema = proof.inputSchema(operation.key);
     if (!schema) return { status: "no-input-schema" };
     const setup = schema.prepare();
     if (setup.status !== "ready") return setup;
@@ -116,7 +113,6 @@ function checkInput(input) {
   } finally {
     prepared?.dispose();
     schema?.dispose();
-    operation?.dispose();
     proof?.dispose();
     parsed.value.dispose();
   }
@@ -137,12 +133,12 @@ platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `DocumentValidation`, as Rust's `validate()` does: a `conformant` branch carrying a
 `ConformantDocument`, or a version refusal or conformance report.
 `validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
-and nothing to dispose. `operations()` acquires canonical `Operation` owners in
-lexical key order. Fields such as `key`, `aliases` and `tags` are direct reads;
+and nothing to dispose. `operations()` returns detached, runtime-frozen `Operation`
+records in lexical key order. Fields such as `key`, `aliases` and `tags` are direct reads;
 optional fields preserve absence as `undefined`. `operation(key)` selects an exact
 primary key; `resolveOperation(name)` also accepts aliases. Both return `undefined`
-when absent. `input()` and `output()` acquire contextual `Schema` owners when
-declared. `prepare()` returns an owned `PreparedSchema` or a structured preparation
+when absent. `proof.inputSchema(operation.key)` and `proof.outputSchema(operation.key)`
+acquire contextual `Schema` owners when declared. `prepare()` returns an owned `PreparedSchema` or a structured preparation
 refusal. Handle each result before
 validating a value. Every result narrows on `status`. A value result's is
 `satisfies`, `fails`, `undefined` (the specification gives the value no defined
@@ -156,9 +152,23 @@ JSON remains an `input-error` even when the signal is already aborted.
 ## Browser resource management
 
 Use `using` or `try`/`finally` with `dispose()` for timely release. Methods such as
-`value()`, `schemas()`, `input()` and `output()` acquire independent owners. Dispose
-each returned owner, including every element of a domain collection and every
-value in a schema map. Scalar field getters and frozen string arrays return plain data. `retain()` acquires another owner when work must outlive a scope.
+`value()`, `schemas()`, `inputSchema()` and `outputSchema()` acquire independent owners.
+Dispose every returned owner, including every value in a schema map. Documents,
+proofs, `Schema`, `ExactJson` (including traversal cursors and yielded owners),
+resource sets and prepared schemas retain storage. `retain()` acquires another
+owner when work must outlive a scope.
+
+Canonical `Operation`, `Binding`, `Source`, `Dependency` and `Example` reads return
+detached, runtime-frozen records and frozen string arrays. They contain only declared
+fields, have no handle, methods or document reference, survive proof disposal and
+need no disposal. Each call makes fresh records, with no cache or lazy fields.
+Navigation and exact payload queries require a live proof and primary keys. A key
+used with another proof selects that proof's revision.
+
+A forgotten `Schema` or `ExactJson` acquired from a document keeps its **whole
+document in Wasm memory**, even after the proof and document handles are disposed,
+until that owner is disposed or finalized. Finalizers are best effort; entry records
+do not have this pinning cost. Released Wasm capacity can be reused but does not shrink.
 
 For `using` in a browser without `Symbol.dispose`, load the SDK from a separate
 application module after this bootstrap. Static imports run before statements:
@@ -258,13 +268,20 @@ owners; callers retain and dispose them. `EditError.inputPointer` identifies a
 refused ordinary input inside the edit batch, without inventing source coordinates.
 The [inspection/editing example](examples/inspect-edit.ts) demonstrates exact edits
 and canonical reads after conformance. `Operation`, `Source`, `Binding`, `Dependency`
-and `Example` are owned entries of that proved snapshot. Relationships such as
-`binding.source()` acquire another owner from the same snapshot.
+and `Example` are detached readonly record types. Follow relationships through the
+live proof, for example `proof.source(binding.sourceKey)` and
+`proof.operation(dependency.operationKey)`. `proof.operationBindings(operation.key)`
+and `proof.examples(operation.key)` return records too. Use the pure
+`acceptsKind(dependency, kind)` helper for kind filters. Exact payloads remain owners:
+`operationValue`, `bindingValue`, `sourceValue`, `dependencyValue`, `exampleValue`,
+`sourceData`, `bindingData`, `exampleInput` and `exampleOutput` are proof queries
+addressed by primary key (and an operation-local example key where needed).
 
 `ConformantDocument` is a separate class with infallible reads and no setters.
 `asDocument()` creates an independent immutable document owner. `intoDocument()` consumes the
 proof: every alias of that proof becomes disposed and later reads fail lifecycle
-checks. Independently retained proofs and views keep their certified revision.
+checks. Independently retained proofs and schemas keep their certified revision. Detached
+entry records remain readable; further queries need a live proof.
 `toBytes()` copies the current exact bytes. Dispose every acquired owner.
 
 ## Limits and diagnostics

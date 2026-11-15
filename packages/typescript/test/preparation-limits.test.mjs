@@ -16,7 +16,7 @@ function owners() {
   const document = sdk.Document.parse(fixture.document).value;
   const proof = document.validate().document;
   const operation = proof.operation("run");
-  const schema = operation.input();
+  const schema = proof.inputSchema(operation.key);
   const value = sdk.parseJson(fixture.schema).value;
   const resources = new sdk.ExternalSchemas([[fixture.uri, value]]);
   return {
@@ -24,14 +24,7 @@ function owners() {
     value,
     resources,
     dispose() {
-      for (const owner of [
-        resources,
-        value,
-        schema,
-        operation,
-        proof,
-        document,
-      ])
+      for (const owner of [resources, value, schema, proof, document])
         owner.dispose();
     },
   };

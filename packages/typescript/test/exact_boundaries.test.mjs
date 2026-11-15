@@ -441,10 +441,10 @@ test("canonical fields are narrow/frozen/lexical and exact children outlive the 
     sourceView = source.source("toString"),
     dependency = source.dependency("__proto__"),
     operation = source.resolveOperation("alias"),
-    example = operation.example("constructor");
+    example = source.example(operation.key, "constructor");
   try {
     const operations = source.operations(),
-      examples = operation.examples();
+      examples = source.examples(operation.key);
     try {
       assert.deepEqual(
         operations.map((x) => x.key),
@@ -459,47 +459,34 @@ test("canonical fields are narrow/frozen/lexical and exact children outlive the 
         [["constructor", undefined]],
       );
     } finally {
-      for (const owner of [...operations, ...examples]) owner.dispose();
+      for (const record of [...operations, ...examples])
+        assert.ok(Object.isFrozen(record));
     }
     assert.equal("metadata" in binding, false);
     assert.equal(binding.preference, -1);
     assert.equal(binding.deprecated, false);
     assert.ok(Object.isFrozen(dependency.kinds));
     assert.deepEqual(dependency.kinds, ["local"]);
-    assert.equal(dependency.acceptsKind("local"), true);
-    assert.equal(dependency.acceptsKind("other"), false);
-    const content = sourceView.data(),
-      input = example.input(),
-      output = example.output(),
-      retained = binding.retain();
-    for (const owner of [
-      source,
-      operation,
-      example,
-      binding,
-      sourceView,
-      dependency,
-    ])
-      owner.dispose();
+    assert.equal(sdk.acceptsKind(dependency, "local"), true);
+    assert.equal(sdk.acceptsKind(dependency, "other"), false);
+    const content = source.sourceData(sourceView.key),
+      input = source.exampleInput(operation.key, example.key),
+      output = source.exampleOutput(operation.key, example.key),
+      retained = source.binding(binding.key);
+    source.dispose();
     try {
       assert.equal(content.text, "null");
       assert.equal(input.text, "9007199254740993");
       assert.equal(output.text, "null");
       assert.equal(retained.sourceKey, "toString");
-      disposed(() => binding.sourceKey);
+      assert.equal(binding.sourceKey, retained.sourceKey);
+      assert.notEqual(binding, retained);
+      disposed(() => source.binding(binding.key));
     } finally {
-      for (const owner of [content, input, output, retained]) owner.dispose();
+      for (const owner of [content, input, output]) owner.dispose();
     }
   } finally {
-    for (const owner of [
-      source,
-      operation,
-      example,
-      binding,
-      sourceView,
-      dependency,
-    ])
-      owner.dispose();
+    source.dispose();
   }
   assert.equal(testing.liveStorageOwners(), baseline);
 });

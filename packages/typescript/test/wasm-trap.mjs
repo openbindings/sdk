@@ -60,13 +60,13 @@ if (mode === "initialize") {
   const document = sdk.Document.parse(text).value;
   const proof = document.validate().document;
   const operation = proof.operation("op");
-  const schema = operation.input();
+  const schema = proof.inputSchema(operation.key);
   const prepared = schema.prepare().schema;
   const exact = sdk.parseJson('{"a":1}').value;
   const cursor = exact.members();
   const resources = new sdk.ExternalSchemas();
   const publication = new http.DiscoveryPublication(proof);
-  // Warm cached metadata too: it must not remain usable after a trap.
+  // Detached metadata stays usable even when its originating instance traps.
   assert.equal(operation.key, "op");
   const owners = [
     publication,
@@ -75,7 +75,6 @@ if (mode === "initialize") {
     exact,
     prepared,
     schema,
-    operation,
     proof,
     document,
   ];
@@ -85,8 +84,8 @@ if (mode === "initialize") {
       const largeDocument = sdk.Document.parse(chainDoc(49_000)).value;
       const largeProof = largeDocument.validate().document;
       const largeOperation = largeProof.operation("op");
-      const largeSchema = largeOperation.input();
-      owners.push(largeSchema, largeOperation, largeProof, largeDocument);
+      const largeSchema = largeProof.inputSchema(largeOperation.key);
+      owners.push(largeSchema, largeProof, largeDocument);
       const prepare = bridge.WasmSchema.prototype.prepare;
       bridge.WasmSchema.prototype.prepare = function (...args) {
         try {
@@ -223,7 +222,7 @@ if (mode === "initialize") {
     () => exact.text,
     () => exact.locate("/a"),
     () => cursor.next(),
-    () => operation.key,
+    () => proof.inputSchema(operation.key),
     () => resources.retain(),
     () => resources.prepare("https://trap.test/schema"),
     () => prepared.evaluate(0),
@@ -236,6 +235,7 @@ if (mode === "initialize") {
     () => testing.liveStorageOwners(),
   ])
     assert.throws(call, isTrap);
+  assert.equal(operation.key, "op");
   await assert.rejects(sdk.initialize(), isTrap);
   await assert.rejects(
     http.discover("https://trap.test", { fetch: entered }),

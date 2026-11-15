@@ -39,6 +39,7 @@ export {
   Source,
   Binding,
   Dependency,
+  acceptsKind,
 } from "./document.js";
 export {
   SchemaOrigin,

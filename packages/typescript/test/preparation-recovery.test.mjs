@@ -8,7 +8,7 @@ test("a 49000-link preparation refusal leaves the same instance usable", () => {
   const document = sdk.Document.parse(chainDocument(49_000)).value;
   const proof = document.validate().document;
   const operation = proof.operation("op");
-  const schema = operation.input();
+  const schema = proof.inputSchema(operation.key);
   try {
     for (const [preparationLimits, code] of [
       [
@@ -37,6 +37,6 @@ test("a 49000-link preparation refusal leaves the same instance usable", () => {
       }
     }
   } finally {
-    for (const owner of [schema, operation, proof, document]) owner.dispose();
+    for (const owner of [schema, proof, document]) owner.dispose();
   }
 });

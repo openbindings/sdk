@@ -11,7 +11,7 @@ export function prepareService(documentBytes, entries = []) {
     proof = checked.document;
     operation = proof.resolveOperation("lookup");
     if (!operation) return { status: "operation-missing" };
-    schema = operation.input();
+    schema = proof.inputSchema(operation.key);
     if (!schema) return { status: "no-schema" };
     resources = new ExternalSchemas(entries); // borrowed schema owners
     // A ready result owns its prepared schema independently of setup locals.
@@ -19,7 +19,6 @@ export function prepareService(documentBytes, entries = []) {
   } finally {
     resources?.dispose();
     schema?.dispose();
-    operation?.dispose();
     proof?.dispose();
     parsed.value.dispose();
   }

@@ -59,7 +59,7 @@ function validate() {
 function prepare() {
   const source = p.kind === "chain" ? chainDoc(p.n) : recordsDoc(p.n, p.supplied, p.distinct);
   const doc = parsed(sdk.Document.parse(source));
-  const schema = own(own(proof(doc).operation("op")).input());
+  const schema = own(proof(doc).inputSchema("op"));
   let resources;
   if (p.supplied) {
     const value = parsed(sdk.parseJson(JSON.stringify(recordsSchema(p.n, p.distinct))));
@@ -97,7 +97,7 @@ function prepare() {
 function hostile() {
   const doc = parsed(sdk.Document.parse(JSON.stringify({ openbindings: "0.2.0",
     operations: { op: { input: { type: "string", pattern: "^(?:a{1,200}){1,200}$" } } } })));
-  const schema = own(own(proof(doc).operation("op")).input());
+  const schema = own(proof(doc).inputSchema("op"));
   const result = schema.prepare({ limits: p.limits });
   assert.equal(result.status, "ready");
   const prepared = own(result.schema);

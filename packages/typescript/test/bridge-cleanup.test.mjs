@@ -19,9 +19,8 @@ test("owned preparation wrappers release untaken children on decode/take failure
   const checked = document.validate();
   assert.equal(checked.status, "conformant");
   const operation = checked.document.resolveOperation("run");
+  const contract = checked.document.inputSchema(operation.key);
   checked.document.dispose();
-  const contract = operation.input();
-  operation.dispose();
   try {
     // The first preparation initializes instance-lifetime evaluator arenas;
     // warm them so every fault compares against a settled baseline.
@@ -74,7 +73,7 @@ test("owned preparation wrappers release untaken children on decode/take failure
     const proof = document.validate().document,
       selected = proof.operation("run");
     assert.equal(selected.key, "run");
-    selected.dispose();
+    assert.ok(Object.isFrozen(selected));
     proof.dispose();
     const prepared = contract.prepare();
     assert.equal(prepared.status, "ready");
@@ -124,7 +123,7 @@ test("ordinary admission maps only known engine limits and preserves unexpected 
   }
 });
 
-test("canonical collections release adopted and untaken owners on partial transfer failure", () => {
+test("canonical collection decode failures retain no document owners", () => {
   const text = JSON.stringify({
     openbindings: "0.2.0",
     operations: {
@@ -144,45 +143,42 @@ test("canonical collections release adopted and untaken owners on partial transf
     warmProof = warm.validate().document;
   warmProof.dispose();
   warm.dispose();
-  for (const [type, method, onOperation] of [
-    [sdk.Operation, "operations", false],
-    [sdk.Source, "sources", false],
-    [sdk.Binding, "bindings", false],
-    [sdk.Dependency, "dependencies", false],
-    [sdk.Binding, "bindings", true],
-    [sdk.Example, "examples", true],
-  ])
+  for (const [method, args] of [
+    ["operations", []],
+    ["sources", []],
+    ["bindings", []],
+    ["dependencies", []],
+    ["operationBindings", ["a"]],
+    ["examples", ["a"]],
+  ]) {
     for (const failAt of [1, 2, 3]) {
       const baseline = testing.liveStorageOwners();
       const draft = sdk.Document.parse(text).value,
         proof = draft.validate().document;
-      const parent = onOperation ? proof.operation("a") : proof;
-      const original = type.fromRaw,
-        adopted = [];
-      const thrown = new Error("injected collection adoption failure");
+      const freeze = Object.freeze;
+      const thrown = new Error("injected collection decode failure");
+      const decoded = [];
       let attempts = 0;
-      type.fromRaw = (raw) => {
+      // Invoke the real bridge, then fail at each record freeze. Rust entries
+      // have already dropped when the text crosses to JS, so no partial decode
+      // can leave an untaken document owner.
+      Object.freeze = (value) => {
         if (++attempts === failAt) throw thrown;
-        const owner = original(raw);
-        adopted.push(owner);
-        return owner;
+        decoded.push(value);
+        return freeze(value);
       };
       try {
         assert.throws(
-          () => parent[method](),
+          () => proof[method](...args),
           (error) => error === thrown,
         );
-        assert.ok(adopted.every((owner) => owner.disposed));
+        assert.ok(decoded.every(Object.isFrozen));
       } finally {
-        type.fromRaw = original;
-        parent.dispose();
+        Object.freeze = freeze;
         proof.dispose();
         draft.dispose();
       }
-      assert.equal(
-        testing.liveStorageOwners(),
-        baseline,
-        `${type.name}.${method}: no unadopted retained document`,
-      );
+      assert.equal(testing.liveStorageOwners(), baseline, method);
     }
+  }
 });

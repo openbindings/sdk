@@ -24,6 +24,15 @@
 - TypeScript ordinary values refused at an admission limit report `byte-limit`, `node-limit` or `depth-limit`, the
   codes exact text reports for the same causes, where they reported `input-limit`.
 
+
+- Breaking: TypeScript entry reads (`operations()`, `operation(key)`, `resolveOperation(name)`, `bindings()`,
+  `binding(key)`, `sources()`, `source(key)`, `dependencies()`, `dependency(key)`, and examples) return detached,
+  frozen records of the entry's fields, with nothing to dispose. What needed an entry is a query on the proof by
+  primary key: `inputSchema`, `outputSchema`, `operationBindings`, `examples`, `example`, `sourceData`,
+  `bindingData`, `exampleInput`, `exampleOutput` and the `operationValue`-style queries. `acceptsKind` is a plain
+  function. Schemas, exact JSON, documents, proofs, resource sets and prepared schemas stay owners, and a forgotten
+  schema or exact value still keeps its whole document in Wasm memory until it is disposed or finalized.
+
 ### Added
 
 - `SchemaValidator::retained_bytes()`, defaulting to `None`, with `PreparedSchema::retained_bytes()` and

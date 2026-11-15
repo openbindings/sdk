@@ -29,16 +29,10 @@ export class DocumentEditor {
       const checked = parsed.value.validate();
       if (checked.status !== "conformant") return checked;
       proof = checked.document;
-      const entries = proof.operations();
-      let operations;
-      try {
-        operations = entries.map((entry) => ({ key: entry.key }));
-      } finally {
-        for (const entry of entries) entry.dispose();
-      }
+      const operations = proof.operations(); // safe to keep after proof disposal
       operation = proof.resolveOperation("find");
       if (!operation) return { status: "operation-missing" };
-      schema = operation.input();
+      schema = proof.inputSchema(operation.key);
       if (!schema) return { status: "no-schema" };
       const setup = schema.prepare();
       if (setup.status !== "ready") {
@@ -61,7 +55,6 @@ export class DocumentEditor {
     } finally {
       input?.dispose();
       schema?.dispose();
-      operation?.dispose();
       proof?.dispose();
       parsed.value.dispose();
     }

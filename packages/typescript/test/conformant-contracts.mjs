@@ -13,13 +13,15 @@ function prepare(document, operation, field, options) {
     }
     view = (proof ?? document).resolveOperation(operation);
     if (!view) throw new Error(`Fixture lacks operation ${operation}`);
-    contract = field === "input" ? view.input() : view.output();
+    contract =
+      field === "input"
+        ? (proof ?? document).inputSchema(view.key)
+        : (proof ?? document).outputSchema(view.key);
     if (!contract)
       throw new Error(`Fixture operation ${operation} declares no ${field}`);
     return contract.prepare(options);
   } finally {
     contract?.dispose();
-    view?.dispose();
     proof?.dispose();
   }
 }

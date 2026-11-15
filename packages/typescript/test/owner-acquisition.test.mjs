@@ -22,14 +22,24 @@ test("owner acquisition is a method; property access creates no owner", () => {
     [sdk.Document, ["value"]],
     [
       sdk.ConformantDocument,
-      ["value", "schemas", "operations", "sources", "bindings", "dependencies"],
+      [
+        "value",
+        "schemas",
+        "schema",
+        "inputSchema",
+        "outputSchema",
+        "operationValue",
+        "bindingValue",
+        "sourceValue",
+        "dependencyValue",
+        "exampleValue",
+        "sourceData",
+        "bindingData",
+        "exampleInput",
+        "exampleOutput",
+      ],
     ],
-    [sdk.Operation, ["value", "input", "output"]],
     [sdk.Schema, ["json", "prepare"]],
-    [sdk.Dependency, ["value"]],
-    [sdk.Binding, ["value", "data"]],
-    [sdk.Source, ["value", "data"]],
-    [sdk.Example, ["value", "input", "output"]],
   ];
   const before = registrations;
   for (const [type, names] of paths) {
@@ -76,10 +86,7 @@ test("owner acquisition is a method; property access creates no owner", () => {
   assert.equal(second.text, '{"openbindings":"0.2.0","operations":{}}');
   second.dispose();
   assert.equal(testing.liveStorageOwners(), baseline);
-  for (const [type, name] of [
-    [sdk.ExactJson, "text"],
-    [sdk.Operation, "key"],
-  ]) {
+  for (const [type, name] of [[sdk.ExactJson, "text"]]) {
     let prototype = type.prototype;
     while (!Object.hasOwn(prototype, name))
       prototype = Object.getPrototypeOf(prototype);
@@ -88,4 +95,30 @@ test("owner acquisition is a method; property access creates no owner", () => {
       "function",
     );
   }
+  const draft = sdk.Document.parse(
+    '{"openbindings":"0.2.0","operations":{"run":{"tags":["tag"]}}}',
+  ).value;
+  const proof = draft.validate().document;
+  const beforeRecords = registrations;
+  const firstRecord = proof.operation("run"),
+    secondRecord = proof.operation("run");
+  const listed = proof.operations();
+  assert.equal(
+    registrations,
+    beforeRecords,
+    "canonical reads allocate no registered owners",
+  );
+  assert.notEqual(firstRecord, secondRecord);
+  assert.ok(!registered.has(firstRecord));
+  for (const record of [firstRecord, secondRecord, ...listed]) {
+    assert.ok(Object.isFrozen(record));
+    assert.equal(Object.getOwnPropertyDescriptor(record, "key").get, undefined);
+    assert.equal(record.dispose, undefined);
+    assert.equal(record.retain, undefined);
+    assert.equal(record.document, undefined);
+  }
+  proof.dispose();
+  draft.dispose();
+  assert.equal(firstRecord.key, "run");
+  assert.equal(testing.liveStorageOwners(), baseline);
 });

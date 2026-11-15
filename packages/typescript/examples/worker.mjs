@@ -54,7 +54,10 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ id, status: "operation-missing", operation });
       return;
     }
-    schema = direction === "input" ? selected.input() : selected.output();
+    schema =
+      direction === "input"
+        ? proof.inputSchema(selected.key)
+        : proof.outputSchema(selected.key);
     if (!schema) {
       self.postMessage({
         id,
@@ -89,7 +92,6 @@ self.onmessage = async ({ data }) => {
     input?.dispose();
     prepared?.dispose();
     schema?.dispose();
-    selected?.dispose();
     proof?.dispose();
     document?.dispose();
   }

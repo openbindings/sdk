@@ -192,8 +192,14 @@ reservations for preparation storage and evaluation work units for work.
 
 - Dispose every owner with `using` or `try`/`finally`: parsed values, documents,
   conformance proofs, schemas, prepared schemas and resource sets.
-  `operations()` returns independently owned operation entries; dispose each
-  entry, including ones skipped by an early return. Operation lookups own too.
+  Canonical entry reads such as `operations()` and `operation(key)` return detached,
+  runtime-frozen records with no handles and nothing to dispose. Keep records across
+  an `await` freely; navigation and exact payload queries use a live proof and primary keys.
+  The [synchronous disposal probe](../tools/workers-memory/README.md#entry-disposal)
+  measures 10,000 undisposed `operations()` calls in one turn.
+- A forgotten `Schema` or `ExactJson` acquired from a document keeps its whole document
+  in Wasm memory until disposed or finalized, even after the proof and document handles
+  are disposed. Finalizers are best effort. Entry records do not pin that storage.
 - Do not hold owners across an `await`. Read the bounded body first,
   finish SDK work synchronously, copy needed plain results, dispose, then await
   further I/O. Concurrent retained owners add to the same isolate's high-water mark.

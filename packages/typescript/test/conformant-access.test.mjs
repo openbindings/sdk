@@ -29,15 +29,14 @@ test("Rust proof transfer is single-use and unavailable to parsed or forged hand
   const retained = proof.retain();
   proof.free();
   const resources = new bridge.WasmResources();
-  const operation = retained.resolveOperation("go");
-  assert.ok(operation instanceof bridge.WasmOperation);
-  const contract = operation.input();
+  const operation = JSON.parse(retained.resolveOperation("go"));
+  assert.equal(operation.key, "run");
+  const contract = retained.inputSchema(operation.key);
   assert.ok(contract instanceof bridge.WasmSchema);
   const preparation = contract.prepareWith(resources, "{}", undefined, false);
   assert.equal(JSON.parse(preparation.result()).status, "ready");
   preparation.free();
   contract.free();
-  operation.free();
   resources.free();
   retained.free();
   for (const source of [
@@ -170,13 +169,16 @@ test("raw document receiver substitution rechecks proof at every authority entry
         parsed,
         "op",
       );
+    const metadata = JSON.parse(operation);
+    const contract = bridge.WasmConformantDocument.prototype.inputSchema.call(
+      parsed,
+      metadata.key,
+    );
     parsed.free();
     const publication = new bridge.WasmPublication(proof, "*");
     publication.free();
     proof.free();
     retained.free();
-    const contract = operation.input();
-    operation.free();
     const preparation = contract.prepareWith(resources, "{}", undefined, false);
     assert.equal(JSON.parse(preparation.result()).status, "ready");
     const prepared = preparation.takeSchema();
@@ -225,7 +227,7 @@ test("raw draft inspection preserves malformed fields, exact text and absence", 
   }
 });
 
-test("validated text and retained reads preserve decoded text and presence", () => {
+test("validated text and detached reads preserve decoded text and presence", () => {
   const unproven = sdk.Document.parse(text).value;
   const result = unproven.validate();
   assert.equal(result.status, "conformant");
@@ -250,24 +252,22 @@ test("validated text and retained reads preserve decoded text and presence", () 
   assert.equal(sources[0].kind.charCodeAt(0), 0xd800);
   assert.equal(dependencies[0].kinds[0].charCodeAt(0), 0xd800);
   assert.equal(bindings[0].description.charCodeAt(0), 0xd800);
-  assert.equal(dependencies[0].acceptsKind("\ud800\udc00"), true);
+  assert.equal(sdk.acceptsKind(dependencies[0], "\ud800\udc00"), true);
   for (const entry of [...operations, ...sources, ...dependencies, ...bindings])
-    entry.dispose();
+    assert.ok(Object.isFrozen(entry));
   const schemas = proof.schemas();
   assert.deepEqual([...schemas.keys()], ["f", "o", "t"]);
   const operation = proof.resolveOperation("go");
-  const example = operation.example("e");
-  const inputContract = operation.input(),
-    outputContract = operation.output();
+  const example = proof.example(operation.key, "e");
+  const inputContract = proof.inputSchema(operation.key),
+    outputContract = proof.outputSchema(operation.key);
   const input = inputContract.json(),
     output = outputContract.json();
   inputContract.dispose();
   outputContract.dispose();
-  const exampleInput = example.input();
-  assert.equal(example.output(), undefined);
+  const exampleInput = proof.exampleInput(operation.key, example.key);
+  assert.equal(proof.exampleOutput(operation.key, example.key), undefined);
   assert.equal(example.description.charCodeAt(0), 0xd800);
-  example.dispose();
-  operation.dispose();
   proof.dispose();
   unproven.dispose();
   assert.equal(input.text, "true");
@@ -303,12 +303,11 @@ test("validated text and retained reads preserve decoded text and presence", () 
         assert.equal(validation.status, "conformant");
         const proof = validation.document,
           op = proof.operation("run");
-        const acquired = op[direction](),
+        const acquired = proof[`${direction}Schema`](op.key),
           exact = acquired?.json();
         assert.equal(exact?.text, value);
         exact?.dispose();
         acquired?.dispose();
-        op.dispose();
         proof.dispose();
       }
       doc.dispose();
@@ -331,11 +330,7 @@ test("validated text and retained reads preserve decoded text and presence", () 
 
 function accepts(document, key, kind) {
   const dependency = document.dependency(key);
-  try {
-    return dependency?.acceptsKind(kind);
-  } finally {
-    dependency?.dispose();
-  }
+  return dependency && sdk.acceptsKind(dependency, kind);
 }
 test("conformant kind filters compare decoded text and handle unpaired caller strings", () => {
   const parsed = sdk.Document.parse(
@@ -350,7 +345,7 @@ test("conformant kind filters compare decoded text and handle unpaired caller st
     assert.equal(proof.version, "\uffff");
     const source = proof.source("s");
     assert.equal(source.kind, "café𝄞");
-    source.dispose();
+    assert.ok(Object.isFrozen(source));
     for (const key of ["escaped", "literal", "all"]) {
       assert.equal(accepts(proof, key, "café𝄞"), true);
     }

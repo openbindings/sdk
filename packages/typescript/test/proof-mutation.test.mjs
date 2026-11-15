@@ -80,104 +80,92 @@ test("Wasm proof storage refuses every borrowed editing entry", () => {
   document.free();
 });
 
-test("raw JSON and wrong canonical owners cannot be borrowed to produce schemas", () => {
+test("raw JSON and detached records cannot be borrowed to produce schemas", () => {
   const document = sdk.Document.parse(
     '{"openbindings":"0.2.0","operations":{"run":{"input":true,"examples":{"e":{"input":42}}}}}',
   ).value;
-  const proof = document.validate().document,
-    operation = proof.operation("run"),
-    example = operation.example("e");
+  const proof = document.validate().document;
+  const operation = proof.operation("run"),
+    example = proof.example(operation.key, "e");
   const raw = document.value(),
     input = raw.at("/operations/run/input");
-  const refused = (error) =>
-    error instanceof sdk.SdkError && error.code === "document-conformance";
-  for (const owner of [raw, input, example]) {
-    for (const method of ["input", "output"])
-      assert.throws(() => sdk.Operation.prototype[method].call(owner), refused);
+  for (const receiver of [raw, input, example, operation]) {
+    const refused = (error) =>
+      error instanceof sdk.SdkError &&
+      error.code ===
+        ([raw, input].includes(receiver)
+          ? "document-conformance"
+          : "disposed-handle");
+    for (const method of ["inputSchema", "outputSchema"])
+      assert.throws(
+        () => sdk.ConformantDocument.prototype[method].call(receiver, "run"),
+        refused,
+      );
     for (const method of ["json", "prepare", "retain"])
-      assert.throws(() => sdk.Schema.prototype[method].call(owner), refused);
+      assert.throws(() => sdk.Schema.prototype[method].call(receiver), refused);
   }
-  for (const owner of [input, raw, example, operation, proof, document])
-    owner.dispose();
+  for (const owner of [input, raw, proof, document]) owner.dispose();
 });
 
-test("every canonical Wasm owner checks its Rust variant before borrowed reads", () => {
+test("every canonical Wasm query checks proof authority before borrowed reads", () => {
   const draft = bridge.WasmDocument.parseText(
     '{"openbindings":"0.2.0","operations":{"op":{"input":true,"examples":{"e":{"input":42}}}},"sources":{"s":{"kind":"k"}},"bindings":{"b":{"operation":"op","source":"s"}},"dependencies":{"d":{"operation":"op"}}}',
   );
   const assessment = draft.validate(),
-    proof = assessment.takeConformant(),
-    operation = proof.operation("op");
-  const cases = [
-    [
-      bridge.WasmOperation,
-      operation,
-      [
-        ["input", []],
-        ["output", []],
-        ["bindings", []],
-        ["examples", []],
-        ["example", ["e"]],
-      ],
-    ],
-    [bridge.WasmSource, proof.source("s"), [["data", []]]],
-    [
-      bridge.WasmBinding,
-      proof.binding("b"),
-      [
-        ["data", []],
-        ["operation", []],
-        ["source", []],
-      ],
-    ],
-    [
-      bridge.WasmDependency,
-      proof.dependency("d"),
-      [
-        ["operation", []],
-        ["acceptsKind", ['"k"']],
-      ],
-    ],
-    [
-      bridge.WasmExample,
-      operation.example("e"),
-      [
-        ["input", []],
-        ["output", []],
-      ],
-    ],
+    proof = assessment.takeConformant();
+  const invalid = bridge.WasmDocument.parseText('{"openbindings":"0.2.0"}');
+  const transfer = invalid.validate();
+  const reads = [
+    ["operations", []],
+    ["operation", ["op", "op"]],
+    ["resolveOperation", ["op"]],
+    ["bindings", []],
+    ["binding", ["b"]],
+    ["sources", []],
+    ["source", ["s"]],
+    ["dependencies", []],
+    ["dependency", ["d"]],
+    ["inputSchema", ["op"]],
+    ["outputSchema", ["op"]],
+    ["operationBindings", ["op"]],
+    ["examples", ["op"]],
+    ["example", ["op", "e"]],
+    ["operationValue", ["op"]],
+    ["bindingValue", ["b"]],
+    ["sourceValue", ["s"]],
+    ["dependencyValue", ["d"]],
+    ["exampleValue", ["op", "e"]],
+    ["sourceData", ["s"]],
+    ["bindingData", ["b"]],
+    ["exampleInput", ["op", "e"]],
+    ["exampleOutput", ["op", "e"]],
   ];
   try {
     const refused = (error) =>
-      JSON.parse(error).code === "invalid-domain-owner";
-    for (const [type, owner, reads] of cases) {
-      for (const [otherType, other] of cases) {
-        if (type === otherType) continue;
-        for (const [method, args] of [
-          ["retain", []],
-          ["document", []],
-          ["value", []],
-          ["metadata", []],
-          ...reads,
-        ])
-          assert.throws(
-            () => type.prototype[method].call(other, ...args),
-            refused,
-            `${type.name}.${method} on ${otherType.name}`,
-          );
-      }
-      assert.ok(JSON.parse(owner.metadata()).key);
-    }
-    const schema = operation.input(),
+      JSON.parse(error).code === "document-conformance";
+    for (const receiver of [invalid, transfer])
+      for (const [method, args] of reads)
+        assert.throws(
+          () =>
+            bridge.WasmConformantDocument.prototype[method].call(
+              receiver,
+              ...args,
+            ),
+          refused,
+          method,
+        );
+    const schema = proof.inputSchema("op"),
       json = schema.json();
     assert.equal(json.text(), "true");
     json.free();
     schema.free();
-    const value = cases[4][1].input();
+    const value = proof.exampleInput("op", "e");
     assert.equal(value.text(), "42");
     value.free();
+    assert.deepEqual(proof.operation("op", "op"), { key: "op" });
   } finally {
-    for (const [, owner] of cases) owner.free();
+    transfer.free();
+    invalid.free();
     proof.free();
     assessment.free();
     draft.free();

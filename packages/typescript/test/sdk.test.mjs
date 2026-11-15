@@ -197,17 +197,15 @@ test("retained contracts and metadata support repeated native-feeling caller use
     assert.equal(checked.status, "conformant");
     const entries = checked.document.operations();
     assert.ok(Object.isFrozen(entries));
-    for (const entry of entries) entry.dispose();
+    for (const entry of entries) assert.ok(Object.isFrozen(entry));
     const op = checked.document.resolveOperation("execute");
     assert.equal(op.key, "run");
-    assert.deepEqual(op.bindings(), []);
-    op.dispose();
+    assert.deepEqual(checked.document.operationBindings(op.key), []);
     const run = checked.document.resolveOperation("run");
-    const contract = run.input();
+    const contract = checked.document.inputSchema(run.key);
     const input = ready(contract.prepare());
-    const output = run.output();
+    const output = checked.document.outputSchema(run.key);
     contract.dispose();
-    run.dispose();
     checked.document.dispose();
     document.dispose();
     const good = sdk.ExactJson.from(7),
@@ -419,9 +417,8 @@ test("explicit resources, evaluator limits and pre-cancellation keep their disti
   const checked = document.validate();
   assert.equal(checked.status, "conformant");
   const operation = checked.document.resolveOperation("run");
+  const contract = checked.document.inputSchema(operation.key);
   checked.document.dispose();
-  const contract = operation.input();
-  operation.dispose();
   const cancelled = contract.prepare({ resources, signal: control.signal });
   const value = sdk.ExactJson.from(7);
   assert.equal(cancelled.status, "refused");
@@ -538,27 +535,34 @@ test("schema resources retain every entry and release owners", () => {
   }
 });
 
-test("canonical operations retain their proof and contracts independently", () => {
+test("canonical records outlive proofs while contracts retain their context independently", () => {
   const before = testing.liveStorageOwners(),
     document = parsed(text);
   const checked = document.validate();
   assert.equal(checked.status, "conformant");
-  const original = checked.document.resolveOperation("execute"),
-    retained = original.retain();
-  assert.ok(retained instanceof sdk.Operation);
-  assert.notEqual(retained, original);
+  const proof = checked.document,
+    retained = proof.retain();
+  const original = proof.resolveOperation("execute"),
+    record = retained.operation(original.key);
+  assert.ok(Object.isFrozen(record));
+  assert.notEqual(record, original);
+  assert.deepEqual(record, original);
   const raw = document.value();
   assert.throws(
-    () => sdk.Operation.prototype.retain.call(raw),
-    (e) => e.code === "invalid-domain-owner",
+    () => sdk.ConformantDocument.prototype.inputSchema.call(raw, record.key),
+    (e) => e.code === "document-conformance",
   );
   raw.dispose();
-  original.dispose();
-  checked.document.dispose();
+  proof.dispose();
   document.dispose();
-  assert.equal(retained.key, "run");
-  const contract = retained.input();
+  assert.equal(record.key, "run");
+  const contract = retained.inputSchema(record.key);
   retained.dispose();
+  assert.equal(original.key, "run");
+  assert.throws(
+    () => retained.inputSchema(record.key),
+    (e) => e.code === "disposed-handle",
+  );
   const json = contract.json();
   assert.equal(json.text, '{"type":"integer"}');
   json.dispose();
