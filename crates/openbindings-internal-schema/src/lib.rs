@@ -17,7 +17,10 @@ mod input_policy;
 pub mod schema_index;
 mod space;
 pub mod uri;
-pub use input_policy::{IndexedDocument, InputPolicy, Supplied, SuppliedSet};
+pub use input_policy::{
+    IndexedDocument, InputPolicy, Supplied, SuppliedSet, canonical_resolved_uri,
+    normalized_hierarchical_uri_text,
+};
 mod program;
 pub use program::*;
 use serde::Serialize;

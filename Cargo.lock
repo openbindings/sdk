@@ -1011,6 +1011,7 @@ dependencies = [
  "openbindings",
  "openbindings-internal-json",
  "openbindings-internal-schema",
+ "openbindings-json-schema-evaluator",
  "serde_json",
 ]
 

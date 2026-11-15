@@ -504,11 +504,20 @@ impl OmittedEntry {
     pub fn status(&self) -> OmittedStatus {
         OmittedStatus::read(self.0.value().get("status").expect("status")).expect("admitted status")
     }
-    optional_text!(item, "item", "Borrow the omitted source item's label.");
+    optional_text!(
+        item,
+        "item",
+        "Borrow the omitted source item's label: `operations/<key>` or `schemas/<key>`, using the offered key.
+See the pinned [Report contract](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/source-puller/README.md#report)."
+    );
     optional_text!(
         existing,
         "existing",
-        "Borrow the input-document label touched by the omission; required on conflicts. PullResult::validate_for checks primary keys and slot presence."
+        "Borrow the input-document label touched by the omission; required on conflicts.
+Forms are `operations/<key>` or `schemas/<key>` using document primary keys;
+an identifier declaration may use `operations/<key>/input` or `operations/<key>/output`.
+[`PullResult::validate_for`] checks primary keys and slot presence. See the pinned
+[Report contract](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/source-puller/README.md#report)."
     );
     labels_accessor!(
         also_identifies,
@@ -522,7 +531,7 @@ impl OmittedEntry {
     labels_accessor!(
         through,
         "through",
-        "Borrow schema-entry or operation-slot labels through which a conflict differs, in reported order. PullResult::validate_for checks primary keys and slot presence."
+        "Borrow `schemas/<key>` or `operations/<key>/input` or `operations/<key>/output` labels through which a conflict differs when `existing` and `offered` read the same. [`PullResult::validate_for`] checks primary keys and slot presence."
     );
     optional_text!(
         identifier,

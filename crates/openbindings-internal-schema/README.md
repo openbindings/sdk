@@ -3,6 +3,11 @@
 Implements shared fixed document/schema admission and the original-schema resource
 graph. It separates the normative contained OBI walk from external interpretation
 profiles, while retaining original identities, references and source locations.
+Evaluation and comparison share this crate's `canonical_resolved_uri` normalizer
+and `normalized_hierarchical_uri_text` shortcut for JSON Schema resource equivalence.
+The `uri`
+module keeps spelling-preserving resolution for document conformance and
+retrieval registration, whose identity rules are separate.
 Applications use `openbindings` for document validation and an explicit schema
 evaluator for operation values.
 

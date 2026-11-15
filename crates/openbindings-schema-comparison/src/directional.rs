@@ -3,7 +3,10 @@ use crate::{
     ComparisonFailure as Failure, ComparisonLimits, SchemaInput,
     budget::Attempt,
     normalize::{get_value as get, is, outside},
-    value::{self, Object, Value},
+    value::{
+        self, Object, Value,
+        membership::{Membership, contains_sorted},
+    },
 };
 use std::{cmp::Ordering, fmt};
 
@@ -314,14 +317,7 @@ fn walk(
     if includes(t, "object") || includes(c, "object") {
         let (needed, supplied) = if input { (c, t) } else { (t, c) };
         for name in array(needed, "required") {
-            let mut found = false;
-            for other in array(supplied, "required") {
-                if value::equal(name, other, depth + 1, attempt)? {
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
+            if !contains_sorted(array(supplied, "required"), name, depth + 1, attempt)? {
                 let name = render(name, depth, attempt)?;
                 return answer(
                     Verdict::Incompatible,
@@ -495,21 +491,24 @@ fn values(
         )
         .map(Some);
     };
+    let membership = if key == "enum" {
+        Some(Membership::new(
+            array(accepts, "enum"),
+            source.len(),
+            depth + 1,
+            attempt,
+        )?)
+    } else {
+        None
+    };
     for v in source {
         let admitted = if key == "const" {
             value::equal(v, constraint, depth + 1, attempt)?
         } else {
-            let Value::Array(choices) = constraint else {
-                return Err(Failure::from(FailureKind::InvalidSchema));
-            };
-            let mut found = false;
-            for choice in choices {
-                if value::equal(v, choice, depth + 1, attempt)? {
-                    found = true;
-                    break;
-                }
-            }
-            found
+            membership
+                .as_ref()
+                .expect("enum membership")
+                .contains(v, depth + 1, attempt)?
         };
         if !admitted {
             let v = render(v, depth + 1, attempt)?;
@@ -535,15 +534,9 @@ fn values(
     // A const and enum together are separate constraints. Check both rather than
     // allowing one to erase the other when a caller supplies both keywords.
     if key == "const" && get(accepts, "enum").is_some() {
+        let membership = Membership::new(array(accepts, "enum"), source.len(), depth + 1, attempt)?;
         for v in source {
-            let mut found = false;
-            for choice in array(accepts, "enum") {
-                if value::equal(v, choice, depth + 1, attempt)? {
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
+            if !membership.contains(v, depth + 1, attempt)? {
                 let v = render(v, depth + 1, attempt)?;
                 return answer(
                     Verdict::Incompatible,
@@ -704,7 +697,6 @@ fn unions(
     } else {
         (cv, tv, ck, "candidate", "target")
     };
-    let mut incompatible = None;
     let mut indeterminate = None;
     for (index, variant) in flow.iter().enumerate() {
         attempt.work(1)?;
@@ -740,23 +732,19 @@ fn unions(
                 }
                 continue;
             }
-            if incompatible.is_none() {
-                incompatible = Some(answer(
-                    Verdict::Incompatible,
-                    report!(
-                        attempt,
-                        "{key}: {side} variant {index} has no compatible {other} variant"
-                    ),
+            return answer(
+                Verdict::Incompatible,
+                report!(
                     attempt,
-                )?);
-            }
+                    "{key}: {side} variant {index} has no compatible {other} variant"
+                ),
+                attempt,
+            );
         }
     }
     // Flow is universal: a definite failure dominates uncertainty. Retain
     // the first authored index within the deciding class for diagnostics.
-    Ok(incompatible
-        .or(indeterminate)
-        .unwrap_or_else(Comparison::compatible))
+    Ok(indeterminate.unwrap_or_else(Comparison::compatible))
 }
 // Exact JSON diagnostics. Non-scalar UTF-16 units are escaped, never replaced.
 fn quote(name: &[u16], attempt: &mut Attempt<'_>) -> Result<String, Failure> {

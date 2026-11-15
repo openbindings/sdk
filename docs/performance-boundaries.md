@@ -71,12 +71,85 @@ The decision receipt records all release boundaries, conservative sites left
 cumulative, commands and raw samples. These observations are not a release or
 hosted-platform performance qualification.
 
+## Schema comparison membership (2026-11-14)
+
+Directional enum membership uses a sorted vector of borrowed exact instance
+values, built by fallible heapsort, and binary searches. Required names use the
+order normalization already supplies. For combined set sizes N this needs at
+most O(N log N) comparisons; value sizes still determine each exact comparison's
+work. Single lookups and sets of at most eight values use linear scans. No
+input-value hashing or lossy serialization participates in equality. Authored
+enum order and first-failure reasons are retained. Union search stops at its
+first authored incompatible variant.
+
+The review witness compares N strings against 2N strings, with all matching
+values after a disjoint prefix. On Darwin arm64, Rust 1.99.0, release thin LTO,
+one codegen unit, the unchanged `2351ac2` code and repaired code measured:
+
+| N | Before ms | After ms | Verdict |
+| ---: | ---: | ---: | --- |
+| 2,000 | 75.082 | 1.568 | Compatible |
+| 8,000 | 891.613 | 6.757 | Compatible |
+| 32,000 | 13,792.196 | 30.785 | Compatible |
+
+These are single fresh-process samples, with inputs parsed before timing and no
+concurrent build or test. Small sets, required names, const against enum and
+reference paths were measured the same way: ten alternating baseline and
+candidate pairs showed small-case median ratios from 0.992 to 1.022, with pair
+ranges crossing 1.0 for each; the 8,000-name required case improved from
+324.091 ms to 4.672 ms. These are local observations, not a
+portable timing guarantee. At this pin, `tools/evaluator-bench` has no
+schema-comparison dependency or directional-comparison workloads.
+
 ## Prepared value contracts
 
 Retain a `PreparedSchema` for repeated validation. Reusing a conformant
 document and `ExternalSchemas` also saves work, but still prepares a fresh contract on
 each `prepare` call. The SDK does not transparently cache arbitrary custom
 evaluator results.
+
+The Original evaluator builds an enum index only after repeated queries within
+one evaluation. For more than eight choices, the first `ilog2(m)` membership
+queries against the same schema position use the first-match linear walk. The
+next query uses fallible in-place heapsort over four-byte choice positions;
+subsequent queries use binary search. Across `q` queries, this takes order
+`(m + q) log m` choice comparisons, with exact comparison also depending on each
+JSON value's size. Enums of eight choices or fewer always use the linear walk.
+The common single-query counter is inline, so a single query allocates nothing
+new and adds no work debit. Other nodes use accounted entries keyed by schema
+position. No index, enum state or enum charge is added during preparation.
+
+Indexes and sorting use the evaluation's own cumulative reservation ledger and
+existing `semantic-analysis-memory-limit` refusal. A sorted index of 20,000
+choices costs 80,000 bytes, plus any counter-entry storage and comparison scratch.
+Every evaluation starts fresh: retaining a prepared schema never warms an enum
+index or changes a later call's work limit boundary. No fingerprint or secret
+seed is involved. Exact ordering uses mathematical decimals, decoded UTF-16
+strings and member-order independent objects, with heap frames for nesting.
+
+`uniqueItems` still fingerprints each item and sorts the fixed-width candidates.
+A same-fingerprint group of at most eight retains pairwise exact verification;
+larger groups use that same charged heapsort and exact order over four-byte
+positions, then compare neighbours. The first eight candidates may already
+have undergone bounded pairwise checks. A group of `g` distinct colliding items
+now needs order `g log g` exact comparisons, independent of host seed entropy.
+The forced-collision seam's minimum completing evaluation work at 64 / 256 /
+1,024 distinct integers fell from 67,600 / 1,473,136 / 26,533,552 to
+19,356 / 139,427 / 831,106. Each fourfold increase stays within eight times the
+previous work, and the gate fails against the former implementation. Values
+without collisions keep their work debits; small groups keep pairwise verification.
+Only large groups allocate the position scratch, charged to the evaluation's
+cumulative reservation ledger. The fingerprint buffer remains read-only.
+
+The unchanged public work-growth gate uses numeric choices under `items` and a
+reversed integer array. Minimum completing work at 64 / 256 / 1,024 choices is
+70,842 / 485,429 / 2,790,629, down from 207,193 / 4,072,729 / 70,947,865 at
+`0b1d273a`. Every fourfold increase must stay within eight times the previous work.
+Sorting now belongs to that evaluation work total. These witnesses guard this
+shape, rather than proving a bound for every JSON value. Work counts match
+wasm32 and 64-bit hosts; small enums and single queries never exceed their former
+complete walk's debit. The unmodified library and admission's literal counts
+remain unchanged.
 
 The compiled lane reserves a conservative scratch estimate before exact
 arithmetic and composite equality. Its default ceiling remains 48 MiB.
@@ -980,9 +1053,10 @@ above at the default limit adds 247.2 MiB to the resident memory of a process
 that has read the file, and 351.5 MiB at a 64 MiB limit. The package's tests
 (`packages/typescript/test/wasm-memory.test.mjs`) validate the probe's two
 copied-identifier documents, each in a fresh process, and fail if a call adds
-more module memory than it does now: 223.75 and 227.75 MiB, rounded up to the
-next MiB. Module memory is the same on every run of one build, so any growth
-fails.
+more than 224 and 228 MiB of module memory respectively. The recorded growth
+was 223.75 and 227.75 MiB, rounded up to the next MiB, leaving 0.25 MiB of
+headroom per case. Module memory is the same on every run of one build;
+growth beyond those ceilings fails.
 
 The operating system's maximum resident set size of a process that reads a file
 and validates it three times, including that process's own copy of the file,
@@ -1059,10 +1133,11 @@ print('sha256', hashlib.sha256(b).hexdigest())
 PY
 ```
 
-The 2026-10-24 implementation asset is **6,060,275 bytes**, or **1,699,844 bytes**
-with gzip level 9 (`8be7fe3`: 6,010,809 and 1,681,221; `94b6991`: 7,445,434 and
-1,951,593). Its SHA-256 is
-`cd28e5d8cd3f44d05bfb3215316f3a7ff2888b1dbe33c2d57ba8cc05190d50df`.
+The built asset checked in the 2026-11-14 review is **6,809,646 bytes**.
+The earlier 2026-10-24 measurement was 6,060,275 bytes, or 1,699,844 bytes with
+gzip level 9 (`8be7fe3`: 6,010,809 and 1,681,221; `94b6991`: 7,445,434 and
+1,951,593). Those compressed lengths describe the earlier assets; rerun the
+commands above for the current compressed length and SHA-256.
 The build uses the workspace release profile and removes the Wasm name section.
 These lengths exclude JavaScript, declarations, runtime memory and host overhead.
 `build-info.json` beside the generated asset records its source and tool identities.

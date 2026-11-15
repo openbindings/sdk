@@ -83,9 +83,14 @@ returns the first exact value and its exclusive token-end offset.
 `JsonPrefixError::Incomplete` means the boundary is unknown; `Invalid(InputError)`
 reports an admission failure. At known EOF use `JsonValue::parse_with_limits` on
 an incomplete remainder to accept a final number or obtain its ordinary refusal.
-After `Incomplete`, append at least the current buffer length before retrying,
-unless EOF or a limit is reached first, to keep cumulative parsing work linear.
-The host owns separators and I/O. The
+Impossible prefixes return `Invalid` immediately. After `Incomplete`, retain the
+buffer. For files or batches whose producers keep writing, append at least the
+current buffer length before retrying, unless EOF or a limit is reached first,
+to keep cumulative parsing work linear. Waiting for that growth can stall a peer
+that sends one message and waits for a reply. Retrying on every read avoids that
+wait but reparses from the start each time and can make cumulative work quadratic.
+For newline-delimited JSON or MCP over stdio, find the protocol delimiter and
+parse the complete message once. The host owns separators and I/O. The
 [sequence example](https://github.com/openbindings/sdk/blob/main/crates/openbindings/examples/json_sequence.rs)
 implements that geometric rule with bounded reads and whitespace separators.
 `parse_prefix_with_limits` applies the same byte, depth and node allowances as

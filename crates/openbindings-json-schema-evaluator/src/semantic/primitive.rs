@@ -3,7 +3,7 @@
 use super::*;
 use openbindings_internal_json::numeric;
 
-fn shape() -> NoVerdict {
+pub(super) fn shape() -> NoVerdict {
     no_verdict(
         NoVerdictReason::UnsupportedCapability,
         "semantic-predicate-schema",
@@ -200,11 +200,23 @@ impl Run<'_> {
             );
         }
         if let Some(choices) = schema.get("enum") {
-            let mut any = false;
-            for choice in choices.elements().ok_or_else(shape)? {
-                self.graph.tick()?;
-                any |= value_predicates::literal_equal(value, choice, &mut self.graph)?;
-            }
+            // Keep the bounded common walk in its original caller; the larger
+            // evaluation-local query state is used only for large enums.
+            let any = if choices.kind() == JsonKind::Array
+                && choices.len().expect("enum array") > membership::LINEAR
+            {
+                self.enums.contains(node, choices, value, &mut self.graph)?
+            } else {
+                let mut any = false;
+                for choice in choices.elements().ok_or_else(shape)? {
+                    self.graph.tick()?;
+                    if value_predicates::literal_equal(value, choice, &mut self.graph)? {
+                        any = true;
+                        break;
+                    }
+                }
+                any
+            };
             record(any, "enum");
         }
         let prepared = self.plan.operands.get(&node);

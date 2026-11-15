@@ -70,6 +70,34 @@ times value nodes of at most 40,000,000. A value outside that profile uses Origi
 selection alone is not a refusal. Failure during compiled construction can still
 refuse preparation.
 
+Original keeps enum query counts inside each evaluation, keyed by schema
+position. Enums of eight choices or fewer always scan to the first match and
+allocate no index. For a larger enum with `m` choices, the first `ilog2(m)`
+queries also scan; the next query builds a fallible heapsort index, then uses
+binary search for the rest of that evaluation. A single query allocates nothing
+new and never costs more SDK work than the former complete scan. Preparation
+builds no enum membership index or counter storage. Neither enters the prepared
+plan or survives a value call, so cold and warm calls spend the same work.
+
+The evaluation ledger reserves four bytes per indexed choice, plus accounted
+entries for additional enum nodes. An index of 20,000 choices uses 80,000 bytes.
+Sort comparisons and their scratch retain the evaluation's cumulative reservation
+policy and `semantic-analysis-memory-limit` refusal. Equality remains exact for
+mathematical numbers, decoded strings and objects in any member order. Work is
+deterministic on wasm32 and 64-bit hosts. The compiled library lane and admission
+policy are unchanged.
+
+Original `uniqueItems` keeps sorted fingerprints for candidate selection. Groups
+of at most eight candidates retain pairwise exact verification. Larger groups
+use the same fallible heapsort and exact JSON order as enum membership, then
+check adjacent values. Verification is worst-case `g log g` comparisons for a
+colliding group of `g` items, without relying on a secret seed on wasm32.
+Large groups reserve four bytes per item for sorted positions, keeping the
+ordinary fingerprint buffer read-only. Positions, comparisons and heap frames
+charge the evaluation ledger. Values without collisions retain their previous
+work debits. Exact numbers, decoded UTF-16 strings, arrays and unordered member
+maps have the same equality relation as `literal_equal`.
+
 Original uses heap frames, cooperative work checks and cumulative SDK storage
 reservations. Compiled evaluation recurses in the library, with static admission
 and a conservative peak scratch estimate within the default 48 MiB allowance.
@@ -208,6 +236,12 @@ Cancellation is cooperative through `WorkControl`. Cancelled preparation produce
 no prepared owner; a cancelled evaluation does not poison cached predicates or
 prevent a later uncancelled retry. A smaller budget can replace an answer with an
 honest inability, but cannot manufacture `Undefined` or reverse validity.
+
+`tests/cancellation_work.rs` checks large-schema preparation and pattern-free
+value evaluation through public controls. After the control first reports
+cancellation, at most four additional polls may occur, independent of input size.
+This bounds propagation at cooperative boundaries, not work between polls or
+synchronous dependency execution.
 
 ## Patterns, exact values and diagnostics
 

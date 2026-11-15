@@ -31,6 +31,11 @@ impl fmt::Display for AdapterError {
 }
 impl std::error::Error for AdapterError {}
 
+#[cfg(not(target_arch = "wasm32"))]
+type InvokeFuture<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
+#[cfg(target_arch = "wasm32")]
+type InvokeFuture<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + 'a>>;
+
 fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).expect("valid example JSON")
 }
@@ -62,7 +67,7 @@ fn admit(request: &BindingRequest) -> Result<(), InvocationError> {
     Ok(())
 }
 impl BindingInvoker for Memory {
-    type Invoke<'a> = Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send + 'a>>;
+    type Invoke<'a> = InvokeFuture<'a>;
     type Preflight<'a> = Ready<Result<Option<ContextChallenge>, InvocationError>>;
 
     fn handle_invoke<'a>(

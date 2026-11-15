@@ -4,6 +4,7 @@ use crate::{ComparisonContext, ComparisonFailure as Failure, SchemaInput, budget
 use openbindings::{JsonKind, JsonRef, JsonValue};
 use openbindings_internal_json::backend;
 use openbindings_internal_schema::{
+    canonical_resolved_uri, normalized_hierarchical_uri_text,
     schema_index::{SCHEMA_SELECTORS, SchemaSelector, each_schema_child},
     uri,
 };
@@ -36,17 +37,17 @@ pub(crate) struct Resources {
     index: Arc<Mutex<Index>>,
     side: crate::ComparisonSide,
 }
-fn identity(text: &str, attempt: &mut Attempt<'_>) -> Result<String, Failure> {
+// Keep the resolved spelling for relative references and source coordinates;
+// only the lookup key uses the evaluator's URI equivalence.
+fn identity(text: &str, attempt: &mut Attempt<'_>) -> Result<(String, String), Failure> {
     attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
     attempt.allocate(text.len().saturating_mul(8).saturating_add(128))?;
     if !uri::absolute(text) || uri::fragment(text).is_some_and(|f| !f.is_empty()) {
         return Err(Failure::from(FailureKind::InvalidReference));
     }
-    let mut resolved = uri::resolve(text, text).ok_or(FailureKind::InvalidReference)?;
-    if resolved.ends_with('#') {
-        resolved.pop();
-    }
-    Ok(resolved)
+    let base = uri::compared_id(None, text).ok_or(FailureKind::InvalidReference)?;
+    let name = canonical_resolved_uri(&base).ok_or(FailureKind::InvalidReference)?;
+    Ok((base, name))
 }
 fn same(
     a: &ComparisonContext,
@@ -240,6 +241,9 @@ fn context_roots(context: &ComparisonContext) -> impl Iterator<Item = &JsonValue
     std::iter::once(&context.data.document)
         .chain(context.data.resources.iter().map(|(_, value)| value))
 }
+fn is_obi(root: JsonRef<'_>) -> bool {
+    root.get("openbindings").is_some() && root.get("operations").is_some()
+}
 // Only a recognized schema edge can make an enclosing value a schema. In
 // particular /schemas/X and /operations/X/input stop before their carrier root.
 fn enclosing(schema: JsonRef<'_>) -> Option<JsonRef<'_>> {
@@ -269,7 +273,7 @@ fn enclosing(schema: JsonRef<'_>) -> Option<JsonRef<'_>> {
 }
 fn configured_top(root: JsonRef<'_>, top: JsonRef<'_>, obi: bool) -> bool {
     let same = |a, b| backend::occurrence(a) == backend::occurrence(b);
-    if !obi || root.get("openbindings").is_none() || root.get("operations").is_none() {
+    if !obi || !is_obi(root) {
         return same(root, top);
     }
     let Some(parent) = backend::parent(top) else {
@@ -341,34 +345,43 @@ impl Index {
         let count = context.data.resources.len().saturating_add(1);
         attempt.retain(count.saturating_mul(std::mem::size_of::<Resource>()))?;
         let mut entries = Vec::with_capacity(count);
+        let initial = context
+            .data
+            .base
+            .as_deref()
+            .filter(|_| !is_obi(context.data.document.view()))
+            .map(|s| identity(s, attempt))
+            .transpose()?;
         entries.push(Resource {
-            base: context
-                .data
-                .base
-                .as_deref()
-                .map(|s| identity(s, attempt))
-                .transpose()?,
+            base: initial.as_ref().map(|(base, _)| base.clone()),
             document: context.data.document.clone(),
             origin: 0,
         });
         let mut uris = BTreeMap::new();
-        if let Some(base) = &entries[0].base {
-            attempt.retain(base.len().saturating_add(2048))?;
-            uris.insert(base.clone(), Some(0));
+        // ExternalSchemas rejects repeated spelling-preserving retrieval IDs at
+        // registration. Canonical alias conflicts are refused only when reached.
+        let mut retrievals = std::collections::BTreeSet::new();
+        if let Some((base, name)) = initial {
+            attempt.retain(base.len().saturating_add(name.len()).saturating_add(2048))?;
+            uris.insert(name, Some(0));
+            retrievals.insert(base);
         }
-        for (base, document) in &context.data.resources {
-            let base = identity(base, attempt)?;
+        for (retrieval, document) in &context.data.resources {
+            let (base, name) = identity(retrieval, attempt)?;
             attempt.work(
                 base.len()
+                    .max(name.len())
                     .saturating_add(1)
                     .saturating_mul(uris.len().saturating_add(1).ilog2() as usize + 1)
                     .saturating_mul(12),
             )?;
-            if uris.contains_key(&base) {
+            attempt.retain(base.len().saturating_add(name.len()).saturating_add(2048))?;
+            if !retrievals.insert(base.clone()) {
                 return Err(Failure::from(FailureKind::InvalidReference));
             }
-            attempt.retain(base.len().saturating_add(2048))?;
-            uris.insert(base.clone(), Some(entries.len()));
+            uris.entry(name)
+                .and_modify(|entry| *entry = None)
+                .or_insert(Some(entries.len()));
             entries.push(Resource {
                 base: Some(base),
                 document: document.clone(),
@@ -474,16 +487,20 @@ impl Index {
                 )
                 .ok_or(FailureKind::InvalidReference)?
             };
-            let base = identity(&resolved, attempt)?;
-            self.uri_work(&base, attempt)?;
-            if let Some(Some(index)) = self.uris.get(&base)
-                && backend::occurrence(self.entries[*index].document.view()) == node
+            let (base, name) = identity(&resolved, attempt)?;
+            self.uri_work(&name, attempt)?;
+            let same_node =
+                self.uris.get(&name).copied().flatten().filter(|index| {
+                    backend::occurrence(self.entries[*index].document.view()) == node
+                });
+            if let Some(index) = same_node
+                && self.entries[index].base.as_deref() == Some(&base)
             {
-                return Ok(*index);
+                return Ok(index);
             }
             // An already ambiguous URI can include this occurrence. Re-entering
             // it must not publish another declaration after a failed lookup.
-            if self.uris.get(&base) == Some(&None) {
+            if self.uris.get(&name) == Some(&None) {
                 for (index, resource) in self.entries.iter().enumerate() {
                     attempt.work(base.len().saturating_add(1))?;
                     if resource.base.as_deref() == Some(&base)
@@ -495,13 +512,14 @@ impl Index {
             }
             attempt.retain(
                 base.len()
+                    .saturating_add(name.len())
                     .saturating_add(2048)
                     .saturating_add(2 * std::mem::size_of::<Resource>()),
             )?;
             scope = self.entries.len();
             self.uris
-                .entry(base.clone())
-                .and_modify(|value| *value = None)
+                .entry(name)
+                .and_modify(|value| *value = same_node.map(|_| scope))
                 .or_insert(Some(scope));
             self.entries.push(Resource {
                 base: Some(base),
@@ -516,10 +534,7 @@ impl Index {
         let mut roots = attempt.vector(1)?;
         if scope == 0 && self.parent.is_some() {
             roots.push(self.local_root.as_ref().expect("detached root").clone());
-        } else if scope == 0
-            && root.get("openbindings").is_some()
-            && root.get("operations").is_some()
-        {
+        } else if scope == 0 && is_obi(root.view()) {
             if let Some(schemas) = root.get("schemas").and_then(|v| v.members()) {
                 for schema in schemas {
                     attempt.allocate(2 * std::mem::size_of::<JsonValue>())?;
@@ -731,7 +746,7 @@ impl Index {
             }
         }
         let target = if decoded.is_empty() || decoded.starts_with('/') {
-            fragment_target(&self.entries[scope].document, fragment, attempt)?
+            fragment_target(&self.entries[scope].document, &decoded, scope == 0, attempt)?
         } else {
             self.anchors(scope, attempt)?;
             attempt.work(
@@ -784,13 +799,13 @@ impl Index {
         }
         let text = reference.as_str().ok_or(FailureKind::InvalidReference)?;
         attempt.work(text.len().saturating_mul(8).saturating_add(1))?;
-        if !uri::valid(text) {
-            return Err(Failure::from(FailureKind::InvalidReference));
-        }
         if text.is_empty() {
             return self.target(scope, "", attempt);
         }
         if let Some(fragment) = text.strip_prefix('#') {
+            if !uri::valid(text) {
+                return Err(Failure::from(FailureKind::InvalidReference));
+            }
             return self.target(scope, fragment, attempt);
         }
         let current = &self.entries[scope];
@@ -799,18 +814,17 @@ impl Index {
             .saturating_add(current.base.as_ref().map_or(0, String::len));
         attempt.allocate(bytes.saturating_mul(8).saturating_add(128))?;
         attempt.work(bytes.saturating_mul(8).saturating_add(1))?;
-        let resolved = if uri::absolute(text) {
-            uri::resolve(text, text)
-        } else {
-            uri::resolve(
-                current
-                    .base
-                    .as_deref()
-                    .ok_or(FailureKind::InvalidReference)?,
-                text,
-            )
-        }
-        .ok_or(FailureKind::InvalidReference)?;
+        // Literal dot removal must precede decoding escaped dots. Exclude
+        // potential literal dot segments from the absolute normalization shortcut.
+        let absolute = (!text.contains("/."))
+            .then(|| normalized_hierarchical_uri_text(text))
+            .flatten();
+        let resolved = absolute
+            .or_else(|| {
+                let resolved = uri::compared_id(current.base.as_deref(), text)?;
+                canonical_resolved_uri(&resolved)
+            })
+            .ok_or(FailureKind::InvalidReference)?;
         let (resource, fragment) = resolved.split_once('#').unwrap_or((&resolved, ""));
         self.catalog(attempt)?;
         let own = self.lookup(resource, attempt)?;
@@ -832,20 +846,16 @@ impl Index {
 }
 fn fragment_target(
     root: &JsonValue,
-    fragment: &str,
+    pointer: &str,
+    obi: bool,
     attempt: &mut Attempt<'_>,
 ) -> Result<JsonValue, Failure> {
-    attempt.work(fragment.len().saturating_mul(4).saturating_add(1))?;
-    attempt.allocate(fragment.len())?;
-    let pointer = uri::decode_fragment(fragment).ok_or(FailureKind::InvalidReference)?;
-    if pointer.is_empty() {
-        return Ok(root.clone());
-    }
-    let path = pointer
-        .strip_prefix('/')
-        .ok_or(FailureKind::UnsupportedReference)?;
+    attempt.work(pointer.len().saturating_mul(4).saturating_add(1))?;
+    let obi = obi && is_obi(root.view());
+    let mut position = (!obi).then_some(SchemaSelector::Direct);
     let mut node = root.view();
-    for segment in path.split('/') {
+    let path = pointer.strip_prefix('/').unwrap_or(pointer);
+    for segment in path.split('/').filter(|_| !pointer.is_empty()) {
         attempt.work(segment.len().saturating_mul(4).saturating_add(1))?;
         let mut decoded = attempt.vector::<u16>(segment.len())?;
         let mut units = segment.encode_utf16();
@@ -860,7 +870,7 @@ fn fragment_target(
                 unit
             });
         }
-        node = match node.kind() {
+        let child = match node.kind() {
             JsonKind::Object => {
                 let mut found = None;
                 attempt.allocate(decoded.len().saturating_mul(8))?;
@@ -914,6 +924,35 @@ fn fragment_target(
             }
             _ => return Err(Failure::from(FailureKind::MissingReference)),
         };
+        // Track schema placement during the pointer walk, reusing the core and
+        // evaluator's normative selectors. Map/array containers are not schemas.
+        position = match position {
+            Some(SchemaSelector::Direct) if node.kind() == JsonKind::Object => {
+                attempt.work(SCHEMA_SELECTORS.len())?;
+                let name = backend::member_name(child).and_then(|n| n.as_str());
+                SCHEMA_SELECTORS
+                    .iter()
+                    .find_map(|(key, selector)| (Some(*key) == name).then_some(*selector))
+            }
+            Some(SchemaSelector::Map | SchemaSelector::MapOrStringArray)
+                if node.kind() == JsonKind::Object =>
+            {
+                Some(SchemaSelector::Direct)
+            }
+            Some(SchemaSelector::Array) if node.kind() == JsonKind::Array => {
+                Some(SchemaSelector::Direct)
+            }
+            _ => None,
+        };
+        if position.is_none() && obi && configured_top(root.view(), child, true) {
+            position = Some(SchemaSelector::Direct);
+        }
+        node = child;
+    }
+    if position != Some(SchemaSelector::Direct)
+        || !matches!(node.kind(), JsonKind::Object | JsonKind::Boolean)
+    {
+        return Err(FailureKind::MissingReference.into());
     }
     Ok(node.to_owned())
 }
@@ -928,10 +967,10 @@ mod tests {
     }
     #[test]
     fn references_use_each_supplied_root_base_and_external_context() {
-        let selected = json(r##"{"$ref":"#/schemas/A"}"##);
+        let selected = json(r##"{"$ref":"#/$defs/A"}"##);
         let input = SchemaInput::new(
             selected.clone(),
-            json(r##"{"schemas":{"A":{"type":"string"}}}"##),
+            json(r##"{"$defs":{"A":{"type":"string"}}}"##),
         )
         .with_base("https://example.test/root")
         .with_resource(
@@ -942,7 +981,7 @@ mod tests {
         let control = AtomicBool::new(false);
         let mut attempt = Attempt::new(ComparisonLimits::default(), &control);
         let resources = Resources::new(&input, crate::ComparisonSide::Left, &mut attempt).unwrap();
-        let reference = json(r##""#/schemas/A""##);
+        let reference = json(r##""#/$defs/A""##);
         assert_eq!(
             resources
                 .resolve(0, reference.view(), &mut attempt)
@@ -957,7 +996,7 @@ mod tests {
             .resolve(scope, a.get("$ref").unwrap(), &mut attempt)
             .unwrap();
         assert_eq!(b.text(), "false");
-        let other = SchemaInput::new(selected, json(r##"{"schemas":{"A":true}}"##));
+        let other = SchemaInput::new(selected, json(r##"{"$defs":{"A":true}}"##));
         assert_eq!(
             Resources::new(&other, crate::ComparisonSide::Left, &mut attempt)
                 .unwrap()
@@ -973,11 +1012,13 @@ mod tests {
         let control = AtomicBool::new(false);
         let mut attempt = Attempt::new(ComparisonLimits::default(), &control);
         let input = {
-            let schema = json(r##"{"a/b":[true,false],"duplicate":true,"duplicate":false}"##);
+            let schema = json(
+                r##"{"$defs":{"a/b":{"prefixItems":[true,false]}},"duplicate":true,"duplicate":false}"##,
+            );
             SchemaInput::new(schema.clone(), schema)
         };
         let resources = Resources::new(&input, crate::ComparisonSide::Left, &mut attempt).unwrap();
-        let reference = json(r##""#/a~1b/1""##);
+        let reference = json(r##""#/$defs/a~1b/prefixItems/1""##);
         assert_eq!(
             resources
                 .resolve(0, reference.view(), &mut attempt)

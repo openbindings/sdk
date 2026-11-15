@@ -38,10 +38,10 @@ console.log(JSON.stringify({
 }));
 `;
 
-test("hostile copied identifiers finish within public document and finding limits", async (t) => {
+test("hostile copied identifiers stay within documented module memory ceilings", async (t) => {
   const shapes = [
-    ["copied identifier paths", "", "conformant"],
-    ["copied identifier paths with pieces", "?#f", "non-conformant"],
+    ["copied identifier paths", "", "conformant", 224 * MIB],
+    ["copied identifier paths with pieces", "?#f", "non-conformant", 228 * MIB],
   ];
   const results = await Promise.all(
     shapes.map(async ([, pieces]) => {
@@ -62,9 +62,14 @@ test("hostile copied identifiers finish within public document and finding limit
     ),
   );
   results.forEach((result, at) => {
-    const [name, , conclusion] = shapes[at];
+    const [name, , conclusion, ceiling] = shapes[at];
     assert.equal(result.conclusion, conclusion, name);
     assert(result.bytes <= 32 * MIB, "document fits the public byte limit");
+    // Recorded growth: 223.75 / 227.75 MiB, rounded up with 0.25 MiB headroom.
+    assert.ok(
+      result.added <= ceiling,
+      `${name}: module memory grew by ${result.added} bytes, ceiling ${ceiling}`,
+    );
   });
   assert.equal(results[1].findings, 4096);
 });

@@ -1,5 +1,89 @@
 # Changelog
 
+## 2026-11-14 review repairs (unreleased)
+
+### Changed
+
+- A comparison context whose root is an OpenBindings document ignores a caller-set
+  base. The document's own resource cannot be named by any reference
+  (specification section 7.2), so a reference to it through a retrieval address is
+  a missing reference, as it is without the base. A base on a standalone schema
+  root keeps its meaning.
+- Comparison follows a reference only to a schema position of its resource. A
+  target that is instance data (under `const`, `enum`, `default`, `examples`, or
+  an unknown keyword) fails as `MissingReference` and is no longer compared as a
+  schema. A standalone schema that kept definitions under a member such as
+  `schemas` or `components` must keep them at a schema position such as `$defs`.
+
+### Added
+
+- The kind guide covers what eight independent adapter authors had to find in
+  the source: a worked source checker, reading exact JSON, placing schemas taken
+  from a protocol artifact, what an adapter caches, depth bounds for a recursive
+  decoder, matching existing entries by a stable identity, cleanup that outlives a
+  cancelled call, and the two shapes of a transport-generic adapter with what each
+  does to `Send`.
+- Compiled examples back each of those, and one shows a host that holds two kinds:
+  object-safe twins of the role traits, an error type that keeps the adapter's own
+  error behind `source()`, a registration check against published support, and a
+  context store keyed by the exact source entry.
+
+
+- Tests that fail if comparison cost grows faster than n log n for enum, const and
+  required membership, measured in the SDK's own work units, and tests that a
+  cancelled preparation, evaluation or comparison returns within a fixed number of
+  further polls whatever the input's size.
+- The TypeScript memory test now asserts the two Wasm memory ceilings the
+  performance notes say it guards (224 MiB and 228 MiB).
+
+
+- The kind guide now states the pull report's label forms and links the interface's Report section, says that a
+  pull offering schemas needs the comparison companion and which root its references resolve in, links the challenge
+  conventions, and adds the rule against hash tables keyed by input content to its checklist. Compiled examples cover
+  a report with current and stale schema entries and a conflict taken through the checked pull, and one adapter whose
+  invocation future is `Send` on native targets and local on wasm32.
+
+### Fixed
+
+- Directional enum, const and required membership uses an ordered lookup in place
+  of a linear search for each value: 32,000 strings against 64,000 fell from 13.4 s
+  to about 36 ms. Verdicts and reasons are unchanged. A union walk stops at its
+  first incompatible variant.
+- The documented count of ordinary directional fixture groups is 65.
+
+- `JsonValue::parse_prefix` reports an invalid string escape or a malformed literal
+  as `Invalid` at once, at the defective byte. Before, an invalid escape inside an
+  unfinished string was reported as `Incomplete` until the closing quote arrived.
+- The guidance for `parse_prefix` now says what the retry rule assumes. Waiting
+  for the buffer to double keeps work linear for a file or a batch and stalls a
+  peer that sends one message and waits for the reply; retrying on every read
+  reparses from the start each time. A protocol with its own delimiter should find
+  the delimiter and parse once.
+
+- The recorded Wasm asset size and the development loop's opening paragraph are
+  current.
+
+- The evaluator's own lane checked a value against an enum by walking every choice, and kept walking after a match,
+  so an array of n values against n choices cost n squared comparisons. Within one evaluation, after `ilog2(m)`
+  lookups against the same enum of m choices (more than eight), it now sorts the choices once under an order whose
+  equal class is the evaluator's literal equality and answers the rest by binary search; every walk stops at its
+  first match. Preparation does no new work, a single value and a small enum cost what they did, nothing is kept
+  between evaluations, and verdicts and failing keywords are unchanged. Work for 1,024 values against 1,024 choices
+  falls from 70,947,865 units to 2,790,629.
+
+- Comparison resolved a reference to an embedded or supplied resource only under the exact spelling of its URI,
+  where the evaluator also accepts the same URI with a different case of scheme or host, a percent-encoded
+  unreserved character, a different case of percent-encoding, or the default port. It answered `MissingReference`
+  for such a reference, so one SDK read one reference two ways. Comparison now uses the core's own URI
+  canonicalization for a resource's `$id`, a supplied resource's URI, a caller's base and a reference, and a test
+  asks both for every spelling in a table of 23 and requires them to agree. Supplied resources registered under
+  two spellings of one URI are refused as the evaluator refuses them.
+
+- `uniqueItems` compared every pair of items that shared a fingerprint, so a group of g distinct colliding items
+  cost g squared comparisons, and on wasm32, where the fingerprint seed is not secret, a sender who knows the build
+  can make items collide. A group of more than eight is now sorted under the evaluator's exact order and checked
+  neighbour to neighbour. Arrays without collisions cost what they did; verdicts are unchanged.
+
 ## 2026-11-13 panel decisions (unreleased)
 
 ### Changed

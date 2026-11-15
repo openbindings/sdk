@@ -197,11 +197,10 @@ impl std::error::Error for InputError {}
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum JsonPrefixError {
-    /// The buffer ends before the value's boundary is known. Retain the buffer
-    /// and, before retrying, append at least as many bytes as it already holds,
-    /// unless EOF or an admission limit is reached first. Geometric growth keeps
-    /// total parsing work linear in the accumulated value, even with tiny reads.
-    /// At known EOF, pass the remainder to [`JsonValue::parse_with_limits`].
+    /// The buffer can still become valid, but the value's boundary is unknown.
+    /// Retain the buffer; choose retries to suit the producer, as described in
+    /// [`JsonValue::parse_prefix_with_limits`]. At known EOF, pass the remainder
+    /// to [`JsonValue::parse_with_limits`].
     Incomplete,
     /// Invalid encoding, JSON syntax or an exceeded admission limit.
     Invalid(InputError),
@@ -391,7 +390,7 @@ impl JsonValue {
         Ok(Self { owner, id: 0 })
     }
     /// Parse the first JSON value under [`JsonLimits::default`]. See
-    /// [`Self::parse_prefix_with_limits`] for buffer and offset semantics.
+    /// [`Self::parse_prefix_with_limits`] for buffer, offset and retry semantics.
     ///
     /// # Errors
     /// Returns [`JsonPrefixError::Incomplete`] while the value's boundary is
@@ -414,18 +413,25 @@ impl JsonValue {
     /// and literals need no lookahead. Adjacent values are accepted; the host
     /// chooses its separator rule and handles an empty sequence itself.
     ///
-    /// This stateless call borrows the buffer and copies only the admitted source
-    /// on success. After [`JsonPrefixError::Incomplete`], append at least as many
-    /// bytes as the buffer already holds before retrying, unless EOF or a limit
-    /// is reached first. This geometric rule bounds cumulative parsing work by
-    /// the value's size. See the `json_sequence` host example in `openbindings`.
-    /// No reader, I/O or async behavior is provided by this primitive.
+    /// This stateless call reparses from the start on each retry and copies only
+    /// the admitted source on success. After [`JsonPrefixError::Incomplete`],
+    /// retain the buffer. For a file or batch whose producer keeps writing,
+    /// append at least the current buffer length before retrying, unless EOF or
+    /// a limit is reached first. This geometric rule keeps cumulative work
+    /// linear; the `json_sequence` host example in `openbindings` uses it.
+    /// Waiting for that growth can stall a request/reply peer that sends one
+    /// message and waits for a reply. Retrying on every read avoids that wait,
+    /// but repeatedly reparses the buffer and can make cumulative work quadratic.
+    /// If the protocol has its own delimiter, such as newline-delimited JSON or
+    /// MCP over stdio, find the delimiter and parse the complete message once.
+    /// The host owns framing, reads and retry scheduling.
     ///
     /// # Errors
     /// Returns [`JsonPrefixError::Incomplete`] for a truncated value, empty or
     /// whitespace-only buffer, or ambiguous numeric end. Invalid UTF-8 within
     /// the value, a byte order mark, malformed syntax and exceeded limits return
-    /// [`JsonPrefixError::Invalid`]. Error locations refer to the supplied buffer.
+    /// [`JsonPrefixError::Invalid`]. A prefix no continuation can make valid is
+    /// invalid immediately. Error locations refer to the supplied buffer.
     ///
     /// ```
     /// # use openbindings_internal_json as openbindings;

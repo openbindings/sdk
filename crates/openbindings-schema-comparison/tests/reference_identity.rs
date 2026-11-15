@@ -4,17 +4,17 @@ use std::sync::atomic::AtomicBool;
 fn input(schema: &str, target: &str) -> SchemaInput {
     SchemaInput::new(
         JsonValue::parse(schema).unwrap(),
-        JsonValue::parse(format!(r#"{{"schemas":{{"S":{target}}}}}"#)).unwrap(),
+        JsonValue::parse(format!(r#"{{"$defs":{{"S":{target}}}}}"#)).unwrap(),
     )
 }
 #[test]
 fn accounted_leaves_keep_siblings_and_containing_conjunctions_unmerged() {
     let a = input(
-        r##"{"allOf":[{"$ref":"#/schemas/S","minLength":1},{"type":"string"}]}"##,
+        r##"{"allOf":[{"$ref":"#/$defs/S","minLength":1},{"type":"string"}]}"##,
         r#"{"type":"integer"}"#,
     );
     let b = input(
-        r##"{"allOf":[{"$ref":"#/schemas/S","minLength":1,"description":"author"},{"type":"string"}]}"##,
+        r##"{"allOf":[{"$ref":"#/$defs/S","minLength":1,"description":"author"},{"type":"string"}]}"##,
         r#"{"type":"string"}"#,
     );
     assert_eq!(
@@ -26,13 +26,13 @@ fn accounted_leaves_keep_siblings_and_containing_conjunctions_unmerged() {
         identical_with_references(
             Some(&a),
             Some(&b),
-            &|r| r.spelling() == "#/schemas/S",
+            &|r| r.spelling() == "#/$defs/S",
             &ComparisonLimits::default()
         ),
         Ok(true)
     );
     let reordered = input(
-        r##"{"allOf":[{"type":"string"},{"$ref":"#/schemas/S","minLength":1}]}"##,
+        r##"{"allOf":[{"type":"string"},{"$ref":"#/$defs/S","minLength":1}]}"##,
         r#"{"type":"string"}"#,
     );
     assert_eq!(
@@ -45,7 +45,7 @@ fn accounted_leaves_keep_siblings_and_containing_conjunctions_unmerged() {
         Ok(false)
     );
     let changed = input(
-        r##"{"allOf":[{"$ref":"#/schemas/S","minLength":2},{"type":"string"}]}"##,
+        r##"{"allOf":[{"$ref":"#/$defs/S","minLength":2},{"type":"string"}]}"##,
         r#"{"type":"string"}"#,
     );
     assert_eq!(
@@ -60,8 +60,8 @@ fn accounted_leaves_keep_siblings_and_containing_conjunctions_unmerged() {
 }
 #[test]
 fn unaccounted_target_drift_has_a_second_identity_question() {
-    let a = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"type":"string"}"#);
-    let b = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"type":"number"}"#);
+    let a = input(r##"{"$ref":"#/$defs/S"}"##, r#"{"type":"string"}"#);
+    let b = input(r##"{"$ref":"#/$defs/S"}"##, r#"{"type":"number"}"#);
     assert_eq!(
         identical_with_references(Some(&a), Some(&b), &|_| false, &ComparisonLimits::default()),
         Ok(false)
@@ -71,8 +71,8 @@ fn unaccounted_target_drift_has_a_second_identity_question() {
         Ok(true)
     );
     for schema in [
-        r##"{"not":{"$ref":"#/schemas/S"}}"##,
-        r##"{"$dynamicRef":"#/schemas/S"}"##,
+        r##"{"not":{"$ref":"#/$defs/S"}}"##,
+        r##"{"$dynamicRef":"#/$defs/S"}"##,
     ] {
         let before = input(schema, r#"{"type":"string"}"#);
         let after = input(schema, r#"{"type":"number"}"#);
@@ -112,7 +112,7 @@ fn unaccounted_target_drift_has_a_second_identity_question() {
 }
 #[test]
 fn only_same_spelled_accounted_references_can_hide_missing_content_or_cycles() {
-    let a = input(r##"{"$ref":"#/schemas/S"}"##, r##"{"$ref":"#/schemas/S"}"##);
+    let a = input(r##"{"$ref":"#/$defs/S"}"##, r##"{"$ref":"#/$defs/S"}"##);
     assert_eq!(
         identical_with_references(Some(&a), Some(&a), &|_| true, &ComparisonLimits::default()),
         Ok(true)
@@ -133,7 +133,7 @@ fn only_same_spelled_accounted_references_can_hide_missing_content_or_cycles() {
         .map_err(|failure| failure.kind()),
         Err(ComparisonFailureKind::InvalidReference)
     );
-    let malformed_target = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"$ref":"not a uri"}"#);
+    let malformed_target = input(r##"{"$ref":"#/$defs/S"}"##, r#"{"$ref":"not a uri"}"#);
     assert_eq!(
         identical_with_references(
             Some(&malformed_target),
@@ -186,7 +186,7 @@ fn only_same_spelled_accounted_references_can_hide_missing_content_or_cycles() {
 }
 #[test]
 fn reference_rule_variants_apply_limits_and_cooperative_control() {
-    let a = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"type":"string"}"#);
+    let a = input(r##"{"$ref":"#/$defs/S"}"##, r#"{"type":"string"}"#);
     assert_eq!(
         (identical_with_references_and_control(
             Some(&a),
@@ -222,13 +222,13 @@ fn reference_rule_variants_apply_limits_and_cooperative_control() {
 
 #[test]
 fn accounting_receives_the_original_resource_context_without_disclosing_it() {
-    let a = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"type":"string"}"#)
+    let a = input(r##"{"$ref":"#/$defs/S"}"##, r#"{"type":"string"}"#)
         .with_base("https://sentinel.test/root");
-    let b = input(r##"{"$ref":"#/schemas/S"}"##, r#"{"type":"number"}"#)
+    let b = input(r##"{"$ref":"#/$defs/S"}"##, r#"{"type":"number"}"#)
         .with_base("https://sentinel.test/root");
     let accounted = |context: ReferenceContext<'_>| {
-        assert_eq!(context.spelling(), "#/schemas/S");
-        assert!(context.resource().get("schemas").is_some());
+        assert_eq!(context.spelling(), "#/$defs/S");
+        assert!(context.resource().get("$defs").is_some());
         assert_eq!(
             context.schema().get("$ref").unwrap().as_str(),
             Some(context.spelling())
@@ -256,11 +256,11 @@ fn accounting_receives_the_original_resource_context_without_disclosing_it() {
 #[test]
 fn an_inline_occurrence_does_not_keep_another_propertys_reference_as_a_leaf() {
     let left = input(
-        r##"{"properties":{"owner":{"$ref":"#/schemas/S"},"author":{"$ref":"#/schemas/S"}}}"##,
+        r##"{"properties":{"owner":{"$ref":"#/$defs/S"},"author":{"$ref":"#/$defs/S"}}}"##,
         r#"{"type":"string"}"#,
     );
     let right = input(
-        r##"{"properties":{"owner":{"type":"string"},"author":{"$ref":"#/schemas/S"}}}"##,
+        r##"{"properties":{"owner":{"type":"string"},"author":{"$ref":"#/$defs/S"}}}"##,
         r#"{"type":"string"}"#,
     );
     assert_eq!(

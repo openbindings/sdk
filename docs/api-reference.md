@@ -68,9 +68,15 @@ or obtain the ordinary refusal. Complete strings, containers and literals need
 no lookahead. Only the value and constant lookahead are inspected; following
 bytes, including invalid UTF-8, remain with the host. The byte allowance covers
 the prefix through `end`; depth and node limits are unchanged.
-After `Incomplete`, append at least the current buffer length before retrying,
-unless EOF or a limit is reached first, so repeated parsing stays linear in the
-value's size. The host owns separators, buffering and I/O. See the tested
+An impossible prefix returns `Invalid` immediately. After `Incomplete`, retain
+the buffer. For files or batches whose producers keep writing, append at least
+the current buffer length before retrying, unless EOF or a limit is reached
+first, to keep cumulative work linear. Waiting for that growth can stall a peer
+that sends one message and waits for a reply. Retrying on every read avoids that
+wait but reparses from the start each time and can make cumulative work quadratic.
+For newline-delimited JSON or MCP over stdio, find the protocol delimiter and
+parse the complete message once. The host owns separators, buffering and I/O.
+See the tested
 [whitespace-separated host example](../crates/openbindings/examples/json_sequence.rs).
 The TypeScript facade does not yet expose this primitive.
 
@@ -420,6 +426,10 @@ present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `finding()` accessors. `ComparisonContext::new(root)` retains a reusable document;
 `with_base` and `with_resource` configure it, and `schema(exact_value)` selects a
 `SchemaInput`. `SchemaInput::new` remains a convenience for single comparisons;
+`with_base` sets the initial base of a standalone schema root and is ignored for
+an OBI root. Its document resource cannot be named by a caller URI. Followed
+references must reach schema positions; pointers into instance or carrier data
+fail with `MissingReference` in every comparison mode.
 `context()` exposes its retained context. Indexing is lazy, shared within each
 call and reusable across calls. Failed and cancelled work leaves contexts usable.
 `check_interface` and `check_interface_with_control` take required/provided
@@ -428,7 +438,8 @@ conformant documents, their respective `&ComparisonContext`s, and a callback
 required operation and each distinct provided match, or `None` when missing.
 Each context must retain the exact root of its paired proof; an equal but
 separately parsed root fails with `ContextMismatch` before callbacks. Initial
-cancellation takes precedence. Bases and external resources come from the caller.
+cancellation takes precedence. External resources come from the caller and use
+their supplied URIs as bases, including for relative references between resources.
 The callback selects realized, consumed, both, or excluded for that match. Every distinct
 provided match is retained, independent of alias order, with output then input
 results including failures. `operations()`, `issues()` and each issue's

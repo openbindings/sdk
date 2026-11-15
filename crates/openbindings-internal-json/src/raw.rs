@@ -1438,6 +1438,7 @@ impl Parser<'_> {
                 return Err(problem);
             }
             let mut problem = self.error("literal");
+            problem.offset += matched;
             if text.as_bytes().starts_with(rest) {
                 problem.code = self.source.incomplete_code("literal");
             }
@@ -1561,7 +1562,10 @@ impl Parser<'_> {
                                 _ => char::from_u32(u32::from(unit)).expect("a scalar value"),
                             }
                         }
-                        _ => return Err(self.error("escape")),
+                        _ => {
+                            self.pos -= 1;
+                            return Err(self.error("escape"));
+                        }
                     };
                     if !unpaired {
                         self.out

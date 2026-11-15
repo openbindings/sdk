@@ -29,6 +29,13 @@ Dropping the original document or view does not invalidate the input.
 For many comparisons, construct one `ComparisonContext::new(root)` per document
 and select inputs with `context.schema(exact_schema)`. Its `with_base` and
 `with_resource` configure resolution, just as the convenience input methods do.
+For offered `#/schemas/...` references, the compiled
+[schema-report example](https://github.com/openbindings/sdk/blob/main/examples/source-pull-consumer/tests/schema_report.rs)
+supplies an OBI-shaped exact root directly, without a temporary validated document.
+`with_base` sets the initial base only for a standalone schema root. It is ignored
+for an OBI root: the document resource has its own unnameable base, so a caller URI
+cannot make its schemas addressable from another resource. Supplied resources
+still use their supplied URIs, including for relative references between them.
 Contexts retain completed successful indexing across calls. Failed or cancelled
 work leaves them usable. The persistent index contains only configured documents
 and resources, never detached selections. An OBI contributes declarations only
@@ -42,8 +49,10 @@ A schema selected outside the root's schema positions, including an opaque
 carrier member, gets the same call-local view of its subtree's declarations as
 a detached schema. These declarations are private to that view: sibling
 selections and the other side of a comparison cannot see them, and the view is
-released with the call. Pointer references still resolve into the configured
+released with the call. Pointer references still start at the configured
 document unless the selected subtree declares its own resource with `$id`.
+They must land at a schema position there; selecting carrier data never makes
+that data a reference target.
 Selecting carrier data adds no declarations to the containing document.
 Within a call, inputs with the same root and resource
 configuration share indexing, including reference inventory and normalization.
@@ -79,6 +88,18 @@ root. Relative references need a resource base; external content must be supplie
 with `with_resource`. Nothing is fetched. A `$ref` target is conjoined with its
 siblings using the profile's `allOf` rules. Missing content, cycles and malformed
 references fail normalization. Duplicate supplied URI identities are refused.
+Resource IDs, supplied names, initial bases and references share the evaluator's
+URI canonicalization, including scheme/host case, unreserved percent encodings,
+hexadecimal encoding case, dot segments and HTTPS's default port. An empty path
+remains distinct from `/`. Retrieval duplicates use `ExternalSchemas` registration
+identity; conflicts between distinct spellings of one canonical URI are refused
+when reached, while unused conflicts do not prevent unrelated comparisons.
+Resolved base spelling is preserved for subsequent relative references and source
+coordinates; only resource lookup keys use canonical equivalence.
+Targets under `const`, `enum`, annotations, unknown keywords, or other data
+positions fail with `MissingReference`, in directional, identity, and followed
+reference-rule comparisons. Schema positions follow the same normative selectors
+as core conformance and the value evaluator, including nested `$id` resources.
 
 Normalization strips the profile's annotations/extensions, canonicalizes type and
 required, resolves references, and merges eligible allOf branches in authored
@@ -98,6 +119,13 @@ literal false/true merge rules do not rewrite object forms into those flags.
 
 Numbers compare mathematically without binary64 conversion or exponent expansion.
 Names and strings retain decoded UTF-16 identity without Unicode normalization.
+Directional enum membership uses a sorted index over borrowed exact instance
+values, with worst-case `n log n` ordering work and binary searches. The private
+order uses exact decimal comparison and UTF-16 strings, recursively comparing
+ordered arrays and objects by sorted names. It introduces no serialization or
+input-value hashing. Single lookups and sets of at most eight values use linear
+search; required names already normalize into sorted order. Membership leaves
+authored enum order intact, including the first failing value in a reason.
 Ambiguous duplicate object members are refused, including inside opaque data.
 Enum intersections retain the first branch's order; repeated equal first-branch
 values currently return UnsupportedNormalization because the pin does not specify
@@ -124,8 +152,15 @@ cooperative cancellation at work and allocation boundaries. It never publishes a
 partial normalized tree or caches a failed result. Completed document indexing
 can be reused without charging that indexing again in a later call.
 
+`tests/work_growth.rs` searches the smallest public `max_work` that completes
+enum subsets, const against enum, and required subsets at 1,000, 4,000 and 16,000
+values. Each fourfold increase may use at most eight times the work: fixed-width
+`n log n` growth fits, while quadratic growth does not. It also bounds extra
+cancellation polls by four, independently of input width. These are deterministic
+SDK work and poll checks, not duration guarantees.
+
 The fixture harness passes all 30 ordinary and 10 exact identity groups, and all
-62 ordinary and 29 exact directional groups, including expected normalization
+65 ordinary and 29 exact directional groups, including expected normalization
 failures. No groups are skipped. All copied inputs are byte-identical to the pin,
 with hashes in `tests/fixtures/README.md`.
 
@@ -162,7 +197,8 @@ they differ. Union search accepts a definitive matching variant; if no variant
 matches and some comparisons are indeterminate, that variant remains indeterminate.
 A variant with no match decides incompatible before an indeterminate variant
 decides indeterminate, whatever order the variants were written in; the reason
-names the first authored variant of the deciding kind.
+names the first authored variant of the deciding kind. The walk stops as soon as
+that first incompatible variant is known.
 Reasons retain nested paths, exact JSON values, exclusive markers, actual union
 keys and authored indexes. Types, properties and required names choose the first
 lexical failure; enum and union traversal retain authored order.
@@ -173,8 +209,9 @@ accepts two `ConformantDocument`s, their caller-configured `ComparisonContext`s 
 Each context must retain the exact root of its paired proof, obtained from
 `document.document().value().clone()`. An equal but separately parsed root fails
 with `ComparisonFailureKind::ContextMismatch` before any callback runs. Initial
-cancellation takes precedence. Retrieval bases and supplied resources remain
-independent on the two sides, and no reference causes I/O.
+cancellation takes precedence. Supplied resources and their bases remain
+independent on the two sides; caller bases do not name either OBI document
+resource, and no reference causes I/O.
 
 The callback receives the required operation and each distinct matched provided
 operation, or `None` when missing. It runs once per match, before expanding `Both`.
@@ -248,13 +285,13 @@ reference inventory and comparison work.
 ```rust
 use openbindings::JsonValue;
 use openbindings_schema_comparison::{identical_with_references, ComparisonLimits, SchemaInput};
-let schema = JsonValue::parse(r##"{"$ref":"#/schemas/User"}"##)?;
-let before = SchemaInput::new(schema.clone(), JsonValue::parse(r#"{"schemas":{"User":{"type":"string"}}}"#)?);
-let offered = SchemaInput::new(schema, JsonValue::parse(r#"{"schemas":{"User":{"type":"number"}}}"#)?);
+let schema = JsonValue::parse(r##"{"$ref":"#/$defs/User"}"##)?;
+let before = SchemaInput::new(schema.clone(), JsonValue::parse(r#"{"$defs":{"User":{"type":"string"}}}"#)?);
+let offered = SchemaInput::new(schema, JsonValue::parse(r#"{"$defs":{"User":{"type":"number"}}}"#)?);
 let limits = ComparisonLimits::default();
 // The caller has a report entry for User, so its drift is reported there.
 assert!(identical_with_references(Some(&before), Some(&offered),
-    &|reference| reference.spelling() == "#/schemas/User", &limits)?);
+    &|reference| reference.spelling() == "#/$defs/User", &limits)?);
 // Without that accounting, following the reference finds a difference.
 assert!(!identical_with_references(Some(&before), Some(&offered), &|_| false, &limits)?);
 // Keeping every same-spelled reference answers the second question: the entry

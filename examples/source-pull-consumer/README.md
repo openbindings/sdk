@@ -30,6 +30,11 @@ The consumer explicitly adopts additions or applies proposals and revalidates.
 Its binding data selects source items and needs no other additions, so the
 reconciler emits no `uses`. Schema references show their own targets.
 
+The fixed [schema-report example](tests/schema_report.rs) takes current and stale
+schema entries, a source entry, and a conflict with `offered` and `through` through
+a checked pull. It compares the offering in its own OBI-shaped `ComparisonContext`,
+so `#/schemas/...` resolves there and an author's description stays current.
+
 To keep part of a pull, choose added bindings, insert their operations when added
 and what their `uses` names, then follow schema references to further additions.
 Each reached added binding brings its own operation and `uses`. Repeat until

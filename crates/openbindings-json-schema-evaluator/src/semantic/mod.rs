@@ -12,6 +12,7 @@ mod decision;
 mod execution;
 mod explain;
 mod formats;
+mod membership;
 mod meta;
 mod operands;
 mod patterns;
@@ -369,6 +370,7 @@ impl Plan {
             supports: BTreeMap::new(),
             support_memo_count: 0,
             patterns: storage::Entries::default(),
+            enums: membership::Queries::default(),
         };
         let (mut outcome, witness) = run.evaluate_root(value, unavailable);
         if record_witnesses
@@ -633,6 +635,7 @@ struct Run<'a> {
     supports: BTreeMap<Visit, Arc<Option<refinement::Support>>>,
     support_memo_count: usize,
     patterns: storage::Entries<(usize, usize), patterns::Search>,
+    enums: membership::Queries,
 }
 impl Run<'_> {
     fn units(&mut self, value: JsonRef<'_>) -> Result<Vec<u16>, NoVerdict> {

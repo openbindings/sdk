@@ -477,7 +477,7 @@ fn comparison_gaps_and_removal_proposals_are_reported() {
 #[test]
 fn unchanged_reference_with_unaccounted_target_drift_is_unassessed() {
     let original = document(
-        r##"{"openbindings":"0.2.0","operations":{"a":{"input":{"$ref":"#/schemas/S"}}},"schemas":{"S":{"type":"string","minLength":1}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"schemas":{"S":{"type":"string","minLength":2}},"items":[{"key":"a","operation":{"input":{"$ref":"#/schemas/S"}},"data":{"item":"a"}}]}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"##,
+        r##"{"openbindings":"0.2.0","operations":{"a":{"input":{"$ref":"https://schemas.test/S"}}},"schemas":{"S":{"type":"string","minLength":1,"$id":"https://schemas.test/S"}},"sources":{"catalog":{"kind":"example.embedded@1","data":{"items":[{"key":"a","operation":{"input":{"$ref":"https://schemas.test/S"}},"data":{"item":"a"}}],"$defs":{"S":{"type":"string","minLength":2,"$id":"https://schemas.test/S"}}}}},"bindings":{"a":{"operation":"a","source":"catalog","data":{"item":"a"}}}}"##,
     );
     let (result, _) = complete(Embedded.pull_source(
         PullRequest::new(original, "catalog"),

@@ -210,6 +210,72 @@ fn malformed_input_is_invalid_without_waiting_for_eof() {
 }
 
 #[test]
+fn impossible_prefixes_report_the_defect_before_any_continuation() {
+    for (text, code, offset) in [
+        ("\"\\q", "escape", 2),
+        ("\"\\q\"", "escape", 2),
+        ("\"\\uX", "unicode-escape", 3),
+        ("\"\\u12x", "unicode-escape", 5),
+        ("\"\\u123x", "unicode-escape", 6),
+        ("\"\\ud800\\q", "escape", 8),
+        ("\"\n", "string-control", 1),
+        ("\"a\u{1f}", "string-control", 2),
+        ("-x", "number", 1),
+        ("--", "number", 1),
+        ("1.e", "fraction", 2),
+        ("1e!", "exponent", 2),
+        ("1e+!", "exponent", 3),
+        ("1e-!", "exponent", 3),
+        ("tru!", "literal", 3),
+        ("nul!", "literal", 3),
+        ("fals!", "literal", 4),
+        ("[tru!", "literal", 4),
+        ("[1 2", "comma-or-close", 3),
+        ("[1,]", "value", 3),
+        ("{x", "object-key", 1),
+        ("{\"k\"x", "colon", 4),
+        ("{\"k\":}", "value", 5),
+    ] {
+        // Appending bytes cannot repair a defect already inside the first value.
+        for tail in ["", "\"", "0 ", "null", "}", "]"] {
+            let input = format!("{text}{tail}");
+            let error = invalid(input.as_bytes());
+            assert_eq!(error.kind(), InputErrorKind::Syntax);
+            assert_eq!((error.code(), error.byte_offset()), (code, offset));
+            assert_eq!(error, JsonValue::parse(&input).unwrap_err());
+        }
+    }
+}
+
+#[test]
+fn extendable_tokens_remain_incomplete() {
+    for (prefix, continuation) in [
+        ("\"", "\""),
+        ("\"\\", "n\""),
+        ("\"\\u", "1234\""),
+        ("\"\\u12", "34\""),
+        ("\"\\ud800", "\""),
+        ("\"\\ud800\\u", "dc00\""),
+        ("-", "0 "),
+        ("1.", "0 "),
+        ("1e", "0 "),
+        ("1e+", "0 "),
+        ("1e-", "0 "),
+        ("tru", "e"),
+        ("nul", "l"),
+        ("fals", "e"),
+        ("[1 ", "]"),
+        ("{\"k\"", ":0}"),
+    ] {
+        assert_eq!(
+            JsonValue::parse_prefix(prefix).unwrap_err(),
+            JsonPrefixError::Incomplete
+        );
+        JsonValue::parse_prefix(format!("{prefix}{continuation}")).unwrap();
+    }
+}
+
+#[test]
 fn invalid_utf8_after_a_complete_value_is_deferred() {
     for text in ["12", "true", "\"é\"", "{}", "[]"] {
         for suffix in [b"\xff".as_slice(), b"\xf0\x9f", b" \xff"] {

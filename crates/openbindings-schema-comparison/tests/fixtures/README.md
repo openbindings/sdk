@@ -9,7 +9,7 @@ they are test evidence, not replacements for the pinned publication.
 | Fixture | Evidence owner | SHA-256 |
 | --- | --- | --- |
 | `exact-values.json` | Pinned interfaces | `90b3271bf73af691ec0ae8817308b07e1b1c59868809333350c420b4b84170bf` |
-| `independent.json` | SDK controls | `297c0bf62453449b9ad6b5910d49d9f4b540e7ad09ce8c6e04dfe343495cd3f9` |
+| `independent.json` | SDK controls | `a002f2adc65de35ffd3741064951d26ffefe794fd206edbf383ff0f4f2b7f2a4` |
 | `manifest.json` | Pinned interfaces | `674ad51fcd6a1ea84aca1136e4f3d5171341f2aac988db156f84afe5e879d816` |
 | `profile/allof-ref-pattern-indeterminate.json` | Pinned interfaces | `0861640e3213333d5f5c18c3dc67324a381d7e3de89213fb63f99becfc679b19` |
 | `profile/allof-ref-union-indeterminate.json` | Pinned interfaces | `28a8bdda62e767ba9016aa0551e7ed369cbc3af342bb02e76a0cf75908328e98` |

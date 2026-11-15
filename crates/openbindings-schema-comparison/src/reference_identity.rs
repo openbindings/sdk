@@ -43,10 +43,12 @@ impl<'a> ReferenceContext<'a> {
         &self.resource
     }
     /// Absolute base of that resource, if the caller or a schema supplied one.
+    /// An OpenBindings document resource has no caller-set base.
     pub fn base(&self) -> Option<&str> {
         self.base.as_deref()
     }
-    /// Initial resolved target, or its resolution failure. An accounted leaf
+    /// Initial resolved schema target, or its resolution failure. A pointer into
+    /// instance data fails with [`crate::ComparisonFailureKind::MissingReference`]. An accounted leaf
     /// may still be kept when its target is unavailable.
     pub fn target(&self) -> Result<&JsonValue, Failure> {
         self.target.as_ref().map_err(Clone::clone)

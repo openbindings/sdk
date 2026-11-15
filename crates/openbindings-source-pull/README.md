@@ -11,7 +11,8 @@ A report is a producer claim, not proof of live availability or fidelity.
 
 The carriers preserve exact JSON, allowed output metadata and absence versus null.
 `OmittedEntry` borrows `item`, `existing`, `also_identifies`, `offered`, `through`
-and `identifier` through accessors using the interface's field meanings; absent
+and `identifier` through accessors using the pinned
+[Report contract's label forms](https://github.com/openbindings/interfaces/blob/a3c19658fc89815d7a417eae29ba31fd4e930daf/source-puller/README.md#report); absent
 members stay `None`. Proposals carry restricted edit authority; retaining unknown metadata does not
 authorize copying it into a document. No TypeScript interface API is implied.
 
