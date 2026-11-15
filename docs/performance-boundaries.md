@@ -836,12 +836,12 @@ limits native call depth, which the Original sampler cannot observe. A Wasm
 trap does not unwind Rust frames or restore their stack-pointer updates;
 continuing with that instance is not a recovery strategy.
 An allocation failure during preparation was reproduced on 2026-11-14 with
-a 64 MiB Node Wasm cap: the caller received `RuntimeError: unreachable`, not
-an `SdkError`, with no SDK code. A later integer-schema preparation also
-trapped, although small-document validation still worked. Treat this as fatal
-for the isolate. `initialize()` caches its successful instance and cannot
-replace it. Whether to translate this trap to an SDK error remains open;
-see [Workers recovery](workers.md#memory-exhaustion).
+a 64 MiB Node Wasm cap: the caller then received a bare `RuntimeError:
+unreachable`, and a later integer-schema preparation also trapped. The package
+now turns a trap into an `SdkError` with code `wasm-trap` and refuses every later
+call on that instance with the same code. Treat it as fatal for the isolate:
+`initialize()` caches its instance and cannot replace it. See
+[Workers recovery](workers.md#memory-exhaustion).
 
 Local workerd 2026-11-04 (compatibility date 2026-09-28) ran the same module
 from a plain Worker on 2026-11-07 and passed at its default stack and with

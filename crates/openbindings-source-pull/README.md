@@ -142,7 +142,8 @@ no `uses` accessor; an additional member with that name is retained as unknown
 metadata. Existing binding `references` name what the data refers to in the
 input document; follow schema references for what those entries reach in turn.
 
-Qualification includes the 38 pinned pull-report cases, five published examples,
+Qualification includes the 41 pinned pull-report cases (30 valid, 11 invalid, three of them reusing operations
+through a recursive schema under the accounted-reference rule), five published examples,
 74 independently designed controls and two illustrative kind consumers. The old
 inspection/synthesis companions and consumers are removed; full SDK integration
 and final performance qualification remain separate work.

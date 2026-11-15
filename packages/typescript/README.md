@@ -132,8 +132,10 @@ platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `Document.parse` retains an inspectable, immutable document. `validate()` returns a
 `DocumentValidation`, as Rust's `validate()` does: a `conformant` branch carrying a
 `ConformantDocument`, or a version refusal or conformance report.
-`validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
-and nothing to dispose. `operations()` returns detached, runtime-frozen `Operation`
+`validateDocument(bytes)` returns a plain `DocumentReport` union, with no proof
+and nothing to dispose: `{ status: "report", report }` or
+`{ status: "version-refused", refusal }`; narrow on `status` before reading the
+report. `operations()` returns detached, runtime-frozen `Operation`
 records in lexical key order. Fields such as `key`, `aliases` and `tags` are direct reads;
 optional fields preserve absence as `undefined`. `operation(key)` selects an exact
 primary key; `resolveOperation(name)` also accepts aliases. Both return `undefined`
@@ -226,7 +228,10 @@ does not enforce the platform's memory or CPU limits.
 
 Use JSON text or UTF-8 bytes for exact numbers such as `9007199254740993`.
 `parseJson` retains tokens; `ExactJson.from` checks ordinary JavaScript input and
-cannot restore precision already lost to a JavaScript number. Nonfinite numbers,
+cannot restore precision already lost to a JavaScript number. An `ExactJson`'s
+`text` getter returns its exact JSON text (a property, where Rust has `text()`),
+and `schema.json()` returns a schema's exact value as an `ExactJson` owner to
+dispose. Nonfinite numbers,
 undefined opaque values, bigint, cycles, sparse arrays and accessors are refused.
 Those failures throw standard `TypeError` with a stable `.code` such as
 `non-finite-number`, `unsupported-value`, `cyclic-value` or `accessor-property`.

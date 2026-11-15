@@ -55,9 +55,9 @@ itself reads and writes, not the library's compiled program (see the
 [evaluator limits](../crates/openbindings-json-schema-evaluator/README.md#limits-and-cancellation)).
 On native hosts, prepare such schemas in a separate process with an
 operating-system memory limit. Cloudflare Workers need explicit SDK allowances
-and deployment qualification; local workerd has no such process limit. An
-allocation failure can throw a bare `RuntimeError: unreachable`, with no SDK
-code, and leave subsequent preparations failing in that instance. Treat it as
+and deployment qualification; local workerd has no such process limit. In
+TypeScript an allocation failure throws an `SdkError` with code `wasm-trap`,
+and every later call on that instance fails with the same code. Treat it as
 fatal for the isolate; see [Workers recovery](workers.md#memory-exhaustion).
 Value evaluation uses static compiled admission or Original heap frames and
 sampled stack checks. A caller-selected cumulative work cap selects Original.

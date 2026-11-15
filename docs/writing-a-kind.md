@@ -85,7 +85,20 @@ uses version dependencies on `openbindings`, `openbindings-invocation`,
 `[workspace]` to keep it outside the SDK workspace. Packages are unpublished;
 the repository verifier supplies local Cargo patches and verifies resolution
 against the workspace lockfile. Do the same for an exact source checkout rather
-than assuming a registry release has this API.
+than assuming a registry release has this API. With the SDK checked out at
+`../sdk`, the verifier's patches are:
+
+```toml
+[patch.crates-io]
+openbindings = { path = "../sdk/crates/openbindings" }
+openbindings-internal-json = { path = "../sdk/crates/openbindings-internal-json" }
+openbindings-internal-schema = { path = "../sdk/crates/openbindings-internal-schema" }
+openbindings-internal-cancellation = { path = "../sdk/crates/openbindings-internal-cancellation" }
+openbindings-context = { path = "../sdk/crates/openbindings-context" }
+openbindings-invocation = { path = "../sdk/crates/openbindings-invocation" }
+openbindings-source-pull = { path = "../sdk/crates/openbindings-source-pull" }
+openbindings-kind-description = { path = "../sdk/crates/openbindings-kind-description" }
+```
 
 The following blocks build one `src/lib.rs` in order. The small construction
 helpers use checked exact JSON composition. Their `expect` calls suit this
@@ -1416,8 +1429,9 @@ cancellation drops its guard without resuming async cleanup. Native compile chec
 retain `Send` for the plain adapter's invocation and pull futures.
 
 There is no public adapter conformance kit today. The evaluator test-support
-crate tests schema evaluators, not kind adapters. The SDK's invocation lifecycle
-helpers are private. Use checked calls in your own tests and the pinned interface
+crate tests schema evaluators, not kind adapters. `Invocation::new` gives an
+operation-invoker implementation the SDK's invocation lifecycle; it runs a
+provider, it does not check one. Use checked calls in your own tests and the pinned interface
 fixtures as shape/reference examples; passing carrier admission alone does not
 prove behavior. Start with the [invocation tests](../crates/openbindings-invocation/tests),
 [pull tests](../crates/openbindings-source-pull/tests) and

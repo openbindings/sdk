@@ -53,6 +53,8 @@
 
 ### Added
 
+- The API-reference check denies every rustdoc warning, not only broken links; a malformed tag had been rendering a
+  source-pull page wrongly on docs.rs.
 - A regression that a provider's `ERR_REFUSED` reason, an explicit `null` reason and no reason each reach the caller
   unchanged through checked binding and operation invocation and preflight.
 
@@ -147,7 +149,8 @@
   memory ceiling, such as a Worker, turns a schema too large for it into a refusal with a code: at the default
   allowance of 512 MiB a module that runs out of memory traps instead.
 - Ordinary JavaScript encoding failures keep their `TypeError` or `RangeError` class and message and gain a stable
-  `code`. Ordinary admission limits report `input-limit`; exact-text admission keeps `byte-limit`, `node-limit`
+  `code`. Ordinary admission limits reported `input-limit` here (the owner rulings above replace it with the
+  exact-text codes); exact-text admission keeps `byte-limit`, `node-limit`
   and `depth-limit`.
 - `Pointer::to_exact_json()` exports a complete JSON string token that keeps every UTF-16 unit, so a pointer into
   a draft whose member name holds an unpaired unit selects the same member after transport. Ordinary Serde output

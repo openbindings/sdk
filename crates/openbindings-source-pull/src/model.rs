@@ -357,7 +357,7 @@ impl ExistingEntry {
     labels_accessor!(
         references,
         "references",
-        "Iterate schemas/<key> and operations/<key>/input or /output labels referenced by binding data. PullResult::validate_for checks primary keys and slot presence."
+        "Iterate `schemas/<key>` and `operations/<key>/input` or `/output` labels referenced by binding data. PullResult::validate_for checks primary keys and slot presence."
     );
     /// Read the exact entry type and key this observation addresses.
     pub fn target(&self) -> ExistingTarget<'_> {
