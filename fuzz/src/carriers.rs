@@ -1,5 +1,5 @@
 //! All companion carrier admission through public APIs.
-use openbindings::{JsonLimits, JsonRef, JsonValue};
+use openbindings::{Document, JsonLimits, JsonRef, JsonValue};
 use openbindings_context::{Context, ContextChallenge};
 use openbindings_invocation::{
     BindingRequest, InvocationError, OperationAddress, OperationRequest,
@@ -192,6 +192,26 @@ fn result(value: &pull::PullResult) {
     let _ = value.value();
     additions(&value.additions());
     report(&value.report());
+    // A fixed conformant input makes relationship diagnostics part of seed replay
+    // and fuzzing, without interpreting any provider-owned data.
+    let original = Document::parse(include_str!("relationship_document.json"))
+        .unwrap()
+        .validate()
+        .unwrap()
+        .conformant()
+        .unwrap();
+    let request = pull::PullRequest::new(original, "s");
+    if let Err(error) = value.validate_for(
+        &request,
+        &pull::PullLimits::default(),
+        &std::sync::atomic::AtomicBool::new(false),
+    ) {
+        redacted(&error);
+        if let pull::PullValidationError::Relationship(error) = error {
+            let _ = (error.kind(), error.pointer());
+            redacted(&error);
+        }
+    }
 }
 fn summary(value: &kind::KindSummary) {
     let _ = (value.value(), value.kind(), value.description());

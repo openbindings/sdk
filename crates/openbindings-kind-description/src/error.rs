@@ -1,4 +1,4 @@
-use crate::{CarrierError, ContextChallenge, model};
+use crate::{CarrierError, CarrierErrorKind, ContextChallenge, model};
 use openbindings::{JsonObject, JsonStringRef, JsonValue};
 use std::fmt;
 
@@ -14,7 +14,7 @@ impl CheckRejection {
         let object = model::object(value, Some((&["code", "message", "data"], false)))?;
         let code = model::string(model::field(&object, "code")?, "code", true)?;
         if code == "CONTEXT_REQUIRED" {
-            return Err(CarrierError::ReservedCode);
+            return Err(CarrierErrorKind::ReservedCode.at_field("code"));
         }
         model::string(model::field(&object, "message")?, "message", true)?;
         Ok(Self(object))

@@ -12,7 +12,7 @@ mod request;
 mod validation;
 pub use budget::PullLimits;
 pub use carrier::{CarrierError, CarrierErrorKind};
-pub use error::{PullValidationError, RelationshipError, RequestError};
+pub use error::{PullValidationError, RelationshipError, RelationshipErrorKind, RequestError};
 pub use model::*;
 pub use openbindings_context::{Context, ContextChallenge};
 pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};

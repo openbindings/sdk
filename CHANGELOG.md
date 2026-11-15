@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-14 owner rulings (unreleased)
+
+### Changed
+
+- Breaking: the kind-description crate's `CarrierError` is a struct with `kind()` returning a `Copy`
+  `CarrierErrorKind` and `pointer()` returning the failing location when known, the shape the source-pull crate's
+  carrier error already has. Neither crate's carrier category prints a label in `Display` or `Debug`, including one a
+  caller constructs; read it through `kind()`.
+- Breaking: the source-pull crate's `RelationshipError` is a struct with `kind()` returning a `Copy`,
+  `#[non_exhaustive]` `RelationshipErrorKind` (the twelve former variants) and `pointer()` returning the offending
+  row of the provider's report. Where two rows contradict each other the later one is named; missing coverage has no
+  row. `Display` names no location.
+
 ## 2026-11-14 panel shapes (unreleased)
 
 ### Changed

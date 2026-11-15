@@ -1,0 +1,1 @@
+{"kind":"FUZZ_PRIVATE","description":"d","supports":["openbindings.source-puller.pullSource"],"pull":{"description":"FUZZ_PRIVATE"}}

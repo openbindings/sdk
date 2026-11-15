@@ -1,7 +1,7 @@
 //! Only publication relationships which can be established from the two documents
 //! and report. No traversal of opaque kind data pretends to establish fidelity.
 use crate::{
-    PullRequest, PullResult, PullValidationError as Failure, RelationshipError as Rule,
+    PullRequest, PullResult, PullValidationError as Failure, RelationshipErrorKind as Rule,
     budget::Attempt,
 };
 use openbindings::JsonRef;
@@ -126,6 +126,38 @@ impl<'a> Additions<'a> {
     }
 }
 
+// Addition checks precede report checks. On failure, find the last report row
+// naming the addition, without retaining another index on successful pulls.
+fn addition_failure(
+    kind: Rule,
+    report: JsonRef<'_>,
+    field: Option<&str>,
+    name: &str,
+    attempt: &mut Attempt<'_>,
+) -> Failure {
+    let error = Failure::from(kind);
+    // Schema additions have no defining report row. Unknown metadata on an
+    // added entry must not be mistaken for a published schema field.
+    let Some(field) = field else { return error };
+    let mut row = None;
+    for (index, entry) in member(report, "added")
+        .elements()
+        .expect("admitted added")
+        .enumerate()
+    {
+        if let Err(error) = attempt.work(name.len().saturating_add(1)) {
+            return error;
+        }
+        if entry.get(field).and_then(|value| value.as_str()) == Some(name) {
+            row = Some(index);
+        }
+    }
+    match row {
+        Some(index) => error.at_row("added", index),
+        None => error,
+    }
+}
+
 pub(crate) fn check(
     request: &PullRequest,
     result: &PullResult,
@@ -136,6 +168,7 @@ pub(crate) fn check(
     let schemas = index(original.get("schemas"), attempt)?;
     let bindings = index(original.get("bindings"), attempt)?;
     let raw = result.value().value().view();
+    let report = member(raw, "report");
     let additions = member(raw, "additions");
     let additions = Additions {
         operations: index(additions.get("operations"), attempt)?,
@@ -153,127 +186,165 @@ pub(crate) fn check(
             }
         }
     }
-    for (new, old) in [
-        (&additions.operations, &operations),
-        (&additions.schemas, &schemas),
-        (&additions.bindings, &bindings),
+    for (new, old, field) in [
+        (&additions.operations, &operations, Some("operation")),
+        (&additions.schemas, &schemas, None),
+        (&additions.bindings, &bindings, Some("binding")),
     ] {
         for name in new.keys() {
             if lookup(old, name, attempt)?.is_some() {
-                return Err(Rule::KeyCollision.into());
+                return Err(addition_failure(
+                    Rule::KeyCollision,
+                    report,
+                    field,
+                    name,
+                    attempt,
+                ));
             }
         }
     }
     for name in additions.operations.keys() {
         if contains(&aliases, Section::Operations, name, attempt)? {
-            return Err(Rule::KeyCollision.into());
+            return Err(addition_failure(
+                Rule::KeyCollision,
+                report,
+                Some("operation"),
+                name,
+                attempt,
+            ));
         }
     }
-    for binding in additions.bindings.values() {
-        let source = key(member(*binding, "source"))?;
+    for (name, binding) in &additions.bindings {
+        let source = key(member(*binding, "source")).map_err(|error| match error {
+            Failure::Relationship(error) => {
+                addition_failure(error.kind(), report, Some("binding"), name, attempt)
+            }
+            other => other,
+        })?;
         attempt.work(source.len().saturating_add(1))?;
         if source != request.source() {
-            return Err(Rule::BindingSource.into());
+            return Err(addition_failure(
+                Rule::BindingSource,
+                report,
+                Some("binding"),
+                name,
+                attempt,
+            ));
         }
     }
-    let report = member(raw, "report");
     let mut added = BTreeMap::new();
-    for entry in member(report, "added").elements().expect("admitted added") {
-        let name = key(member(entry, "binding"))?;
-        let operation = key(member(entry, "operation"))?;
-        let binding = lookup(&additions.bindings, name, attempt)?.ok_or(Rule::AddedCoverage)?;
-        attempt.work(operation.len().saturating_add(1))?;
-        if key(member(binding, "operation"))? != operation {
-            return Err(Rule::BindingOperation.into());
-        }
-        let reused = entry.get("reused").is_some();
-        let operation_map = if reused {
-            &operations
-        } else {
-            &additions.operations
-        };
-        if lookup(operation_map, operation, attempt)?.is_none() {
-            return Err(Rule::Reuse.into());
-        }
-        additions.uses(entry.get("uses"), Some(name), attempt)?;
-        attempt.map_insert::<&str, ()>(added.len(), name.len())?;
-        if added.insert(name, ()).is_some() {
-            return Err(Rule::AddedCoverage.into());
-        }
+    for (index, entry) in member(report, "added")
+        .elements()
+        .expect("admitted added")
+        .enumerate()
+    {
+        (|| {
+            let name = key(member(entry, "binding"))?;
+            let operation = key(member(entry, "operation"))?;
+            let binding = lookup(&additions.bindings, name, attempt)?.ok_or(Rule::AddedCoverage)?;
+            attempt.work(operation.len().saturating_add(1))?;
+            if key(member(binding, "operation"))? != operation {
+                return Err(Rule::BindingOperation.into());
+            }
+            let reused = entry.get("reused").is_some();
+            let operation_map = if reused {
+                &operations
+            } else {
+                &additions.operations
+            };
+            if lookup(operation_map, operation, attempt)?.is_none() {
+                return Err(Rule::Reuse.into());
+            }
+            additions.uses(entry.get("uses"), Some(name), attempt)?;
+            attempt.map_insert::<&str, ()>(added.len(), name.len())?;
+            if added.insert(name, ()).is_some() {
+                return Err(Rule::AddedCoverage.into());
+            }
+            Ok(())
+        })()
+        .map_err(|error: Failure| error.at_row("added", index))?;
     }
     if added.len() != additions.bindings.len() {
         return Err(Rule::AddedCoverage.into());
     }
     let mut existing = Labels::new();
     if let Some(entries) = report.get("existing") {
-        for entry in entries.elements().expect("admitted existing") {
-            let (section, name) = if let Some(value) = entry.get("binding") {
-                let name = key(value)?;
-                let binding = lookup(&bindings, name, attempt)?.ok_or(Rule::ExistingTarget)?;
-                let source = key(member(binding, "source"))?;
-                attempt.work(source.len().saturating_add(1))?;
-                if source != request.source() {
-                    return Err(Rule::ExistingTarget.into());
+        for (index, entry) in entries.elements().expect("admitted existing").enumerate() {
+            (|| {
+                let (section, name) = if let Some(value) = entry.get("binding") {
+                    let name = key(value)?;
+                    let binding = lookup(&bindings, name, attempt)?.ok_or(Rule::ExistingTarget)?;
+                    let source = key(member(binding, "source"))?;
+                    attempt.work(source.len().saturating_add(1))?;
+                    if source != request.source() {
+                        return Err(Rule::ExistingTarget.into());
+                    }
+                    (Section::Bindings, name)
+                } else if let Some(value) = entry.get("schema") {
+                    let name = key(value)?;
+                    if lookup(&schemas, name, attempt)?.is_none() {
+                        return Err(Rule::ExistingTarget.into());
+                    }
+                    (Section::Schemas, name)
+                } else {
+                    let name = key(member(entry, "source"))?;
+                    attempt.work(name.len().saturating_add(1))?;
+                    if name != request.source() {
+                        return Err(Rule::ExistingTarget.into());
+                    }
+                    (Section::Sources, name)
+                };
+                if !retain(&mut existing, section, name, attempt)? {
+                    return Err(Rule::DuplicateTarget.into());
                 }
-                (Section::Bindings, name)
-            } else if let Some(value) = entry.get("schema") {
-                let name = key(value)?;
-                if lookup(&schemas, name, attempt)?.is_none() {
-                    return Err(Rule::ExistingTarget.into());
-                }
-                (Section::Schemas, name)
-            } else {
-                let name = key(member(entry, "source"))?;
-                attempt.work(name.len().saturating_add(1))?;
-                if name != request.source() {
-                    return Err(Rule::ExistingTarget.into());
-                }
-                (Section::Sources, name)
-            };
-            if !retain(&mut existing, section, name, attempt)? {
-                return Err(Rule::DuplicateTarget.into());
-            }
-            if let Some(references) = entry.get("references") {
-                for label in references.elements().expect("admitted references") {
-                    if !input_target(key(label)?, &operations, &schemas, false, attempt)? {
-                        return Err(Rule::ReferenceTarget.into());
+                if let Some(references) = entry.get("references") {
+                    for label in references.elements().expect("admitted references") {
+                        if !input_target(key(label)?, &operations, &schemas, false, attempt)? {
+                            return Err(Rule::ReferenceTarget.into());
+                        }
                     }
                 }
-            }
-            if section == Section::Bindings
-                && let Some(proposal) = entry.get("proposal")
-            {
-                additions.uses(proposal.get("uses"), Some(name), attempt)?;
-            }
+                if section == Section::Bindings
+                    && let Some(proposal) = entry.get("proposal")
+                {
+                    additions.uses(proposal.get("uses"), Some(name), attempt)?;
+                }
+                Ok(())
+            })()
+            .map_err(|error: Failure| error.at_row("existing", index))?;
         }
     }
     if let Some(entries) = report.get("omitted") {
-        for entry in entries.elements().expect("admitted omitted") {
-            attempt.work(1)?;
-            if let Some(label) = entry.get("existing")
-                && !input_target(key(label)?, &operations, &schemas, true, attempt)?
-            {
-                return Err(Rule::OmittedTarget.into());
-            }
-            if let Some(labels) = entry.get("through") {
-                for label in labels.elements().expect("admitted through") {
-                    if !input_target(key(label)?, &operations, &schemas, false, attempt)? {
-                        return Err(Rule::OmittedTarget.into());
+        for (index, entry) in entries.elements().expect("admitted omitted").enumerate() {
+            (|| {
+                attempt.work(1)?;
+                if let Some(label) = entry.get("existing")
+                    && !input_target(key(label)?, &operations, &schemas, true, attempt)?
+                {
+                    return Err(Rule::OmittedTarget.into());
+                }
+                if let Some(labels) = entry.get("through") {
+                    for label in labels.elements().expect("admitted through") {
+                        if !input_target(key(label)?, &operations, &schemas, false, attempt)? {
+                            return Err(Rule::OmittedTarget.into());
+                        }
                     }
                 }
-            }
-            if let Some(labels) = entry.get("alsoIdentifies") {
-                for label in labels.elements().expect("admitted alsoIdentifies") {
-                    let label = key(label)?;
-                    attempt.work(label.len().saturating_add(1))?;
-                    let name = label
-                        .strip_prefix("operations/")
-                        .ok_or(Rule::OmittedTarget)?;
-                    if lookup(&operations, name, attempt)?.is_none() {
-                        return Err(Rule::OmittedTarget.into());
+                if let Some(labels) = entry.get("alsoIdentifies") {
+                    for label in labels.elements().expect("admitted alsoIdentifies") {
+                        let label = key(label)?;
+                        attempt.work(label.len().saturating_add(1))?;
+                        let name = label
+                            .strip_prefix("operations/")
+                            .ok_or(Rule::OmittedTarget)?;
+                        if lookup(&operations, name, attempt)?.is_none() {
+                            return Err(Rule::OmittedTarget.into());
+                        }
                     }
                 }
-            }
+                Ok(())
+            })()
+            .map_err(|error: Failure| error.at_row("omitted", index))?;
         }
     }
     for (name, binding) in &bindings {

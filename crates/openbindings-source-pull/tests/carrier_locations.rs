@@ -108,3 +108,22 @@ fn unrelated_top_level_failures_and_category_construction_are_unlocated() {
     assert_eq!(error.kind(), CarrierErrorKind::DuplicateUse);
     assert!(error.pointer().is_none());
 }
+
+#[test]
+fn public_category_labels_are_never_formatted() {
+    for kind in [
+        CarrierErrorKind::MissingField("PRIVATE_CALLER_LABEL"),
+        CarrierErrorKind::FieldType("PRIVATE_CALLER_LABEL"),
+        CarrierErrorKind::EmptyString("PRIVATE_CALLER_LABEL"),
+    ] {
+        let error = CarrierError::from(kind);
+        for diagnostic in [
+            format!("{kind}"),
+            format!("{kind:?}"),
+            format!("{error}"),
+            format!("{error:?}"),
+        ] {
+            assert!(!diagnostic.contains("PRIVATE_CALLER_LABEL"));
+        }
+    }
+}

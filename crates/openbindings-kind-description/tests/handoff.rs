@@ -82,7 +82,7 @@ impl KindDescriptor for Provider {
             if self.mode == 0 {
                 Ok(vec![])
             } else {
-                Err(CarrierError::ExpectedObject)
+                Err(CarrierError::from(CarrierErrorKind::ExpectedObject))
             },
             control,
         )
@@ -98,7 +98,7 @@ impl KindDescriptor for Provider {
                     r#"{"kind":"k","description":"known kind","supports":[]}"#,
                 ))
             } else {
-                Err(CarrierError::ExpectedObject)
+                Err(CarrierError::from(CarrierErrorKind::ExpectedObject))
             },
             control,
         )
@@ -171,7 +171,7 @@ fn malformed_provider_outputs_remain_operational_failures_and_never_kind_rejecti
     let error = complete((provider).check_source(request(), caller.clone())).unwrap_err();
     assert!(matches!(
         error,
-        KindError::Provider(CheckFailure::Operational(CarrierError::UnexpectedMember))
+        KindError::Provider(CheckFailure::Operational(ref carrier)) if carrier.kind() == CarrierErrorKind::UnexpectedMember
     ));
     assert!(!caller.is_cancelled());
     // Both diagnostic renderings omit the provider's message.

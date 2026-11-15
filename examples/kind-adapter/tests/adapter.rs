@@ -506,3 +506,50 @@ async fn routing_agrees_with_published_invocation_support() {
     }
 }
 // guide:agreement:end
+
+// guide:errors:start
+#[test]
+fn role_errors_expose_categories_and_locations() {
+    use openbindings::{Document, JsonValue, Pointer};
+    use openbindings_kind_description::{CarrierErrorKind, KindSummary};
+    use openbindings_source_pull::{
+        PullLimits, PullRequest, PullResult, PullValidationError, RelationshipErrorKind,
+    };
+    use std::sync::atomic::AtomicBool;
+
+    let error =
+        KindSummary::from_json(JsonValue::parse(r#"{"kind":"example"}"#).unwrap()).unwrap_err();
+    match error.kind() {
+        CarrierErrorKind::MissingField("supports") => {
+            assert_eq!(error.pointer().and_then(Pointer::as_str), Some("/supports"));
+        }
+        _ => panic!("refuse or propagate an unknown carrier category"),
+    }
+
+    let document = Document::parse(
+        r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"example"}}}"#,
+    )
+    .unwrap()
+    .validate()
+    .unwrap()
+    .conformant()
+    .unwrap();
+    let request = PullRequest::new(document, "s");
+    let result = PullResult::from_json(JsonValue::parse(
+        r#"{"additions":{},"report":{"exhaustive":true,"added":[],"existing":[{"source":"s","status":"current"},{"schema":"absent","status":"current"}]}}"#,
+    ).unwrap()).unwrap();
+    let error = result
+        .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+        .unwrap_err();
+    match error {
+        PullValidationError::Relationship(error) => match error.kind() {
+            RelationshipErrorKind::ExistingTarget => assert_eq!(
+                error.pointer().and_then(Pointer::as_str),
+                Some("/report/existing/1"),
+            ),
+            _ => panic!("refuse or propagate an unknown relationship category"),
+        },
+        _ => panic!("refuse or propagate another validation failure"),
+    }
+}
+// guide:errors:end

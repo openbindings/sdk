@@ -1254,6 +1254,68 @@ It returns `(result, prospective)`, retaining that proof and the original JSON
 limits. The caller chooses whether to adopt it. The original remains unchanged
 and stale proposals are not applied.
 
+Both role crates return their own `CarrierError` struct from carrier admission.
+Match its Copy, non-exhaustive `CarrierErrorKind` through `kind()` and inspect
+`pointer()` for the location when known. Kind-description locates fixed fields
+and support indices; source-pull carrier failures locate their enclosing report
+row. Labels are available through `kind()` but omitted from both formatters,
+including labels a caller constructs.
+
+A relationship refusal carries a `RelationshipError` struct. Match its Copy,
+non-exhaustive `RelationshipErrorKind` through `kind()`; `pointer()` identifies
+the exact report row, including nested proposal failures. If two rows conflict,
+the later row is identified. Missing coverage and additions with no report row
+have no row pointer. `Display` omits the pointer. Keep the provider's result when
+calling `validate_for` so the application can inspect the identified row.
+
+<!-- guide:errors -->
+```rust
+#[test]
+fn role_errors_expose_categories_and_locations() {
+    use openbindings::{Document, JsonValue, Pointer};
+    use openbindings_kind_description::{CarrierErrorKind, KindSummary};
+    use openbindings_source_pull::{
+        PullLimits, PullRequest, PullResult, PullValidationError, RelationshipErrorKind,
+    };
+    use std::sync::atomic::AtomicBool;
+
+    let error =
+        KindSummary::from_json(JsonValue::parse(r#"{"kind":"example"}"#).unwrap()).unwrap_err();
+    match error.kind() {
+        CarrierErrorKind::MissingField("supports") => {
+            assert_eq!(error.pointer().and_then(Pointer::as_str), Some("/supports"));
+        }
+        _ => panic!("refuse or propagate an unknown carrier category"),
+    }
+
+    let document = Document::parse(
+        r#"{"openbindings":"0.2.0","operations":{},"sources":{"s":{"kind":"example"}}}"#,
+    )
+    .unwrap()
+    .validate()
+    .unwrap()
+    .conformant()
+    .unwrap();
+    let request = PullRequest::new(document, "s");
+    let result = PullResult::from_json(JsonValue::parse(
+        r#"{"additions":{},"report":{"exhaustive":true,"added":[],"existing":[{"source":"s","status":"current"},{"schema":"absent","status":"current"}]}}"#,
+    ).unwrap()).unwrap();
+    let error = result
+        .validate_for(&request, &PullLimits::default(), &AtomicBool::new(false))
+        .unwrap_err();
+    match error {
+        PullValidationError::Relationship(error) => match error.kind() {
+            RelationshipErrorKind::ExistingTarget => assert_eq!(
+                error.pointer().and_then(Pointer::as_str),
+                Some("/report/existing/1"),
+            ),
+            _ => panic!("refuse or propagate an unknown relationship category"),
+        },
+        _ => panic!("refuse or propagate another validation failure"),
+    }
+}
+```
+
 It does not prove source exhaustiveness, faithful projection, schema identity
 behind reuse, change judgments or needs hidden in binding data. It does not
 reject every unused operation or schema addition; an addition can serve a

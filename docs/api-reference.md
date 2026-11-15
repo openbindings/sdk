@@ -47,6 +47,18 @@ subset or applying a proposal still requires validation of that edited document.
 failing row, such as `/existing/1` or `/report/existing/1`. Nested failures identify
 the enclosing row; unrelated top-level failures need not have a pointer.
 
+Kind-description owns its own `CarrierError` struct and Copy, non-exhaustive
+`CarrierErrorKind`. Its `pointer() -> Option<&Pointer>` locates fixed fields,
+nested disclosures and support indices relative to the admitted carrier; opaque
+context failures locate `/context`. Both role crates keep labels inspectable
+through `kind()` while omitting them from `Display` and `Debug`.
+
+`PullValidationError::Relationship` carries a `RelationshipError` struct.
+`kind()` returns a Copy, non-exhaustive `RelationshipErrorKind`; `pointer()` borrows
+an optional exact provider-report row such as `/report/existing/2`. Conflicting
+rows identify the later row. Missing coverage and additions with no report row
+have no row pointer. `Display` does not include locations.
+
 `CheckFailure<E>`, `KindError<E>`, `PullFailure<E>` and `PullError<E>` each expose
 `map_error<F>(self, map: impl FnOnce(E) -> F)` returning the same family with `F`.
 Only the generic error payload is transformed. Other variants and payloads pass
@@ -507,7 +519,7 @@ opaque. Each request decoder that admits a context member applies the same
 check and reports it through its own error: `BindingRequest::from_json` and
 `OperationRequest::from_json` return `BoundaryFailureKind::DuplicateMember` at
 `/context`, `PullRequest::from_json` returns `RequestError::Shape("duplicate-member")`
-and `CheckSourceRequest::from_json` returns `CarrierError::DuplicateMember`. The
+and `CheckSourceRequest::from_json` returns `CarrierErrorKind::DuplicateMember`. The
 TypeScript facade carries no context, so it has no context admission path.
 
 Context admission is SDK policy: every object in context, including objects
