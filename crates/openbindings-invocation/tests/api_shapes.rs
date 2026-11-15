@@ -357,3 +357,94 @@ fn preparing_operation_schemas_needs_no_routing_support() {
     assert_eq!(preparations.get(), 2);
     assert_eq!(calls.load(Ordering::Relaxed), 0);
 }
+
+#[test]
+fn custom_validator_without_accounting_keeps_prepared_estimates_unknown() {
+    let calls = AtomicUsize::new(0);
+    let prepares = Rc::new(Cell::new(0));
+    let evaluations = Rc::new(Cell::new(0));
+    let invoker = DefaultOperationInvoker::new(
+        Echo(&calls),
+        CountingEvaluator(prepares.clone(), evaluations.clone()),
+        ExternalSchemas::default(),
+    );
+    let prepared = invoker.prepare(document(), "a", &cancel()).unwrap();
+    assert_eq!(prepares.get(), 2);
+    assert_eq!(prepared.input().unwrap().retained_bytes(), None);
+    assert_eq!(prepared.output().unwrap().retained_bytes(), None);
+    assert_eq!(prepared.retained_bytes(), None);
+    assert_eq!(prepares.get(), 2);
+    assert_eq!(evaluations.get(), 0);
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn absent_schema_slots_add_no_validator_bytes() {
+    let calls = AtomicUsize::new(0);
+    let prepares = Rc::new(Cell::new(0));
+    let invoker = DefaultOperationInvoker::new(
+        Echo(&calls),
+        CountingEvaluator(prepares.clone(), Rc::new(Cell::new(0))),
+        ExternalSchemas::default(),
+    );
+    let proof = Document::parse(r#"{"openbindings":"0.2.0","operations":{"run":{}}}"#)
+        .unwrap()
+        .validate()
+        .unwrap()
+        .conformant()
+        .unwrap();
+    let prepared = invoker.prepare(proof, "run", &cancel()).unwrap();
+    assert_eq!(
+        prepared.retained_bytes(),
+        Some(prepared.interface().document().retained_bytes() + 3)
+    );
+    assert_eq!(prepares.get(), 0);
+}
+
+#[test]
+fn prepared_operation_sums_present_estimates_and_propagates_unknown_slots() {
+    struct Evaluator;
+    #[derive(Clone)]
+    struct Validator(Option<usize>);
+    impl SchemaEvaluator for Evaluator {
+        type Validator = Validator;
+        fn prepare(
+            &self,
+            request: EvaluationRequest<'_>,
+            _: &PreparationLimits,
+            _: &dyn WorkControl,
+        ) -> Result<Validator, PreparationFailure> {
+            let openbindings::SchemaRoot::Contained(schema) = request.root else {
+                unreachable!()
+            };
+            Ok(Validator(
+                schema.json().view().as_bool().unwrap().then_some(7),
+            ))
+        }
+    }
+    impl SchemaValidator for Validator {
+        fn retained_bytes(&self) -> Option<usize> {
+            self.0
+        }
+        fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+            ValueOutcome::Satisfies
+        }
+    }
+    let calls = AtomicUsize::new(0);
+    let invoker = DefaultOperationInvoker::new(Echo(&calls), Evaluator, ExternalSchemas::default());
+    let proof = Document::parse(r#"{"openbindings":"0.2.0","operations":{"both":{"input":true,"output":true},"input":{"input":true},"output":{"output":true},"mixed":{"input":true,"output":false},"unknown":{"input":false}}}"#)
+        .unwrap().validate().unwrap().conformant().unwrap();
+    for (name, slots) in [
+        ("both", Some(14)),
+        ("input", Some(7)),
+        ("output", Some(7)),
+        ("mixed", None),
+        ("unknown", None),
+    ] {
+        let prepared = invoker.prepare(proof.clone(), name, &cancel()).unwrap();
+        let expected = slots.map(|bytes| proof.document().retained_bytes() + name.len() + bytes);
+        assert_eq!(prepared.retained_bytes(), expected);
+        assert_eq!(prepared.clone().retained_bytes(), expected);
+    }
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
+}

@@ -194,6 +194,13 @@ reject with `SdkError`, as does a WebAssembly module that is not this package's,
 which is refused before it is instantiated; retry after correcting the host
 condition.
 
+A `WebAssembly.RuntimeError`, including an allocation trap, becomes `SdkError`
+with code `wasm-trap` and fixed text: `The OpenBindings WebAssembly instance
+trapped and can no longer be used.` Every later SDK operation immediately fails
+with that code. `initialize()` cannot replace the trapped instance. Disposal is
+safe and idempotent after a trap, finalizers never throw, and the runtime error
+is not attached as a cause. Resume SDK work only in a fresh module instance.
+
 For Cloudflare Workers, follow the
 [Workers guide](https://github.com/openbindings/sdk/blob/main/docs/workers.md)
 for admission, `preparationLimits`, evaluation work, disposal and fatal Wasm
@@ -208,12 +215,15 @@ cannot restore precision already lost to a JavaScript number. Nonfinite numbers,
 undefined opaque values, bigint, cycles, sparse arrays and accessors are refused.
 Those failures throw standard `TypeError` with a stable `.code` such as
 `non-finite-number`, `unsupported-value`, `cyclic-value` or `accessor-property`.
-Ordinary admission limits throw `RangeError` with code `input-limit`, retaining
-fixed messages. `evaluate` and `explain` return that same ordinary limit code;
-`parseJson` and `evaluateJson` retain `byte-limit`, `node-limit` and `depth-limit`.
-These route distinctions are intentional existing behavior. Caller-thrown
-exceptions pass through unchanged. `ExactJson.metadata.kind` has the exported
+Ordinary admission limits throw `RangeError` with `byte-limit`, `node-limit` or
+`depth-limit`, retaining fixed messages. `evaluate` and `explain` return the same
+cause codes as `parseJson` and `evaluateJson`, including limits reached by nested
+exact owners. `input-limit` is reserved for an admission limit whose cause the
+bridge does not identify. Caller-thrown exceptions pass through unchanged. `ExactJson.metadata.kind` has the exported
 `JsonKind` union: `"null" | "boolean" | "number" | "string" | "array" | "object"`.
+TypeScript ordinary conversion permits 10,000 nested containers and refuses
+10,001; Rust's ordinary Serde conversion permits 128 and refuses 129. These
+language-specific conversion depths are unchanged; exact parsing uses `JsonLimits`.
 
 Edit a `Document` through `set(pointer, value)`, `remove(pointer)` or an atomic
 `edit([{ op: "set", pointer, value }, { op: "remove", pointer }])` batch. Paths use
@@ -348,6 +358,15 @@ policy. Preparation returns a refusal; registration throws `SdkError` with code
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning;
 simple Boolean identities add no proof-work unit. Growing loops retain cooperative
 checks, and fast results do not reset shared preparation budgets.
+Its fixed-width accounting agrees with native evaluation for caps both targets
+can express. With `evaluationSdkWorkUnits: null`, counter overflow cannot report
+a work limit. Numeric limit options retain their existing 32-bit range.
+`patternSearchWorkUnits` defaults to 250,000,000 SDK work units per Original
+pattern search. A larger charge returns `no-verdict` with
+`pattern-search-work-limit` before the uncancellable matcher runs. Raise it or
+set it to `null` to remove the ceiling. Changing it from the Wasm-provided
+default selects Original; explicitly supplying the default preserves routing.
+The cumulative `evaluationSdkWorkUnits` cap remains `null` by default.
 Budgets are not deadlines or process-memory measurements. Original uses
 original schema locations and explicit evaluation frames, with a fixed supported
 maximum of 64 distinct symbolic effects per proof. The retired `stackBytes` and
@@ -383,7 +402,8 @@ with a private contract should forward only `instance` and `code`.
 A problem's `instance` is relative to the exact value passed;
 `schema.retrievalUri` and `schema.pointer` identify the original schema source.
 `value.locate(problem.instance)`, `ConformantDocument.locate(problem.schema)` and
-`ExternalSchemas.locate(problem.schema)` compute source coordinates on demand.
+`ExternalSchemas.locate(problem.schema)` compute source coordinates on demand, returning `undefined` when no node or
+matching source is available.
 Keep the corresponding source owner when coordinate lookup is needed.
 Messages are advisory; use result tags, codes and rule evidence for control flow.
 Result records may gain properties: read the properties needed by the application.

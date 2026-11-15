@@ -1,4 +1,6 @@
 //! Explicit external schemas, with immutable identity and lifetime boundaries.
+#[path = "resources_retained.rs"]
+mod retained;
 use crate::{document::DocumentInner, schema::references::SchemaSpace, *};
 use std::{
     collections::{BTreeMap, BTreeSet},

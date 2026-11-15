@@ -30,7 +30,14 @@ pub struct Limits {
     /// Cooperative SDK evaluation work units. `None` (default) sets no
     /// caller-selected cap; internal capability bounds still apply. These are
     /// SDK-defined debits, not CPU operations or a count of schema steps.
+    /// Internal accounting uses fixed-width arithmetic on native and Wasm;
+    /// uncapped evaluation never reports exhaustion from counter overflow.
     pub evaluation_sdk_work_units: Option<usize>,
+    /// Maximum SDK work charged to one uncancellable Original pattern search;
+    /// default 250,000,000. A larger charge returns `pattern-search-work-limit`
+    /// before searching. `None` removes this ceiling. This is not a deadline.
+    /// Changing this from its default selects Original evaluation.
+    pub pattern_search_work_units: Option<usize>,
     /// Maximum UTF-8 bytes in one pattern and its expanded form; default 1 MiB.
     pub pattern_bytes: usize,
     /// Caller-selected authored pattern group ceiling; default 32. The supported
@@ -60,6 +67,7 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             evaluation_sdk_work_units: None,
+            pattern_search_work_units: Some(250_000_000),
             pattern_bytes: 1024 * 1024,
             pattern_depth: pattern::MAX_GROUP_DEPTH,
             total_pattern_bytes: 4 * 1024 * 1024,
@@ -141,6 +149,23 @@ impl std::fmt::Debug for DefaultValidator {
     }
 }
 impl SchemaValidator for DefaultValidator {
+    /// Estimate the SDK lane's retained sources, environment, caches and plan
+    /// from current capacities. Shared clones count the same allocations.
+    /// Collection occupancy and regex NFA representation sizes are estimates.
+    /// Excludes process-wide fixed schemas and format validators, allocator
+    /// overhead and Wasm growth; this is neither resident memory nor what
+    /// dropping one handle frees. Accounting runs only when asked.
+    ///
+    /// Returns `None` when the compiled `jsonschema` lane is retained: that
+    /// library does not expose its allocation capacities. Setting
+    /// [`Limits::evaluation_sdk_work_units`] to `Some` selects the SDK lane.
+    fn retained_bytes(&self) -> Option<usize> {
+        match &self.compiled {
+            compiled::Lane::Original(_) => Some(self.plan.retained_bytes()),
+            compiled::Lane::Compiled(_) => None,
+        }
+    }
+
     fn evaluate(
         &self,
         value: &JsonValue,

@@ -6,6 +6,8 @@ import {
   decode,
   failure,
   sdkCall,
+  requireUsable,
+  wasmCall,
 } from "./diagnostics.js";
 import type { InputFailure, SourceLocation } from "./diagnostics.js";
 import { requireReady } from "./runtime.js";
@@ -16,14 +18,14 @@ import {
   boundedText,
   encodeOrdinary,
   exact,
-  inputErrorKind,
+  ordinaryLimitCode,
   isExact,
   jsonRaw,
   ownEntries,
   scalar,
 } from "./json.js";
 import type { ExactInput, JsonInput } from "./json.js";
-import { Managed, adopt, handle } from "./ownership.js";
+import { Managed, adopt, freeRaw, handle } from "./ownership.js";
 
 /** A keyword or schema in an original schema source, by retrieval URI and exact pointer. retrievalUri null denotes the OpenBindings document; supplied URIs identify explicit resources and never initiate acquisition. Private evaluator projection identities are not exposed. Line and column come from the source's holder: ConformantDocument.locate() for the document and ExternalSchemas.locate() for a supplied resource; prepared schemas may retain immutable original sources needed for evaluation. Keep the corresponding document or external-schema owner when explicit coordinate lookup is needed. */
 export interface SchemaOrigin {
@@ -238,7 +240,7 @@ export type SchemaPreparation =
 
 /** Expected refusal while converting an ordinary caller value into exact JSON, before schema evaluation. The code identifies the unsupported shape; instancePointer is a logical ordinary-value path, never invented source coordinates. */
 export interface ValueAdmissionFailure {
-  /** Stable ordinary-value admission category; returned before schema evaluation. */
+  /** Stable ordinary-value admission category; byte-limit, node-limit and depth-limit identify the cause, with input-limit reserved for an unidentified admission limit. Returned before schema evaluation. */
   readonly code:
     | "non-finite-number"
     | "unsupported-value"
@@ -249,6 +251,9 @@ export interface ValueAdmissionFailure {
     | "accessor-property"
     | "non-enumerable-property"
     | "symbol-key"
+    | "byte-limit"
+    | "node-limit"
+    | "depth-limit"
     | "input-limit";
   /** Pointer into the ordinary caller value; no source bytes are invented. */
   readonly instancePointer: string | null;
@@ -359,7 +364,9 @@ export interface ReferenceLimits {
 /** Return a fresh frozen copy of the default reference-report text allowance. Requires initialization. */
 export function referenceLimits(): Readonly<ReferenceLimits> {
   requireReady();
-  return Object.freeze({ maxReportBytes: wasm.referenceLimits() });
+  return Object.freeze({
+    maxReportBytes: wasmCall(() => wasm.referenceLimits()),
+  });
 }
 
 /** Cooperative work control. A pre-aborted signal returns cancellation. Synchronous Wasm does not yield to same-thread JavaScript, so use a worker plus host scheduling to interrupt long synchronous work externally. This is not a wall-clock deadline. */
@@ -368,10 +375,12 @@ export interface WorkOptions {
   signal?: AbortSignal;
 }
 
-/** Built-in evaluator budgets. Each numeric value is a nonnegative 32-bit integer; evaluationSdkWorkUnits and schemaResources also accept null. Preparation exhaustion returns a preparation failure; evaluation exhaustion returns no-verdict. Exhausted diagnostics preserve an established failure with problemsComplete false. These budgets are not elapsed-time deadlines or total process-memory bounds. */
+/** Built-in evaluator budgets. Each numeric value is a nonnegative 32-bit integer; evaluationSdkWorkUnits, patternSearchWorkUnits and schemaResources also accept null. Preparation exhaustion returns a preparation failure; evaluation exhaustion returns no-verdict. Exhausted diagnostics preserve an established failure with problemsComplete false. These budgets are not elapsed-time deadlines or total process-memory bounds. */
 export interface EvaluatorLimits {
   /** Cooperative SDK evaluation work units; null (default) sets no caller-selected cap. Internal capability bounds still apply. These are SDK-defined debits, not CPU operations or a count of schema steps. */
   evaluationSdkWorkUnits: number | null;
+  /** Maximum SDK work charged to one uncancellable Original pattern search; default 250,000,000. A larger charge returns pattern-search-work-limit before searching. null removes the ceiling. Changing the default selects Original. This is not a deadline. */
+  patternSearchWorkUnits: number | null;
   /** Maximum UTF-8 bytes in one schema pattern and its expanded form; default 1,048,576. */
   patternBytes: number;
   /** Caller-selected authored pattern group ceiling; default 32. The supported maximum remains 32 even when a larger value is requested. */
@@ -417,7 +426,9 @@ export interface ResourceRegistrationOptions extends WorkOptions {
 /** Return a fresh frozen copy of Rust's default preparation and registration budgets. Requires initialization. */
 export function preparationLimits(): Readonly<PreparationLimits> {
   requireReady();
-  return Object.freeze(decode<PreparationLimits>(wasm.preparationLimits()));
+  return Object.freeze(
+    decode<PreparationLimits>(wasmCall(() => wasm.preparationLimits())),
+  );
 }
 
 function preparationSettings(limits?: Partial<PreparationLimits>): {
@@ -489,14 +500,16 @@ export interface ReferenceOptions extends WorkOptions {
 /** Return a fresh frozen copy of default evaluator budgets. Requires initialization; values describe work/depth/retention units rather than elapsed-time deadlines. */
 export function evaluatorLimits(): Readonly<EvaluatorLimits> {
   requireReady();
-  return Object.freeze(decode<EvaluatorLimits>(wasm.evaluatorLimits()));
+  return Object.freeze(
+    decode<EvaluatorLimits>(wasmCall(() => wasm.evaluatorLimits())),
+  );
 }
 
 function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
   const defaults = evaluatorLimits();
   const encoded: Record<string, number | null> = {};
   for (const [key, value] of ownEntries(limits)) {
-    // A null limit is accepted only where the default itself is null.
+    // The per-search ceiling also accepts null to remove its finite default.
     const budget =
       typeof value === "number" &&
       Number.isSafeInteger(value) &&
@@ -506,12 +519,14 @@ function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
       !Object.hasOwn(defaults, key) ||
       !(
         budget ||
-        (value === null && defaults[key as keyof EvaluatorLimits] === null)
+        (value === null &&
+          (key === "patternSearchWorkUnits" ||
+            defaults[key as keyof EvaluatorLimits] === null))
       )
     )
       throw new SdkError(
         "invalid-evaluator-limits",
-        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSdkWorkUnits and schemaResources may also be null for their defaults.",
+        "Evaluator limits must be known budgets, each a nonnegative integer no greater than 4294967295; evaluationSdkWorkUnits, patternSearchWorkUnits and schemaResources may also be null to remove their caps.",
       );
     encoded[key.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase())] = value;
   }
@@ -550,7 +565,8 @@ function resourceUri(uri: string, maxIdentityBytes?: number): string {
   scalar(uri);
   return boundedText(
     uri,
-    maxIdentityBytes ?? (identityBytes ??= wasm.identityByteLimit()),
+    maxIdentityBytes ??
+      (identityBytes ??= wasmCall(() => wasm.identityByteLimit())),
   );
 }
 
@@ -574,7 +590,7 @@ export class ExternalSchemas extends Managed {
       return;
     }
     if (entries === undefined && options === undefined) {
-      super(new wasm.WasmResources());
+      super(wasmCall(() => new wasm.WasmResources()));
       return;
     }
     const settings = registrationOptions(
@@ -600,14 +616,14 @@ export class ExternalSchemas extends Managed {
       registrationActive(settings.signal);
       raw =
         !pending && settings.encoded === undefined
-          ? new wasm.WasmResources()
+          ? wasmCall(() => new wasm.WasmResources())
           : sdkCall(() =>
               (pending ??= new wasm.WasmResourceEntries(
                 settings.encoded,
               )).build(false),
             );
     } finally {
-      pending?.free();
+      freeRaw(pending);
     }
     super(raw);
   }
@@ -621,6 +637,7 @@ export class ExternalSchemas extends Managed {
     document: ExactJson,
     options?: ResourceRegistrationOptions,
   ): ExternalSchemas {
+    requireUsable();
     const settings = registrationOptions(options);
     const bounded = resourceUri(uri, settings.maxIdentityBytes);
     return ExternalSchemas.fromRaw(
@@ -636,14 +653,20 @@ export class ExternalSchemas extends Managed {
   }
   /** Return a NEW independently disposable owner of this immutable set. */
   retain(): ExternalSchemas {
-    return ExternalSchemas.fromRaw(handle<wasm.WasmResources>(this).retain());
+    return ExternalSchemas.fromRaw(
+      wasmCall(() => handle<wasm.WasmResources>(this).retain()),
+    );
   }
-  /** Locate a schema location in one of these resources: the node its pointer names in the resource with its URI, with line and column in that resource's own text. A resource built from a subtree of a larger value is admitted as its own text, so its coordinates count from the subtree's start, where ExactJson.locate on that subtree counts in the whole text it was parsed from. null for a document location, a URI this set does not hold (such as a packaged meta-schema's), or a pointer that names no node. Positions are computed on this call. A malformed location throws SdkError with code invalid-schema-location. */
-  locate(at: SchemaOrigin): SourceLocation | null {
+  /** Locate a schema location in one of these resources: the node its pointer names in the resource with its URI, with line and column in that resource's own text. A resource built from a subtree of a larger value is admitted as its own text, so its coordinates count from the subtree's start, where ExactJson.locate on that subtree counts in the whole text it was parsed from. undefined for a document location, a URI this set does not hold (such as a packaged meta-schema's), or a pointer that names no node. Positions are computed on this call. A malformed location throws SdkError with code invalid-schema-location. */
+  locate(at: SchemaOrigin): SourceLocation | undefined {
     handle<wasm.WasmResources>(this);
     // Reading the location can run caller code, so the handle is taken after it.
     const location = schemaLocationText(at);
-    return decode(sdkCall(() => resourceRaw(this).locate(location)));
+    return (
+      decode<SourceLocation | null>(
+        sdkCall(() => resourceRaw(this).locate(location)),
+      ) ?? undefined
+    );
   }
   /** Prepare a resource in this set as its own JSON Schema root. uri is its retrieval identity for relative references and diagnostics; its own $id governs when present. Uses the same evaluator limits, preparationLimits and signal options as Schema.prepare, with this set supplying the resources. An unavailable URI returns a refused preparation, never a value outcome. Ready owns an independent disposable PreparedSchema; failures and cancellation leave this set usable for retries. */
   prepare(
@@ -686,7 +709,7 @@ export class Schema extends Managed {
   }
   /** Acquire a NEW independently disposable owner for the exact schema, without preparing it. */
   json(): ExactJson {
-    return new ExactJson(schemaRaw(this).json());
+    return new ExactJson(wasmCall(() => schemaRaw(this).json()));
   }
   /** Prepare with the built-in evaluator. Ready transfers a disposable PreparedSchema independent of this owner and preserves its original reference environment; it does not promise every value is decidable. Missing external content or a locally undefined predicate is not a blanket refusal: each evaluation accounts for applicator dependence and evaluated annotations. Unsupported reasoning, exhausted limits and cancellation remain explicit failures or no-verdict outcomes. Supplying a different resource snapshot requires a new preparation; existing prepared owners keep their original meaning. Cancelled/transient failures do not poison retries. Pre-aborted work returns a cancelled preparation failure. */
   prepare(options: PrepareOptions = {}): SchemaPreparation {
@@ -713,7 +736,7 @@ export class Schema extends Managed {
   }
   /** Return a NEW independently disposable owner of this original schema. */
   retain(): Schema {
-    return Schema.fromRaw(schemaRaw(this).retain());
+    return Schema.fromRaw(wasmCall(() => schemaRaw(this).retain()));
   }
 }
 
@@ -721,13 +744,13 @@ function takePreparation(preparation: wasm.WasmPreparation): SchemaPreparation {
   try {
     const result = decode<
       Exclude<SchemaPreparation, { status: "ready" }> | { status: "ready" }
-    >(preparation.result());
+    >(wasmCall(() => preparation.result()));
     if (result.status !== "ready") {
       if (result.status !== "refused")
         throw new Error("Invalid preparation result.");
       return result;
     }
-    const prepared = preparation.takeSchema();
+    const prepared = wasmCall(() => preparation.takeSchema());
     if (!prepared)
       throw new Error("Preparation invariant: ready schema missing.");
     return {
@@ -735,7 +758,7 @@ function takePreparation(preparation: wasm.WasmPreparation): SchemaPreparation {
       schema: adopt(prepared, PreparedSchema.fromRaw),
     };
   } finally {
-    preparation.free();
+    freeRaw(preparation);
   }
 }
 
@@ -886,7 +909,9 @@ export class PreparedSchema extends Managed {
   }
   /** Return a NEW independently disposable owner sharing prepared state; it remains valid after the prior prepared owner is disposed. */
   retain(): PreparedSchema {
-    return PreparedSchema.fromRaw(handle<wasm.WasmPrepared>(this).retain());
+    return PreparedSchema.fromRaw(
+      wasmCall(() => handle<wasm.WasmPrepared>(this).retain()),
+    );
   }
 }
 
@@ -909,8 +934,8 @@ function checkValue(
     const raw = jsonRaw(owner);
     return decode(
       explain
-        ? prepared.explain(raw, cancelled)
-        : prepared.evaluate(raw, cancelled),
+        ? wasmCall(() => prepared.explain(raw, cancelled))
+        : wasmCall(() => prepared.evaluate(raw, cancelled)),
     );
   };
   if (exact) return run(exact, isAborted(signal));
@@ -924,9 +949,7 @@ function checkValue(
       return {
         status: "input-error",
         error: {
-          code: (error.code === "encoding-limit"
-            ? "input-limit"
-            : error.code) as ValueAdmissionFailure["code"],
+          code: error.code as ValueAdmissionFailure["code"],
           instancePointer: error.inputPointer,
           message: error.message,
         },
@@ -936,11 +959,12 @@ function checkValue(
       temporary = new ExactJson(wasm.WasmJson.parseText(text));
     } catch (error) {
       // Only known JSON admission limits can refuse text produced by the checked encoder.
-      if (inputErrorKind(error) !== "Limit") throw error;
+      const code = ordinaryLimitCode(error);
+      if (code === undefined) throw error;
       return {
         status: "input-error",
         error: {
-          code: "input-limit",
+          code,
           instancePointer: null,
           message: ORDINARY_LIMITS,
         },

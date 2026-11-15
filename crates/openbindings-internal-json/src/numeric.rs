@@ -49,6 +49,11 @@ impl std::fmt::Debug for Bound {
     }
 }
 impl Bound {
+    /// Heap backing of this exact operand, computed only when requested.
+    pub fn retained_bytes(&self) -> usize {
+        self.limit.decimal.retained_bytes()
+    }
+
     /// The bound `keyword` states with the operand spelled `token`.
     pub fn parse(keyword: &str, token: &str) -> Result<Self, &'static str> {
         Self::new(keyword, Operand::parse(token))

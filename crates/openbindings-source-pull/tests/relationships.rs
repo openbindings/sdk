@@ -414,7 +414,7 @@ fn binding_data_uses_are_checked_for_added_entries_and_proposals() {
             assert!(
                 matches!(
                     result.validate_for(&request, &PullLimits::default(), &AtomicBool::new(false)),
-                    Err(PullValidationError::Relationship(RelationshipError::Uses))
+                    Err(PullValidationError::Relationship(error)) if error.kind() == RelationshipErrorKind::Uses
                 ),
                 "{label}"
             );
@@ -508,9 +508,7 @@ fn binding_references_name_existing_input_schemas_and_operation_slots() {
         } else {
             assert!(matches!(
                 checked,
-                Err(PullValidationError::Relationship(
-                    RelationshipError::ReferenceTarget
-                ))
+                Err(PullValidationError::Relationship(error)) if error.kind() == RelationshipErrorKind::ReferenceTarget
             ));
         }
     }
@@ -566,9 +564,7 @@ fn omitted_labels_name_input_entries_by_primary_key() {
             assert!(
                 matches!(
                     checked,
-                    Err(PullValidationError::Relationship(
-                        RelationshipError::OmittedTarget
-                    ))
+                    Err(PullValidationError::Relationship(error)) if error.kind() == RelationshipErrorKind::OmittedTarget
                 ),
                 "{field}"
             );

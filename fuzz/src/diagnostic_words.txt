@@ -25,6 +25,7 @@ BoundaryFailureKind
 CONTEXT_REQUIRED
 Cancelled
 CarrierError
+CarrierErrorKind
 ChallengeAfterOutput
 ChallengeShapeError
 CheckDescription
@@ -116,6 +117,7 @@ ReferenceTarget
 Rejected
 Relationship
 RelationshipError
+RelationshipErrorKind
 RequestError
 RequestIdentityLimit
 ReservedCode
@@ -470,3 +472,5 @@ write
 wrong
 x
 y
+pattern-search-work-limit
+pattern_search_work_units

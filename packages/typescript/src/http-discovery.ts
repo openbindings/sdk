@@ -1,7 +1,13 @@
 /** Optional HTTP discovery and publication over the document core. */
 import * as wasm from "./wasm/openbindings_wasm.js";
 import { requireReady } from "./runtime.js";
-import { SdkError, decode, sdkCall } from "./diagnostics.js";
+import {
+  SdkError,
+  decode,
+  sdkCall,
+  wasmCall,
+  requireUsable,
+} from "./diagnostics.js";
 import { scalar } from "./json.js";
 import {
   ConformantDocument,
@@ -10,7 +16,7 @@ import {
   conformantRaw,
 } from "./document.js";
 import type { ValidationReport } from "./document.js";
-import { Managed, handle } from "./ownership.js";
+import { Managed, freeRaw, handle } from "./ownership.js";
 
 /** Pinned HTTP discovery companion identity and wire defaults, independent of package/spec core versions. */
 export interface DiscoveryPolicy {
@@ -31,7 +37,7 @@ export interface DiscoveryPolicy {
 /** Return a fresh plain-data copy of the pinned companion version/revision, route, media types and default decoded-body limit; requires initialization. */
 export function discoveryPolicy(): DiscoveryPolicy {
   requireReady();
-  return decode(wasm.discoveryPolicy());
+  return decode(wasmCall(() => wasm.discoveryPolicy()));
 }
 
 /** Construct the fixed discovery URL from an absolute HTTP(S) origin. The origin must be ASCII: a non-ASCII domain name is refused, so pass its IDNA A-label form. Refuses credentials, resource paths, query and fragment; accepts an optional root slash. HTTP requires literal loopback unless allowHttp is true. Does not fetch. */
@@ -493,10 +499,14 @@ export async function discover(
     phase = "assessment";
     // The body is validated under limits that admit the bound, as in Rust; a
     // body within it cannot pass 4294967295 bytes of Wasm memory.
-    const assessed = new wasm.WasmDiscovery(body, Math.min(limit, 0xffffffff));
+    const assessed = wasmCall(
+      () => new wasm.WasmDiscovery(body!, Math.min(limit, 0xffffffff)),
+    );
     try {
-      const result = decode<DiscoveryBodyResult>(assessed.result()),
-        raw = assessed.document();
+      const result = decode<DiscoveryBodyResult>(
+          wasmCall(() => assessed.result()),
+        ),
+        raw = wasmCall(() => assessed.document());
       let document: Document | undefined = raw ? adoptDocument(raw) : undefined;
       if (result.status === "found") {
         if (!document)
@@ -518,9 +528,10 @@ export async function discover(
       }
       return { ...result, ...(document ? { document } : {}), metadata, body };
     } finally {
-      assessed.free();
+      freeRaw(assessed);
     }
   } catch (error) {
+    requireUsable();
     if (check() || error === aborted)
       return { ...cancellation(), metadata, body };
     if (error instanceof Error && error.name === "TimeoutError")
@@ -602,12 +613,17 @@ export class DiscoveryPublication extends Managed {
   }
   /** Create a detached Response for the route and method. A percent-encoded unreserved character in the path matches that character (RFC 3986 section 2.3), so /.well-known/%6Fpenbindings is the route; a reserved escape such as %2F is preserved and never matches /. GET returns exact bytes; HEAD returns no body with the original Content-Length; unsupported route is 404 and unsupported method 405. Creates no server and does not perform authentication or preflight handling. */
   respond(request: Request): Response {
+    requireUsable();
     const url = new URL(request.url);
     const path = url.pathname;
     const result = decode<{
       status: number;
       headers: { name: string; value: number[] }[];
-    }>(handle<wasm.WasmPublication>(this).metadata(request.method, path));
+    }>(
+      wasmCall(() =>
+        handle<wasm.WasmPublication>(this).metadata(request.method, path),
+      ),
+    );
     const headers = new Headers(
       result.headers.map((h): [string, string] => [
         h.name,
@@ -617,8 +633,9 @@ export class DiscoveryPublication extends Managed {
     const body =
       request.method === "HEAD"
         ? null
-        : handle<wasm.WasmPublication>(this).body(request.method, path).slice()
-            .buffer;
+        : wasmCall(() =>
+            handle<wasm.WasmPublication>(this).body(request.method, path),
+          ).slice().buffer;
     return new Response(body, { status: result.status, headers });
   }
 }

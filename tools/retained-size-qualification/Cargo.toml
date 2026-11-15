@@ -11,3 +11,4 @@ publish = false
 openbindings = { path = "../../crates/openbindings" }
 openbindings-internal-json = { path = "../../crates/openbindings-internal-json" }
 openbindings-schema-comparison = { path = "../../crates/openbindings-schema-comparison" }
+openbindings-json-schema-evaluator = { path = "../../crates/openbindings-json-schema-evaluator" }

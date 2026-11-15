@@ -238,6 +238,11 @@ struct Layer {
     names: BTreeMap<String, NameSelection>,
 }
 impl SchemaSpace {
+    // Local source arenas only; process-wide packaged sources are excluded.
+    pub fn retained_sources(&self) -> impl Iterator<Item = &JsonValue> {
+        self.local.sources.iter().map(|source| &source.value)
+    }
+
     // Excludes shared source arenas and the process-wide packaged catalog.
     pub fn retained_bytes(&self) -> usize {
         use openbindings_internal_json::backend::{btree_bytes, hash_bytes, vec_bytes};

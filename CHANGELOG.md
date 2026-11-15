@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-11-14 owner rulings (unreleased)
+
+### Changed
+
+- Breaking: the kind-description crate's `CarrierError` is a struct with `kind()` returning a `Copy`
+  `CarrierErrorKind` and `pointer()` returning the failing location when known, the shape the source-pull crate's
+  carrier error already has. Neither crate's carrier category prints a label in `Display` or `Debug`, including one a
+  caller constructs; read it through `kind()`.
+- Breaking: the source-pull crate's `RelationshipError` is a struct with `kind()` returning a `Copy`,
+  `#[non_exhaustive]` `RelationshipErrorKind` (the twelve former variants) and `pointer()` returning the offending
+  row of the provider's report. Where two rows contradict each other the later one is named; missing coverage has no
+  row. `Display` names no location.
+- A single uncancellable pattern search on the evaluator's own lane may be charged at most 250,000,000 work units by
+  default; a larger search returns `no-verdict` with `pattern-search-work-limit` before it runs. Rust
+  `Limits::pattern_search_work_units` and TypeScript `EvaluatorLimits.patternSearchWorkUnits` raise it or remove it
+  (`None` / `null`). The two hostile patterns from the review, which ran 6 to 21 seconds and could not be cancelled,
+  are now refused in under 2 ms.
+- TypeScript turns a Wasm runtime trap (memory exhausted, for one) into an `SdkError` with code `wasm-trap`, and marks
+  the instance unusable: every later SDK call fails at once with the same code, where it used to half work.
+  Disposal after a trap is safe and finalizers never throw.
+- TypeScript `locate` returns `undefined`, not `null`, for an unavailable location, as every other optional read does.
+- TypeScript ordinary values refused at an admission limit report `byte-limit`, `node-limit` or `depth-limit`, the
+  codes exact text reports for the same causes, where they reported `input-limit`.
+
+### Added
+
+- `SchemaValidator::retained_bytes()`, defaulting to `None`, with `PreparedSchema::retained_bytes()` and
+  `PreparedOperation::retained_bytes()` passing it through. The default evaluator answers on its own lane, within 3
+  percent of a counting allocator on the measured shapes, and `None` on the lane that runs the `jsonschema` library,
+  whose allocations it cannot see. Nothing is computed until asked.
+
+### Fixed
+
+- The evaluator's work counter was pointer-width, so on wasm32 a pattern charge above 2^32 was reported as a work
+  limit nobody set and Rust and TypeScript answered one input differently. It is 64-bit, and accumulates only when a
+  cap is set.
+
 ## 2026-11-14 panel shapes (unreleased)
 
 ### Changed

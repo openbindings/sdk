@@ -78,7 +78,16 @@ and `pointer() -> Option<&openbindings::Pointer>`. A malformed `added`, `existin
 or `omitted` row is located as `/existing/1`, or `/report/existing/1` when admitted
 through `PullResult::from_json`. Nested loss and proposal failures identify their
 enclosing row. Other failures may have no pointer. Formatting never repeats
-supplied names, messages or data; `Display` retains the category's fixed wording.
+supplied names, messages or data; `Display` retains the category's fixed wording. Both category formatters omit
+labels, including caller-constructed labels; inspect them through `kind()`.
+
+`PullValidationError::Relationship` carries a `RelationshipError` struct with
+`kind() -> RelationshipErrorKind`, a Copy, non-exhaustive category, and
+`pointer() -> Option<&openbindings::Pointer>`. Report failures identify their
+exact row, such as `/report/added/2`, including nested proposal and label checks.
+Conflicting report rows identify the later row. A missing coverage row or an
+addition with no corresponding report row has no pointer. `Display` omits
+locations. Failure mapping preserves both category and pointer.
 
 `PullResult::validate_for` also checks an already supplied result and returns the
 prospective conformant document. That establishes core conformance, not offered

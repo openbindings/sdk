@@ -23,7 +23,16 @@ JSON and number spellings. Data may retain duplicate nested members. Context
 follows the shared
 [SDK admission policy](https://github.com/openbindings/sdk/blob/main/crates/openbindings-context/README.md):
 `CheckSourceRequest::from_json` refuses an object anywhere in it that repeats a
-decoded member name as `CarrierError::DuplicateMember`.
+decoded member name as `CarrierErrorKind::DuplicateMember`.
+
+`CarrierError` is a struct with `kind() -> CarrierErrorKind`, a Copy,
+non-exhaustive category, and `pointer() -> Option<&openbindings::Pointer>`.
+Locations are relative to the admitted carrier: `/description` for a standalone
+disclosure, `/pull/description` inside a kind description, or `/supports/2` for a
+support entry. Ambiguous member names identify their containing object; opaque
+context failures identify `/context`. Category conversion alone has no pointer.
+Labels remain inspectable through `kind()`, but both `Display` and `Debug` omit
+all labels, including caller-constructed labels.
 
 To evaluate proposed data against `KindDescription::source_data()` or
 `binding_data()`, supply that exact `JsonValue` as an `openbindings::ExternalSchema`

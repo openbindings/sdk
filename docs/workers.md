@@ -41,7 +41,8 @@ stream, before buffering it all; an SDK byte limit cannot bound the host's copy.
 | JSON `maxDepth` | 10,000 (default) | Keep the existing qualified depth ceiling: 9,990 array levels grew memory by 1.125 MiB. This is not a stack-byte guarantee. |
 | `preparationLimits.maxSdkReservationBytes` | Select by workload below | Choose the smallest tested allowance admitting the required shape, then measure its linear high-water plus the body's bytes against the host budget. Reservation bytes cannot be subtracted from that budget as if they were actual memory growth. |
 | `preparationLimits.maxSdkWorkUnits` | 100,000,000 | Smallest tested decade completing both large preparations when memory permits: 1,000,000 completed the records, but 10,000,000 still refused the chain. The completing chain took 108 ms here; lower and remeasure for a smaller CPU budget. |
-| `limits.evaluationSdkWorkUnits` | 100,000,000 | Smallest tested decade deciding both large values: 1,000,000 returned no-verdict for the records, as did 10,000,000 for the chain. The hostile pattern returned no-verdict in 3.43 ms with `evaluation-work-limit`, versus 1.858 s uncapped. Use this for hostile work, not memory sizing. Units are not a deadline. |
+| `limits.patternSearchWorkUnits` | 250,000,000 (default) | Refuses one oversized Original pattern search before entry with `pattern-search-work-limit`. Raise it or use `null` to remove the ceiling; either change selects Original. This is not a deadline. |
+| `limits.evaluationSdkWorkUnits` | 100,000,000 | Smallest tested decade deciding both large values: 1,000,000 returned no-verdict for the records, as did 10,000,000 for the chain. The hostile pattern returned no-verdict in 3.43 ms with `evaluation-work-limit`, versus 1.858 s before the default search ceiling. Default limits now refuse that search with `pattern-search-work-limit`. Use this for hostile work, not memory sizing. Units are not a deadline. |
 | `limits.evaluationSdkReservationBytes` | 4 MiB | Smallest tested allowance completing the 3,000-record value; 1 MiB returned `semantic-analysis-memory-limit`. Qualify it together with preparation and admission. This is SDK accounting, not all allocation. |
 | Validation `maxFindings` | 100 | Smallest nonzero retention tested. On 100,000 invalid operations it saved 2.813 MiB versus 4,096 findings; it is secondary to admission limits. Truncation does not change rule conclusions. |
 
@@ -197,25 +198,33 @@ reservations for preparation storage and evaluation work units for work.
   finish SDK work synchronously, copy needed plain results, dispose, then await
   further I/O. Concurrent retained owners add to the same isolate's high-water mark.
 - A timer-driven `AbortSignal` cannot interrupt synchronous SDK work: the timer
-  cannot run until the call returns. Use work limits. A pre-aborted signal works.
-  Measured in local workerd on 2026-11-14, a hostile evaluation stalled a ping
+  cannot run until the call returns. The default per-search ceiling now refuses
+  the measured hostile pattern before its uncancellable search runs. It does
+  not bound an entire request or let timers interrupt admitted searches. Keep
+  a cumulative work cap for aggregate work. A pre-aborted signal works.
+  Before the ceiling, local workerd on 2026-11-14 measured a hostile evaluation stalling a ping
   to the same isolate for 1,671-1,947 ms; this is not deployed-platform timing.
 
 ## Memory exhaustion
 
-An allocation failure currently throws a bare `WebAssembly.RuntimeError`
-(`RuntimeError: unreachable`), not an `SdkError`, with no SDK code. Under a
-64 MiB Wasm cap, the 49,000-link preparation trapped and a subsequent integer
-preparation trapped too, although small-document validation still worked.
-This was reproduced in Node on this tree and measured in local workerd on
-2026-11-14, where the maintainer reran it.
+A Wasm runtime trap, including allocation failure, throws `SdkError` with code
+`wasm-trap` and the fixed message `The OpenBindings WebAssembly instance trapped
+and can no longer be used.` The SDK marks this module instance unusable: every
+later SDK operation, including validation and preparation, fails immediately with
+that code. `initialize()` rejects with the same code and cannot replace it.
+Disposing existing owners remains safe and idempotent; cleanup skips Wasm after
+a trap, and finalizers never throw. The original runtime error is not attached.
 
-Treat an SDK Wasm trap as fatal for the isolate: mark the instance unusable,
-return an error such as 503 and reject subsequent SDK requests there. Resume
-only in a fresh isolate; `initialize()` caches its first successful instance
-and cannot replace it. Whether the platform recycles an isolate after a trap
-is unmeasured. Turning memory exhaustion into a distinct SDK error remains
-an open decision, not current behavior.
+The failure witness is a 49,000-link preparation under a 64 MiB Wasm cap.
+Before this boundary guard, its bare `RuntimeError: unreachable` left preparation
+broken while small-document validation still worked. That behavior was reproduced
+in Node and local workerd on 2026-11-14. The package's child-Node regression now
+caps memory with `--wasm-max-mem-pages=1024` and checks the stable error, immediate
+follow-up refusals and safe disposal.
+
+Treat `wasm-trap` as fatal for the isolate: return an error such as 503 and resume
+only in a fresh isolate. Whether the deployed platform recycles an isolate after
+a trap is unmeasured.
 
 For local failure probes, workerd's
 `v8Flags = ["--wasm-max-mem-pages=2048"]` caps linear memory at 128 MiB

@@ -47,6 +47,18 @@ subset or applying a proposal still requires validation of that edited document.
 failing row, such as `/existing/1` or `/report/existing/1`. Nested failures identify
 the enclosing row; unrelated top-level failures need not have a pointer.
 
+Kind-description owns its own `CarrierError` struct and Copy, non-exhaustive
+`CarrierErrorKind`. Its `pointer() -> Option<&Pointer>` locates fixed fields,
+nested disclosures and support indices relative to the admitted carrier; opaque
+context failures locate `/context`. Both role crates keep labels inspectable
+through `kind()` while omitting them from `Display` and `Debug`.
+
+`PullValidationError::Relationship` carries a `RelationshipError` struct.
+`kind()` returns a Copy, non-exhaustive `RelationshipErrorKind`; `pointer()` borrows
+an optional exact provider-report row such as `/report/existing/2`. Conflicting
+rows identify the later row. Missing coverage and additions with no report row
+have no row pointer. `Display` does not include locations.
+
 `CheckFailure<E>`, `KindError<E>`, `PullFailure<E>` and `PullError<E>` each expose
 `map_error<F>(self, map: impl FnOnce(E) -> F)` returning the same family with `F`.
 Only the generic error payload is transformed. Other variants and payloads pass
@@ -204,6 +216,14 @@ owner. `value()` and `document()` do acquire owners. Exact traversal cursors and
 yielded member/value also have independent lifetimes. Finalizers are best effort;
 disposal is not a promise that process RSS or Wasm capacity shrinks.
 
+TypeScript catches `WebAssembly.RuntimeError` at its Wasm boundary, including
+allocation traps, and throws `SdkError` with code `wasm-trap` and fixed text:
+`The OpenBindings WebAssembly instance trapped and can no longer be used.` The
+module instance becomes unusable. All later SDK operations fail immediately with
+that code; `initialize()` rejects and cannot replace it. Disposal remains safe
+and idempotent, skips Wasm after a trap, and finalizers never throw. The original
+runtime error is not attached as a cause. Resume work in a fresh module instance.
+
 ## Schemas and value results
 
 A `Schema` owns its original location and conformant context. Rust
@@ -224,6 +244,19 @@ or cancellation. TypeScript
 `PreparedSchema`, or a `refused` branch with a `PreparationFailure`. Preparation
 failure judges no instance. A missing operation or absent schema is found before
 preparation and is not a preparation failure.
+
+Rust `PreparedSchema::retained_bytes(&self) -> Option<usize>` asks its validator
+for an on-demand estimate of heap allocations it keeps alive. The defaulted
+`SchemaValidator::retained_bytes` returns `None` for custom validators unless
+they override it. The default evaluator returns `Some` on its SDK lane and
+`None` on its compiled `jsonschema` lane, whose allocations are opaque.
+`PreparedOperation::retained_bytes(&self) -> Option<usize>` adds the retained
+document, operation name and present schema slots; any present unknown estimate
+makes the result `None`. Absent slots add nothing. Shared allocations are counted
+per owner, including across slots; these are neither resident-memory readings
+nor bytes freed by dropping one handle. Allocator overhead, process-wide fixed
+schemas and Wasm memory growth are excluded. Later caches can grow the estimate.
+No accounting runs during preparation or evaluation. This API is Rust only.
 
 Schemas received as interface data, including a kind description's `sourceData`
 and `bindingData` and a context challenge's `schema`, can be prepared as their own
@@ -326,8 +359,12 @@ accessors, sparse arrays and unsupported object forms without running getters or
 `toJSON`; use exact parsing for original number tokens and raised admission limits.
 `ExactJson.from` keeps standard `TypeError` and `RangeError` classes and fixed
 messages, with stable `.code` properties. Shape failures use the existing
-ordinary admission vocabulary. All ordinary admission limits use `input-limit`;
-exact-text admission retains `byte-limit`, `node-limit` and `depth-limit`.
+ordinary admission vocabulary. Ordinary and exact-text admission use the same
+`byte-limit`, `node-limit` and `depth-limit` codes, including aggregate limits
+reached with nested exact owners. `input-limit` remains only for a bridge
+admission limit without an identified cause. TypeScript ordinary conversion
+permits 10,000 nested containers and refuses 10,001; Rust's ordinary Serde
+conversion permits 128 and refuses 129. Those conversion depths are unchanged.
 Caller exceptions remain unchanged. The definitions describe each separate
 encoding and evaluation budget.
 
@@ -363,7 +400,9 @@ Value problems have an instance pointer relative to the evaluated value and a
 `SchemaOrigin` with `retrieval_uri` (TypeScript `retrievalUri`) plus an original schema
 pointer. Null retrieval URI means the document. `JsonValue::locate`,
 `ConformantDocument::locate` and `ExternalSchemas::locate` compute source positions
-when requested; TypeScript offers corresponding `locate()` methods. No synthetic
+when requested; TypeScript offers corresponding `locate()` methods with return
+type `SourceLocation | undefined`. An unavailable source or node returns
+`undefined`. No synthetic
 schema coordinate is substituted for an unavailable origin.
 
 Cheap failures contain no problems. An explanation may be incomplete because of
@@ -507,7 +546,7 @@ opaque. Each request decoder that admits a context member applies the same
 check and reports it through its own error: `BindingRequest::from_json` and
 `OperationRequest::from_json` return `BoundaryFailureKind::DuplicateMember` at
 `/context`, `PullRequest::from_json` returns `RequestError::Shape("duplicate-member")`
-and `CheckSourceRequest::from_json` returns `CarrierError::DuplicateMember`. The
+and `CheckSourceRequest::from_json` returns `CarrierErrorKind::DuplicateMember`. The
 TypeScript facade carries no context, so it has no context admission path.
 
 Context admission is SDK policy: every object in context, including objects
@@ -516,6 +555,28 @@ document is silent on duplicates. This follows the parser-differential reason
 in [OBI-01](https://github.com/openbindings/spec/blob/c1419c9fc3ae5a00c2b83da710c11bf67dab7934/openbindings.md#10-conformance):
 the same bytes can yield different values across parsers. The SDK refuses
 ambiguity without interpreting members, using the exact JSON's existing index.
+
+## Pattern search work limits
+
+Rust evaluator `Limits::pattern_search_work_units: Option<usize>` and TypeScript
+`EvaluatorLimits.patternSearchWorkUnits: number | null` bound the SDK work charged
+to one uncancellable Original pattern search. The default is 250,000,000;
+TypeScript reads it from Wasm through `evaluatorLimits()`. Numeric TypeScript
+values use the same nonnegative integer range as other evaluator limits,
+0 through 4,294,967,295. `None` / `null` removes the ceiling.
+
+A charge above the ceiling returns `NoVerdict` / `no-verdict`, reason
+`LimitExceeded` / `limit-exceeded`, code `pattern-search-work-limit`, before
+searching. The charge is `(UTF-8 input bytes + 1) * prepared program weight`,
+in the existing evaluation work units. It contains no document values.
+`evaluation_sdk_work_units` / `evaluationSdkWorkUnits` remains the separate
+optional cumulative work cap. Internal fixed-width accounting cannot invent an
+uncapped work-limit refusal by overflowing on Wasm.
+
+Changing the search ceiling from its default selects Original, as other changed
+evaluator limits do. Explicitly supplying the default preserves lane selection.
+The compiled lane retains its separate admission bounds. Neither policy is a
+deadline; cancellation is observed around an engine call, never inside it.
 
 ## TypeScript preparation and registration limits
 

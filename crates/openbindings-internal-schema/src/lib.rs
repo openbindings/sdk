@@ -210,6 +210,7 @@ impl std::fmt::Debug for ProjectedResource {
 /// This internal package is version-locked to the SDK, not an extension API.
 #[doc(hidden)]
 pub trait OriginalEnvironment {
+    fn retained_bytes(&self) -> usize;
     fn space(&self) -> &SchemaSpace;
     fn entry(&self) -> usize;
 }

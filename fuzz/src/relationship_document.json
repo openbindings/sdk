@@ -1,0 +1,1 @@
+{"openbindings":"0.2.0","operations":{"o":{"aliases":["reserved"]}},"schemas":{"S":true,"T":false},"sources":{"s":{"kind":"k"},"other":{"kind":"k"}},"bindings":{"a":{"source":"s","operation":"o"},"b":{"source":"s","operation":"o"},"c":{"source":"s","operation":"o"}}}

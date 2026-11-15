@@ -213,3 +213,11 @@ and location requests can grow caches; see its rustdoc for growth bounds.
 
 `InputError::line()` and `byte_column()` report one-based lines and UTF-8 byte
 columns, computed once on failure; nothing changes on success.
+
+`PreparedSchema::retained_bytes()` returns the validator's optional heap estimate.
+`SchemaValidator::retained_bytes()` defaults to `None`, so custom evaluators make
+no size promise unless they override it. Accounting uses current storage only
+when asked. Shared allocations are counted per owner; the estimate excludes
+inline storage, allocator overhead and Wasm growth, and is neither resident
+memory nor bytes freed by dropping one handle. The default evaluator reports
+`Some` on its SDK lane and `None` for opaque compiled `jsonschema` storage.

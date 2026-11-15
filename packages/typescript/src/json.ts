@@ -7,6 +7,9 @@ import {
   decode,
   failure,
   sdkCall,
+  requireUsable,
+  wasmCall,
+  wasmFailure,
 } from "./diagnostics.js";
 import type {
   JsonEncodingErrorCode,
@@ -36,7 +39,7 @@ let defaultLimits: Uint32Array | undefined;
 let defaultMaxBytes: number | undefined;
 
 function jsonDefaults(): Uint32Array {
-  return (defaultLimits ??= wasm.jsonLimits());
+  return (defaultLimits ??= wasmCall(() => wasm.jsonLimits()));
 }
 
 function invalidLimits(message: string): never {
@@ -124,6 +127,7 @@ export function wellFormed(text: string): boolean {
 
 /** @internal */
 export function scalar(text: string): void {
+  requireUsable();
   if (!wellFormed(text))
     throw new TypeError(
       "Unpaired UTF-16 in JSON text; use a JSON \\u escape or exact UTF-8 bytes.",
@@ -226,13 +230,17 @@ class ExactCursor<R extends Raw, C extends Raw, T>
     super(raw);
   }
   next(): IteratorResult<T, undefined> {
-    if (this.#terminal === "closed") return { done: true, value: undefined };
+    if (this.#terminal === "closed") {
+      requireUsable();
+      return { done: true, value: undefined };
+    }
     const raw = handle<R>(this);
     try {
       const child = this.step(raw);
       if (!child) return this.return();
       return { done: false, value: adopt(child, this.wrap) };
     } catch (error) {
+      error = wasmFailure(error);
       this.dispose();
       throw error;
     }
@@ -261,19 +269,21 @@ export class ExactMember extends Managed {
   }
   /** Zero-based occurrence position within its original object. */
   get index(): number {
-    return handle<wasm.WasmMember>(this).index();
+    return wasmCall(() => handle<wasm.WasmMember>(this).index());
   }
   /** Acquire a NEW exact string owner, preserving escaped unpaired code units and original location. */
   name(): ExactJson {
-    return new ExactJson(handle<wasm.WasmMember>(this).name());
+    return new ExactJson(wasmCall(() => handle<wasm.WasmMember>(this).name()));
   }
   /** Acquire a NEW exact value owner, independent of this entry/source/cursor. */
   value(): ExactJson {
-    return new ExactJson(handle<wasm.WasmMember>(this).value());
+    return new ExactJson(wasmCall(() => handle<wasm.WasmMember>(this).value()));
   }
   /** Acquire another independently disposable owner for this occurrence. */
   retain(): ExactMember {
-    return ExactMember.fromRaw(handle<wasm.WasmMember>(this).retain());
+    return ExactMember.fromRaw(
+      wasmCall(() => handle<wasm.WasmMember>(this).retain()),
+    );
   }
 }
 
@@ -283,7 +293,7 @@ export class ExactJson extends Managed {
     super(raw);
     exactOwners.add(this);
   }
-  /** Admit checked ordinary JSON into a new disposable exact owner. Nested ExactJson inputs are borrowed. Ordinary encoding failures throw TypeError/RangeError with stable code properties and fixed messages. Shape codes match ValueAdmissionFailure; all ordinary limits use input-limit, while parseJson uses byte-limit, node-limit or depth-limit. Use parseJson for structured exact-input failures. Handle misuse throws SdkError; precision already lost in JavaScript numbers cannot be recovered. */
+  /** Admit checked ordinary JSON into a new disposable exact owner. Nested ExactJson inputs are borrowed. Ordinary encoding failures throw TypeError/RangeError with stable code properties and fixed messages. Shape codes match ValueAdmissionFailure; limits use byte-limit, node-limit or depth-limit as parseJson does, with input-limit reserved for an unidentified admission limit. Use parseJson for structured exact-input failures. Handle misuse throws SdkError; precision already lost in JavaScript numbers cannot be recovered. */
   static from(value: JsonInput): ExactJson {
     requireReady();
     const text = encodeOrdinary(value);
@@ -291,21 +301,22 @@ export class ExactJson extends Managed {
       return new ExactJson(wasm.WasmJson.parseText(text));
     } catch (error) {
       // The checked encoder leaves only a JSON admission limit to refuse it.
-      if (inputErrorKind(error) !== "Limit") throw error;
-      throw ordinaryError(new RangeError(ORDINARY_LIMITS), "input-limit");
+      const code = ordinaryLimitCode(error);
+      if (code === undefined) throw error;
+      throw ordinaryError(new RangeError(ORDINARY_LIMITS), code);
     }
   }
   /** Return a new independently disposable owner sharing this exact snapshot; no reparse. */
   retain(): ExactJson {
-    return new ExactJson(handle<wasm.WasmJson>(this).retain());
+    return new ExactJson(wasmCall(() => handle<wasm.WasmJson>(this).retain()));
   }
   /** Allocate exact token text in JavaScript, excluding surrounding whitespace; no disposal is needed for the string. */
   get text(): string {
-    return handle<wasm.WasmJson>(this).text();
+    return wasmCall(() => handle<wasm.WasmJson>(this).text());
   }
   /** Allocate a detached copy of exact token UTF-8 bytes; mutating the copy does not change this snapshot. */
   get bytes(): Uint8Array {
-    return handle<wasm.WasmJson>(this).bytes();
+    return wasmCall(() => handle<wasm.WasmJson>(this).bytes());
   }
   /** Allocate plain metadata for this value: kind, original byte coordinates and subtree duplicate-name presence. No disposable owner is returned. */
   get metadata(): {
@@ -316,7 +327,7 @@ export class ExactJson extends Managed {
     /** Whether this subtree contains repeated decoded object member names. */
     duplicateNames: boolean;
   } {
-    return decode(handle<wasm.WasmJson>(this).metadata());
+    return decode(wasmCall(() => handle<wasm.WasmJson>(this).metadata()));
   }
   /** Resolve a relative RFC 6901 pointer and return a NEW disposable subtree owner, or undefined for a malformed pointer or one that names no node. Empty selects this value; repeated names select the first occurrence. A segment may hold an unpaired UTF-16 unit, so a value problem's instance resolves to the node locate() reports. The owner can retain the entire source. */
   at(pointer: string): ExactJson | undefined {
@@ -324,26 +335,30 @@ export class ExactJson extends Managed {
     // Only a pointer holding an unpaired unit needs the exact JSON route that
     // locate() uses; JSON.stringify escapes that unit.
     const found = wellFormed(pointer)
-      ? raw.at(pointer)
-      : raw.atPointer(JSON.stringify(pointer));
+      ? wasmCall(() => raw.at(pointer))
+      : wasmCall(() => raw.atPointer(JSON.stringify(pointer)));
     return found ? new ExactJson(found) : undefined;
   }
-  /** Locate an exact RFC 6901 pointer relative to this value, such as a value problem's instance, in the text it was parsed from: the node's byte offset, line and byte column with the given pointer, or null when it names no node. A segment may hold an unpaired UTF-16 unit. Computed on this call; nothing is retained. A malformed pointer throws SdkError with code invalid-pointer. */
-  locate(pointer: string): SourceLocation | null {
+  /** Locate an exact RFC 6901 pointer relative to this value, such as a value problem's instance, in the text it was parsed from: the node's byte offset, line and byte column with the given pointer, or undefined when it names no node. A segment may hold an unpaired UTF-16 unit. Computed on this call; nothing is retained. A malformed pointer throws SdkError with code invalid-pointer. */
+  locate(pointer: string): SourceLocation | undefined {
+    const raw = handle<wasm.WasmJson>(this);
     if (typeof pointer !== "string")
       throw new TypeError("A JSON Pointer string is required.");
-    const raw = handle<wasm.WasmJson>(this);
-    return decode(sdkCall(() => raw.locate(JSON.stringify(pointer))));
+    return (
+      decode<SourceLocation | null>(
+        sdkCall(() => raw.locate(JSON.stringify(pointer))),
+      ) ?? undefined
+    );
   }
   /** Return a NEW disposable owner for the first member with this decoded name, or undefined if absent/not an object. Duplicate names remain available through exact text; this lookup does not prove uniqueness. */
   get(name: string): ExactJson | undefined {
     scalar(name);
-    const found = handle<wasm.WasmJson>(this).get(name);
+    const found = wasmCall(() => handle<wasm.WasmJson>(this).get(name));
     return found ? new ExactJson(found) : undefined;
   }
   /** Lazily enumerate every member in source order, including duplicate and exact names. Wrong kind returns undefined; an empty object returns an empty cursor. Dispose cursor and each yielded entry independently. */
   members(): ExactIterator<ExactMember> | undefined {
-    const raw = jsonRaw(this).members();
+    const raw = wasmCall(() => jsonRaw(this).members());
     return raw
       ? adopt(
           raw,
@@ -353,7 +368,7 @@ export class ExactJson extends Managed {
   }
   /** Lazily enumerate independent exact element owners in array order. Wrong kind returns undefined; empty arrays return an empty cursor. No unvisited child handles are acquired. */
   elements(): ExactIterator<ExactJson> | undefined {
-    const raw = jsonRaw(this).elements();
+    const raw = wasmCall(() => jsonRaw(this).elements());
     return raw
       ? adopt(
           raw,
@@ -368,7 +383,7 @@ export class ExactJson extends Managed {
   }
   /** Compare exact mathematical JSON values without binary64 rounding. Returns undefined when duplicate names make equality ambiguous; borrows both owners. */
   equals(other: ExactJson): boolean | undefined {
-    return handle<wasm.WasmJson>(this).equals(jsonRaw(other));
+    return wasmCall(() => handle<wasm.WasmJson>(this).equals(jsonRaw(other)));
   }
   /** Allocate an ordinary JS value only if exact round-trip comparison succeeds. Returns inexact for duplicate names, numeric rounding or unsupported conversion. Keeps this owner valid and leaves text/bytes available. */
   toValue():
@@ -415,7 +430,7 @@ export class ExactJson extends Managed {
     } catch (error) {
       if (
         !(error instanceof JsonEncodingError) &&
-        inputErrorKind(error) !== "Limit"
+        ordinaryLimitCode(error) === undefined
       )
         throw error;
       return {
@@ -480,12 +495,25 @@ interface EncodingLimits {
 export const ORDINARY_LIMITS =
   "The ordinary value exceeds the admitted JSON limits; parse it with parseJson and larger limits.";
 
-// The kind of an engine input error, or undefined for any other exception.
+// Preserve a known admission cause; retain input-limit only for an unidentified limit.
 /** @internal */
-export function inputErrorKind(error: unknown): string | undefined {
+export function ordinaryLimitCode(
+  error: unknown,
+): "byte-limit" | "node-limit" | "depth-limit" | "input-limit" | undefined {
+  const normalized = wasmFailure(error);
+  if (normalized !== error) throw normalized;
   if (typeof error !== "string") return undefined;
   try {
-    return (JSON.parse(error) as { kind?: string }).kind;
+    const info = JSON.parse(error) as { kind?: string; code?: string };
+    if (info.kind !== "Limit") return undefined;
+    switch (info.code) {
+      case "byte-limit":
+      case "node-limit":
+      case "depth-limit":
+        return info.code;
+      default:
+        return "input-limit";
+    }
   } catch {
     return undefined;
   }
@@ -548,7 +576,7 @@ export function encodeOrdinary(
     limit = false,
   ): never {
     if (context) throw new JsonEncodingError(code, pointer, message);
-    if (limit) throw ordinaryError(new RangeError(message), "input-limit");
+    if (limit) throw ordinaryError(new RangeError(message), code);
     throw ordinaryError(new TypeError(message), code);
   }
   // A limit the encoded value already exceeds. A document's edit refuses as
@@ -564,7 +592,7 @@ export function encodeOrdinary(
       maxDepth: `${limit}-level nesting`,
     }[setting];
     reject(
-      "encoding-limit",
+      code,
       pointer,
       `Ordinary value exceeds the ${what} limit; parse it with parseJson and a larger limits.${setting}.`,
       true,

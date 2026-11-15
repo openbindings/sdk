@@ -21,6 +21,8 @@ mod primitive;
 mod readings;
 mod refinement;
 mod regex_format;
+#[path = "../retained.rs"]
+mod retained;
 mod stack;
 mod storage;
 mod value_predicates;
@@ -1264,11 +1266,11 @@ impl Run<'_> {
             self.patterns.push(key, compiled, 2, &mut self.graph)?;
             index
         };
-        match self
-            .patterns
-            .value_mut(index)
-            .evaluate(value.as_str(), &mut self.graph)?
-        {
+        match self.patterns.value_mut(index).evaluate(
+            value.as_str(),
+            self.plan.limits.pattern_search_work_units,
+            &mut self.graph,
+        )? {
             patterns::ResultKind::Matched(matched) => Ok(if matched { TRUE } else { FALSE }),
             patterns::ResultKind::Undefined => {
                 self.pattern_atom(Class::Undefined, node, keyword, value)

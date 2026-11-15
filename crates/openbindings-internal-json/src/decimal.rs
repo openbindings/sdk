@@ -163,6 +163,14 @@ impl std::fmt::Debug for Decimal {
 }
 
 impl Decimal {
+    /// Heap backing of this exact operand, computed only when requested.
+    pub fn retained_bytes(&self) -> usize {
+        match &self.0 {
+            Repr::Inline { .. } => 0,
+            Repr::Wide(value) => size_of::<Wide>() + value.digits.len() + value.power.digits.len(),
+        }
+    }
+
     pub fn parse(text: &str) -> Self {
         if let Some(value) = Self::read(text) {
             return value;

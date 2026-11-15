@@ -1,12 +1,12 @@
-use openbindings::{JsonKind, JsonLimits, JsonObject, JsonRef, JsonStringRef, JsonValue};
+use openbindings::{JsonKind, JsonLimits, JsonObject, JsonRef, JsonStringRef, JsonValue, Pointer};
 use openbindings_context::{Context, ContextShapeError};
 use std::{collections::BTreeSet, fmt};
 
 /// A carrier field or local carrier relationship is invalid.
 /// Diagnostics never include provider data, descriptions, context or kind names.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum CarrierError {
+pub enum CarrierErrorKind {
     /// An object-form carrier was required.
     ExpectedObject,
     /// An outer decoded member name occurs more than once, or an object anywhere
@@ -16,6 +16,7 @@ pub enum CarrierError {
     UnexpectedMember,
     /// A required published field is absent. A name several carriers share is
     /// labelled with its carrier, as `check/description`.
+    /// Labels are available for inspection but omitted from Display and Debug.
     MissingField(&'static str),
     /// A published field has the wrong JSON type, labelled the same way.
     FieldType(&'static str),
@@ -34,15 +35,33 @@ pub enum CarrierError {
     /// The invocation disclosure contradicts the explicit support claim.
     InconsistentInvokeSupport,
 }
-impl fmt::Display for CarrierError {
+impl fmt::Debug for CarrierErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::ExpectedObject => "ExpectedObject",
+            Self::DuplicateMember => "DuplicateMember",
+            Self::UnexpectedMember => "UnexpectedMember",
+            Self::MissingField(_) => "MissingField { .. }",
+            Self::FieldType(_) => "FieldType { .. }",
+            Self::EmptyString(_) => "EmptyString { .. }",
+            Self::InputLimit => "InputLimit",
+            Self::DuplicateSupport => "DuplicateSupport",
+            Self::ReservedCode => "ReservedCode",
+            Self::InconsistentCheckSupport => "InconsistentCheckSupport",
+            Self::InconsistentPullSupport => "InconsistentPullSupport",
+            Self::InconsistentInvokeSupport => "InconsistentInvokeSupport",
+        })
+    }
+}
+impl fmt::Display for CarrierErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ExpectedObject => f.write_str("expected an object carrier"),
             Self::DuplicateMember => f.write_str("a carrier member is repeated"),
             Self::UnexpectedMember => f.write_str("the carrier contains an unexpected member"),
-            Self::MissingField(field) => write!(f, "the carrier requires {field}"),
-            Self::FieldType(field) => write!(f, "the carrier field {field} has the wrong type"),
-            Self::EmptyString(field) => write!(f, "the carrier field {field} must not be empty"),
+            Self::MissingField(_) => f.write_str("a required carrier field is absent"),
+            Self::FieldType(_) => f.write_str("a carrier field has an invalid value"),
+            Self::EmptyString(_) => f.write_str("a carrier field must not be empty"),
             Self::InputLimit => f.write_str("the request exceeds exact JSON admission limits"),
             Self::DuplicateSupport => f.write_str("the support list repeats an operation key"),
             Self::ReservedCode => f.write_str("the reserved code requires a context challenge"),
@@ -58,6 +77,63 @@ impl fmt::Display for CarrierError {
         }
     }
 }
+/// Invalid local carrier shape, with a location when the decoder knows it.
+/// Locations contain only fixed carrier fields and numeric support indices.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CarrierError {
+    kind: CarrierErrorKind,
+    pointer: Option<Pointer>,
+}
+impl CarrierError {
+    /// Read the Copy category independently of the optional location.
+    pub fn kind(&self) -> CarrierErrorKind {
+        self.kind
+    }
+    /// Borrow the failing location relative to the admitted carrier.
+    /// Ambiguous member names locate their containing object; context failures
+    /// locate `/context` without repeating any opaque member name.
+    pub fn pointer(&self) -> Option<&Pointer> {
+        self.pointer.as_ref()
+    }
+    fn in_field(mut self, field: &'static str) -> Self {
+        if let Some(pointer) = &self.pointer {
+            self.pointer = Some(
+                format!("/{field}{}", pointer.as_str().expect("fixed pointer"))
+                    .parse()
+                    .expect("fixed nested pointer"),
+            );
+        }
+        self
+    }
+}
+impl From<CarrierErrorKind> for CarrierError {
+    fn from(kind: CarrierErrorKind) -> Self {
+        Self {
+            kind,
+            pointer: None,
+        }
+    }
+}
+impl CarrierErrorKind {
+    pub(crate) fn at_field(self, field: &'static str) -> CarrierError {
+        let field = field.rsplit('/').next().expect("fixed field");
+        CarrierError {
+            kind: self,
+            pointer: Some(format!("/{field}").parse().expect("fixed field pointer")),
+        }
+    }
+    fn at_object(self) -> CarrierError {
+        CarrierError {
+            kind: self,
+            pointer: Some("".parse().expect("root pointer")),
+        }
+    }
+}
+impl fmt::Display for CarrierError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.kind.fmt(f)
+    }
+}
 impl std::error::Error for CarrierError {}
 
 pub(crate) fn object(
@@ -66,18 +142,18 @@ pub(crate) fn object(
 ) -> Result<JsonObject, CarrierError> {
     let object = value
         .as_object()
-        .map_err(|_| CarrierError::ExpectedObject)?;
+        .map_err(|_| CarrierErrorKind::ExpectedObject.at_object())?;
     let mut names = BTreeSet::new();
     for member in value.view().members().expect("object") {
         let name = member.name.as_string().expect("member name");
         if !names.insert(name.utf16_units().collect::<Vec<_>>()) {
-            return Err(CarrierError::DuplicateMember);
+            return Err(CarrierErrorKind::DuplicateMember.at_object());
         }
         if let Some((fields, extensions)) = allowed
             && !(name.as_str().is_some_and(|name| fields.contains(&name))
                 || (extensions && name.utf16_units().take(2).eq([b'x' as u16, b'-' as u16])))
         {
-            return Err(CarrierError::UnexpectedMember);
+            return Err(CarrierErrorKind::UnexpectedMember.at_object());
         }
     }
     Ok(object)
@@ -89,16 +165,18 @@ pub(crate) fn field<'a>(
     object
         .value()
         .get(name)
-        .ok_or(CarrierError::MissingField(name))
+        .ok_or_else(|| CarrierErrorKind::MissingField(name).at_field(name))
 }
 pub(crate) fn string<'a>(
     value: JsonRef<'a>,
     name: &'static str,
     nonempty: bool,
 ) -> Result<JsonStringRef<'a>, CarrierError> {
-    let text = value.as_string().ok_or(CarrierError::FieldType(name))?;
+    let text = value
+        .as_string()
+        .ok_or_else(|| CarrierErrorKind::FieldType(name).at_field(name))?;
     if nonempty && text.utf16_units().next().is_none() {
-        return Err(CarrierError::EmptyString(name));
+        return Err(CarrierErrorKind::EmptyString(name).at_field(name));
     }
     Ok(text)
 }
@@ -112,14 +190,14 @@ fn disclosure(
     let object = object(value, None)?;
     let text = object.value().get("description");
     string(
-        text.ok_or(CarrierError::MissingField(description))?,
+        text.ok_or_else(|| CarrierErrorKind::MissingField(description).at_field(description))?,
         description,
         true,
     )?;
     let flag = object.value().get("executes");
-    flag.ok_or(CarrierError::MissingField(executes))?
+    flag.ok_or_else(|| CarrierErrorKind::MissingField(executes).at_field(executes))?
         .as_bool()
-        .ok_or(CarrierError::FieldType(executes))?;
+        .ok_or_else(|| CarrierErrorKind::FieldType(executes).at_field(executes))?;
     Ok(object)
 }
 fn optional_string(object: &JsonObject, name: &'static str) -> Result<(), CarrierError> {
@@ -135,12 +213,22 @@ fn supports(object: &JsonObject) -> Result<(), CarrierError> {
     let values = field(object, "supports")?;
     let values = values
         .elements()
-        .ok_or(CarrierError::FieldType("supports"))?;
+        .ok_or_else(|| CarrierErrorKind::FieldType("supports").at_field("supports"))?;
     let mut seen = BTreeSet::new();
-    for value in values {
-        let name = string(value, "supports", true)?;
+    for (index, value) in values.enumerate() {
+        let at_index = |mut error: CarrierError| {
+            error.pointer = Some(
+                format!("/supports/{index}")
+                    .parse()
+                    .expect("support pointer"),
+            );
+            error
+        };
+        let name = string(value, "supports", true).map_err(at_index)?;
         if !seen.insert(name.utf16_units().collect::<Vec<_>>()) {
-            return Err(CarrierError::DuplicateSupport);
+            return Err(at_index(
+                CarrierErrorKind::DuplicateSupport.at_field("supports"),
+            ));
         }
     }
     Ok(())
@@ -149,7 +237,7 @@ fn schema(object: &JsonObject, name: &'static str) -> Result<(), CarrierError> {
     if let Some(value) = object.value().get(name)
         && !matches!(value.kind(), JsonKind::Object | JsonKind::Boolean)
     {
-        return Err(CarrierError::FieldType(name));
+        return Err(CarrierErrorKind::FieldType(name).at_field(name));
     }
     Ok(())
 }
@@ -319,7 +407,8 @@ impl KindDescription {
         schema(&object, "sourceData")?;
         schema(&object, "bindingData")?;
         if let Some(check) = object.value().get("check") {
-            CheckDescription::from_json(check.to_owned())?;
+            CheckDescription::from_json(check.to_owned())
+                .map_err(|error| error.in_field("check"))?;
         }
         let operations = field(&object, "supports")?;
         let declares_check = operations
@@ -328,18 +417,18 @@ impl KindDescription {
             .any(|value| value.as_str() == Some("openbindings.kind-descriptor.checkSource"));
         let has_check = object.value().get("check").is_some();
         if declares_check != has_check {
-            return Err(CarrierError::InconsistentCheckSupport);
+            return Err(CarrierErrorKind::InconsistentCheckSupport.at_field("check"));
         }
         for (name, operation, error) in [
             (
                 "pull",
                 "openbindings.source-puller.pullSource",
-                CarrierError::InconsistentPullSupport,
+                CarrierErrorKind::InconsistentPullSupport,
             ),
             (
                 "invoke",
                 "openbindings.binding-invoker.invokeBinding",
-                CarrierError::InconsistentInvokeSupport,
+                CarrierErrorKind::InconsistentInvokeSupport,
             ),
         ] {
             let disclosure = object.value().get(name);
@@ -348,15 +437,17 @@ impl KindDescription {
                 .expect("admitted supports")
                 .any(|value| value.as_str() == Some(operation));
             if supported != disclosure.is_some() {
-                return Err(error);
+                return Err(error.at_field(name));
             }
             if let Some(value) = disclosure {
                 match name {
                     "pull" => {
-                        PullDescription::from_json(value.to_owned())?;
+                        PullDescription::from_json(value.to_owned())
+                            .map_err(|error| error.in_field("pull"))?;
                     }
                     _ => {
-                        InvokeDescription::from_json(value.to_owned())?;
+                        InvokeDescription::from_json(value.to_owned())
+                            .map_err(|error| error.in_field("invoke"))?;
                     }
                 }
             }
@@ -451,15 +542,17 @@ impl CheckSourceRequest {
     /// Admit kind, optional data and optional object context without interpreting them.
     ///
     /// # Errors
-    /// Rejects carrier shape failures, including [`CarrierError::DuplicateMember`]
+    /// Rejects carrier shape failures, including [`CarrierErrorKind::DuplicateMember`]
     /// for context in which any object, at any depth, repeats a decoded member name.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
         let object = object(value, Some((&["kind", "data", "context"], false)))?;
         kind(&object)?;
         if let Some(context) = object.value().get("context") {
             Context::try_from(context.to_owned()).map_err(|error| match error {
-                ContextShapeError::DuplicateMember => CarrierError::DuplicateMember,
-                _ => CarrierError::FieldType("context"),
+                ContextShapeError::DuplicateMember => {
+                    CarrierErrorKind::DuplicateMember.at_field("context")
+                }
+                _ => CarrierErrorKind::FieldType("context").at_field("context"),
             })?;
         }
         Ok(Self(object))
@@ -484,9 +577,9 @@ fn request_value(
     context: Option<Context>,
 ) -> Result<JsonValue, CarrierError> {
     if kind.is_empty() {
-        return Err(CarrierError::EmptyString("kind"));
+        return Err(CarrierErrorKind::EmptyString("kind").at_field("kind"));
     }
-    let kind = JsonValue::string(&kind).map_err(|_| CarrierError::InputLimit)?;
+    let kind = JsonValue::string(&kind).map_err(|_| CarrierErrorKind::InputLimit)?;
     let fields = [
         ("kind", Some(kind)),
         ("data", data),
@@ -505,7 +598,7 @@ fn request_value(
                 .checked_add(name.len() + 4)
                 .and_then(|size| size.checked_add(value.bytes().len()))
                 .filter(|size| *size <= limits.max_bytes)
-                .ok_or(CarrierError::InputLimit)?;
+                .ok_or(CarrierErrorKind::InputLimit)?;
         }
     }
     let mut text = String::with_capacity(size);
@@ -523,7 +616,7 @@ fn request_value(
     }
     text.push('}');
     JsonValue::parse_owned_with_limits(text.into_bytes(), limits)
-        .map_err(|_| CarrierError::InputLimit)
+        .map_err(|_| CarrierError::from(CarrierErrorKind::InputLimit))
 }
 carrier!(
     CheckedSource,

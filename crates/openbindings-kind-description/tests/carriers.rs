@@ -86,8 +86,8 @@ fn source_data_absence_null_and_runtime_context_remain_distinct() {
         Some("9007199254740993")
     );
     assert_eq!(
-        CheckedSource::from_json(exact(text)).unwrap_err(),
-        CarrierError::UnexpectedMember
+        CheckedSource::from_json(exact(text)).unwrap_err().kind(),
+        CarrierErrorKind::UnexpectedMember
     );
     let source = r#"{"kind":"example.k@1","data":null,"x-proof":{"n":9007199254740993}}"#;
     assert_eq!(
@@ -146,18 +146,22 @@ fn typed_kind_requests_escape_names_and_share_json_admission() {
             Some(kind)
         );
     }
-    let expected = CarrierError::EmptyString("kind");
-    assert_eq!(DescribeKindRequest::new("").unwrap_err(), expected);
+    let expected = CarrierErrorKind::EmptyString("kind");
+    assert_eq!(DescribeKindRequest::new("").unwrap_err().kind(), expected);
     assert_eq!(
-        CheckSourceRequest::new("", None, None).unwrap_err(),
+        CheckSourceRequest::new("", None, None).unwrap_err().kind(),
         expected
     );
     assert_eq!(
-        DescribeKindRequest::from_json(exact(r#"{"kind":""}"#)).unwrap_err(),
+        DescribeKindRequest::from_json(exact(r#"{"kind":""}"#))
+            .unwrap_err()
+            .kind(),
         expected
     );
     assert_eq!(
-        CheckSourceRequest::from_json(exact(r#"{"kind":""}"#)).unwrap_err(),
+        CheckSourceRequest::from_json(exact(r#"{"kind":""}"#))
+            .unwrap_err()
+            .kind(),
         expected
     );
 }
@@ -177,22 +181,27 @@ fn support_is_per_operation_and_repeated_decoded_keys_are_rejected() {
     );
     assert_eq!(
         KindSummary::from_json(exact(r#"{"kind":"example.k@1","supports":["x","\u0078"]}"#))
-            .unwrap_err(),
-        CarrierError::DuplicateSupport
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::DuplicateSupport
     );
     assert_eq!(
-        KindSummary::from_json(exact(r#"{"kind":"example.k@1","supports":[""]}"#)).unwrap_err(),
-        CarrierError::EmptyString("supports")
+        KindSummary::from_json(exact(r#"{"kind":"example.k@1","supports":[""]}"#))
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::EmptyString("supports")
     );
 }
 
 #[test]
 fn outer_ambiguity_is_rejected_without_interpreting_opaque_nested_values() {
     assert_eq!(
-        DescribeKindRequest::from_json(exact(r#"{"kind":"a","\u006bind":"b"}"#)).unwrap_err(),
-        CarrierError::DuplicateMember
+        DescribeKindRequest::from_json(exact(r#"{"kind":"a","\u006bind":"b"}"#))
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::DuplicateMember
     );
-    assert_eq!(KindDescription::from_json(exact(r#"{"kind":"k","description":"d","supports":[],"check":{"description":"d","executes":false,"executes":true}}"#)).unwrap_err(), CarrierError::DuplicateMember);
+    assert_eq!(KindDescription::from_json(exact(r#"{"kind":"k","description":"d","supports":[],"check":{"description":"d","executes":false,"executes":true}}"#)).unwrap_err().kind(), CarrierErrorKind::DuplicateMember);
     let data = r#"{"kind":"k","data":{"duplicate":1,"duplicate":2,"properties":{"kind":false}}}"#;
     assert_eq!(
         CheckedSource::from_json(exact(data))
@@ -214,7 +223,7 @@ fn source_check_requests_refuse_repeated_context_names_at_every_depth() {
         let error =
             CheckSourceRequest::from_json(exact(&format!(r#"{{"kind":"k","context":{context}}}"#)))
                 .unwrap_err();
-        assert_eq!(error, CarrierError::DuplicateMember);
+        assert_eq!(error.kind(), CarrierErrorKind::DuplicateMember);
         assert!(!format!("{error} {error:?}").contains("PRIVATE"));
     }
 }
@@ -242,8 +251,8 @@ fn explicit_check_claims_and_disclosure_cannot_contradict_each_other() {
         r#"{"kind":"k","description":"d","supports":["vendor.check"],"check":{"description":"reads","executes":false}}"#,
     ] {
         assert_eq!(
-            KindDescription::from_json(exact(text)).unwrap_err(),
-            CarrierError::InconsistentCheckSupport
+            KindDescription::from_json(exact(text)).unwrap_err().kind(),
+            CarrierErrorKind::InconsistentCheckSupport
         );
     }
     assert!(KindDescription::from_json(exact(r#"{"kind":"k","description":"d","supports":["openbindings.kind-descriptor.checkSource"],"check":{"description":"reads","executes":false}}"#)).is_ok());
@@ -265,8 +274,9 @@ fn check_rejection_preserves_exact_message_data_and_reserved_challenge_boundary(
         CheckRejection::from_json(exact(
             r#"{"code":"CONTEXT_REQUIRED","message":"not a challenge"}"#
         ))
-        .unwrap_err(),
-        CarrierError::ReservedCode
+        .unwrap_err()
+        .kind(),
+        CarrierErrorKind::ReservedCode
     );
     let omitted = CheckRejection::from_json(exact(r#"{"code":"E","message":"failed"}"#)).unwrap();
     let null =
@@ -281,8 +291,10 @@ fn exact_extension_prefixes_do_not_claim_document_unicode_conformance() {
     let source = CheckedSource::from_json(exact(text)).unwrap();
     assert_eq!(source.value().value().text(), text);
     assert_eq!(
-        CheckedSource::from_json(exact(r#"{"kind":"k","\ud800x-":{}}"#)).unwrap_err(),
-        CarrierError::UnexpectedMember
+        CheckedSource::from_json(exact(r#"{"kind":"k","\ud800x-":{}}"#))
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::UnexpectedMember
     );
     let document = openbindings::Document::parse(format!(
         r#"{{"openbindings":"0.2.0","operations":{{}},"sources":{{"s":{text}}}}}"#
@@ -339,7 +351,7 @@ fn pull_and_invocation_disclosures_match_exact_operation_claims() {
 
 #[test]
 fn a_field_name_several_carriers_share_says_which_one() {
-    let missing = |field| CarrierError::MissingField(field);
+    let missing = |field| CarrierErrorKind::MissingField(field);
     let description = |nested: &str| {
         format!(
             r#"{{"kind":"example.k@1","supports":["vendor.operation"],"sourceData":true,"bindingData":true{nested}}}"#
@@ -350,28 +362,34 @@ fn a_field_name_several_carriers_share_says_which_one() {
         r#","description":"d","check":{"executes":false}"#,
     )))
     .unwrap_err();
-    assert_eq!(root, missing("description"));
-    assert_eq!(nested, missing("check/description"));
-    assert_eq!(nested.to_string(), "the carrier requires check/description");
+    assert_eq!(root.kind(), missing("description"));
+    assert_eq!(nested.kind(), missing("check/description"));
+    assert_eq!(nested.to_string(), "a required carrier field is absent");
     let text = exact(r#"{"executes":false}"#);
     assert_eq!(
-        PullDescription::from_json(text.clone()).unwrap_err(),
+        PullDescription::from_json(text.clone()).unwrap_err().kind(),
         missing("pull/description")
     );
     assert_eq!(
-        InvokeDescription::from_json(text).unwrap_err(),
+        InvokeDescription::from_json(text).unwrap_err().kind(),
         missing("invoke/description")
     );
     assert_eq!(
-        CheckDescription::from_json(exact(r#"{"description":"d"}"#)).unwrap_err(),
+        CheckDescription::from_json(exact(r#"{"description":"d"}"#))
+            .unwrap_err()
+            .kind(),
         missing("check/executes")
     );
     assert_eq!(
-        CheckDescription::from_json(exact(r#"{"description":"","executes":false}"#)).unwrap_err(),
-        CarrierError::EmptyString("check/description")
+        CheckDescription::from_json(exact(r#"{"description":"","executes":false}"#))
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::EmptyString("check/description")
     );
     assert_eq!(
-        PullDescription::from_json(exact(r#"{"description":"d","executes":1}"#)).unwrap_err(),
-        CarrierError::FieldType("pull/executes")
+        PullDescription::from_json(exact(r#"{"description":"d","executes":1}"#))
+            .unwrap_err()
+            .kind(),
+        CarrierErrorKind::FieldType("pull/executes")
     );
 }

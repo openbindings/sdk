@@ -78,6 +78,7 @@ pub(super) fn select(
     attempt.check().map_err(PreparationFailure::from)?;
     let default = crate::Limits::default();
     if limits.evaluation_sdk_work_units != default.evaluation_sdk_work_units
+        || limits.pattern_search_work_units != default.pattern_search_work_units
         || limits.evaluation_sdk_reservation_bytes != default.evaluation_sdk_reservation_bytes
         || limits.pattern_bytes != default.pattern_bytes
         || limits.pattern_depth != default.pattern_depth

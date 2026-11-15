@@ -77,3 +77,24 @@ fn kind_mapping_preserves_local_failures_and_composes_with_source_check_mapping(
         KindError::Provider(CheckFailure::ContextRequired(_))
     ));
 }
+
+#[test]
+fn carrier_locations_survive_both_kind_failure_mapping_layers() {
+    use openbindings_kind_description::{CarrierErrorKind, KindDescription};
+    let carrier = KindDescription::from_json(JsonValue::parse(r#"{"kind":"k","description":"d","supports":["openbindings.source-puller.pullSource"],"pull":{"description":"d"}}"#).unwrap()).unwrap_err();
+    let before = carrier.clone();
+    let mapped = KindError::Provider(CheckFailure::Operational(carrier))
+        .map_error(|failure| failure.map_error(Box::new));
+    let KindError::Provider(CheckFailure::Operational(carrier)) = mapped else {
+        panic!("carrier failure")
+    };
+    assert_eq!(*carrier, before);
+    assert_eq!(
+        carrier.kind(),
+        CarrierErrorKind::MissingField("pull/executes")
+    );
+    assert_eq!(
+        carrier.pointer().and_then(openbindings::Pointer::as_str),
+        Some("/pull/executes")
+    );
+}

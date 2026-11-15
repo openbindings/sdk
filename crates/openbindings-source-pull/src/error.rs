@@ -1,4 +1,4 @@
-use openbindings::{DocumentValidation, EditError, VersionRefusal};
+use openbindings::{DocumentValidation, EditError, Pointer, VersionRefusal};
 use std::fmt;
 
 /// Request shape or original document admission failure, before provider work.
@@ -57,7 +57,7 @@ impl std::error::Error for RequestError {
 /// This does not judge kind-owned fidelity, change classification or completeness.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum RelationshipError {
+pub enum RelationshipErrorKind {
     /// An identifier cannot name a conformant document entry.
     Identifier,
     /// An addition replaces an original key or an operation key collides with an alias.
@@ -83,6 +83,40 @@ pub enum RelationshipError {
     /// A uses label is malformed, repeated, names no addition, or names its own binding.
     Uses,
 }
+/// A contradicted relationship, located at its offending provider-report row when present.
+/// If two report rows conflict, the later row in that collection is located.
+/// Missing coverage and additions with no corresponding report row have no row pointer.
+/// Pointers contain only fixed collection labels and numeric indices, never document values.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RelationshipError {
+    kind: RelationshipErrorKind,
+    pointer: Option<Pointer>,
+}
+impl RelationshipError {
+    /// Read the Copy relationship category independently of its location.
+    pub fn kind(&self) -> RelationshipErrorKind {
+        self.kind
+    }
+    /// Borrow the exact offending row, such as `/report/added/2`, when one exists.
+    /// A collision between report rows identifies the later row in report order.
+    pub fn pointer(&self) -> Option<&Pointer> {
+        self.pointer.as_ref()
+    }
+}
+impl From<RelationshipErrorKind> for RelationshipError {
+    fn from(kind: RelationshipErrorKind) -> Self {
+        Self {
+            kind,
+            pointer: None,
+        }
+    }
+}
+impl fmt::Display for RelationshipError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("source-pull result contradicts a document relationship")
+    }
+}
+impl std::error::Error for RelationshipError {}
 /// Failure of local result validation, distinct from a provider's operational error.
 ///
 /// New failure categories may be added. Handle unknown categories by refusing
@@ -119,6 +153,23 @@ pub enum PullValidationError {
     Prospective(DocumentValidation),
     /// Core refused the prospective document's specification version.
     Version(VersionRefusal),
+}
+impl PullValidationError {
+    pub(crate) fn at_row(mut self, collection: &'static str, index: usize) -> Self {
+        if let Self::Relationship(error) = &mut self {
+            error.pointer = Some(
+                format!("/report/{collection}/{index}")
+                    .parse()
+                    .expect("fixed report row pointer"),
+            );
+        }
+        self
+    }
+}
+impl From<RelationshipErrorKind> for PullValidationError {
+    fn from(kind: RelationshipErrorKind) -> Self {
+        Self::Relationship(kind.into())
+    }
 }
 impl From<RelationshipError> for PullValidationError {
     fn from(value: RelationshipError) -> Self {

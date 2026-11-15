@@ -371,7 +371,7 @@ export async function apiQualityCases(sdk, http) {
       "real aggregate admission limit",
     );
     check(
-      depthRefusal.error.code === "input-limit" &&
+      depthRefusal.error.code === "depth-limit" &&
         depthRefusal.error.instancePointer === null,
       "aggregate limit truthful unknown pointer",
     );

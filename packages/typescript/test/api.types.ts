@@ -10,6 +10,7 @@ import {
   type SchemaOrigin,
   type SourceLocation,
   type ValueOutcome,
+  type ValueAdmissionFailure,
   type ValueProblemDetails,
   type DocumentReport,
   type DocumentValidation,
@@ -83,16 +84,16 @@ async function caller(
     const result: ValueOutcome = input.explain(value);
     if (result.status === "fails") {
       result.problems[0]!.instance satisfies string;
-      value.locate(
-        result.problems[0]!.instance,
-      ) satisfies SourceLocation | null;
+      value.locate(result.problems[0]!.instance) satisfies
+        | SourceLocation
+        | undefined;
       result.problems[0]!.schema satisfies SchemaOrigin;
-      validated.locate(
-        result.problems[0]!.schema,
-      ) satisfies SourceLocation | null;
-      resources.locate(
-        result.problems[0]!.schema,
-      ) satisfies SourceLocation | null;
+      validated.locate(result.problems[0]!.schema) satisfies
+        | SourceLocation
+        | undefined;
+      resources.locate(result.problems[0]!.schema) satisfies
+        | SourceLocation
+        | undefined;
       const detail: ValueProblemDetails | undefined =
         result.problems[0]!.details;
       if (detail?.kind === "required") detail.member satisfies string;
@@ -521,3 +522,8 @@ function suppliedRoot(resources: ExternalSchemas) {
   resources.prepare("https://example.test/root", { resources });
 }
 void suppliedRoot;
+
+// Ordinary and exact admission share these precise limit categories.
+for (const code of ["byte-limit", "node-limit", "depth-limit"] as const) {
+  code satisfies ValueAdmissionFailure["code"];
+}

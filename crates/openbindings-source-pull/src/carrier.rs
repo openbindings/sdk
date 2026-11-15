@@ -2,7 +2,7 @@ use openbindings::{JsonKind, JsonObject, JsonRef, JsonStringRef, JsonValue, Poin
 use std::{collections::BTreeSet, fmt};
 
 /// Category of invalid local carrier shape or proposal authority, not an OBI finding.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CarrierErrorKind {
     /// An object carrier was required.
@@ -11,6 +11,7 @@ pub enum CarrierErrorKind {
     DuplicateMember,
     /// A required published field is absent. A name several carriers share is
     /// labelled with its carrier, as `existing/message`.
+    /// Labels are available for inspection but omitted from Display and Debug.
     MissingField(&'static str),
     /// A published field has an invalid type or finite value, labelled the same way.
     FieldType(&'static str),
@@ -27,14 +28,30 @@ pub enum CarrierErrorKind {
     /// A uses list repeats an exact label.
     DuplicateUse,
 }
+impl fmt::Debug for CarrierErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::ExpectedObject => "ExpectedObject",
+            Self::DuplicateMember => "DuplicateMember",
+            Self::MissingField(_) => "MissingField { .. }",
+            Self::FieldType(_) => "FieldType { .. }",
+            Self::EmptyString(_) => "EmptyString { .. }",
+            Self::ExistingTarget => "ExistingTarget",
+            Self::StatusFields => "StatusFields",
+            Self::ProposalAuthority => "ProposalAuthority",
+            Self::EmptyBindingProposal => "EmptyBindingProposal",
+            Self::DuplicateUse => "DuplicateUse",
+        })
+    }
+}
 impl fmt::Display for CarrierErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ExpectedObject => f.write_str("expected an object carrier"),
             Self::DuplicateMember => f.write_str("a carrier member is repeated"),
-            Self::MissingField(field) => write!(f, "the carrier requires {field}"),
-            Self::FieldType(field) => write!(f, "the carrier field {field} has an invalid value"),
-            Self::EmptyString(field) => write!(f, "the carrier field {field} must not be empty"),
+            Self::MissingField(_) => f.write_str("a required carrier field is absent"),
+            Self::FieldType(_) => f.write_str("a carrier field has an invalid value"),
+            Self::EmptyString(_) => f.write_str("a carrier field must not be empty"),
             Self::ExistingTarget => {
                 f.write_str("an existing entry must name exactly one entry type")
             }

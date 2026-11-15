@@ -7,8 +7,8 @@ mod model;
 mod queries;
 pub use error::{CheckFailure, CheckRejection, KindError};
 pub use model::{
-    CarrierError, CheckDescription, CheckSourceRequest, CheckedSource, DescribeKindRequest,
-    InvokeDescription, KindDescription, KindSummary, PullDescription,
+    CarrierError, CarrierErrorKind, CheckDescription, CheckSourceRequest, CheckedSource,
+    DescribeKindRequest, InvokeDescription, KindDescription, KindSummary, PullDescription,
 };
 pub use openbindings_context::{Context, ContextChallenge};
 pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};

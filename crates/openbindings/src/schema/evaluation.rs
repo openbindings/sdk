@@ -717,6 +717,17 @@ pub enum Detail {
 }
 /// Owned validator returned by a [`SchemaEvaluator`]. Repeated calls must preserve caller input and retain no accidental borrow of a completed request. Only claim established semantic verdicts; bound diagnostic work separately and report incompleteness.
 pub trait SchemaValidator {
+    /// Estimate heap bytes this validator keeps alive, or `None` if it does not say.
+    ///
+    /// Compute on demand from existing storage capacities, including retained
+    /// sources and caches. Shared allocations are counted per owner, regardless
+    /// of other handles. This is neither resident memory nor the bytes dropping
+    /// one handle would free; exclude allocator overhead and Wasm memory growth.
+    /// The default makes no accounting promise for custom validators.
+    fn retained_bytes(&self) -> Option<usize> {
+        None
+    }
+
     /// Return only established verdicts. Resource/capability/work failures are NoVerdict.
     ///
     /// The requested [`Detail`] changes only what a failure carries. With
@@ -749,6 +760,19 @@ impl<V: SchemaValidator> fmt::Debug for PreparedSchema<V> {
     }
 }
 impl<V: SchemaValidator> PreparedSchema<V> {
+    /// Estimate heap bytes kept alive by this prepared schema now.
+    ///
+    /// Returns the validator's [`SchemaValidator::retained_bytes`] estimate,
+    /// or `None` when it supplies none. This wrapper has no separate heap
+    /// storage. Shared allocations are counted per owner, so shared clones
+    /// report the same estimate. This is neither resident memory nor what
+    /// dropping one handle frees; allocator overhead and Wasm memory growth
+    /// are excluded. Only this query performs accounting, using existing
+    /// capacities; later cache growth can change the result.
+    pub fn retained_bytes(&self) -> Option<usize> {
+        self.validator.retained_bytes()
+    }
+
     /// Validate an admitted exact value, distinguishing satisfies, fails, undefined
     /// (the specification gives the value no defined validity) and no-verdict (the
     /// evaluator could not answer). For ordinary Rust data first use [`JsonValue::from_serializable`];
@@ -844,8 +868,14 @@ impl std::fmt::Debug for SchemaOrigin {
 }
 
 macro_rules! forward_validator {
-    ($owner:ident) => {
+    ($owner:ident, $header:expr) => {
         impl<V: SchemaValidator + ?Sized> SchemaValidator for $owner<V> {
+            fn retained_bytes(&self) -> Option<usize> {
+                (**self)
+                    .retained_bytes()
+                    .map(|bytes| bytes + size_of_val(&**self) + $header)
+            }
+
             fn evaluate(
                 &self,
                 value: &JsonValue,
@@ -869,9 +899,9 @@ macro_rules! forward_validator {
     };
 }
 use std::rc::Rc;
-forward_validator!(Arc);
-forward_validator!(Rc);
-forward_validator!(Box);
+forward_validator!(Arc, 2 * size_of::<usize>());
+forward_validator!(Rc, 2 * size_of::<usize>());
+forward_validator!(Box, 0);
 
 // An internal space check can refuse an invalid external schema as
 // `ConservativePreparation` with code `invalid-schema`; only internal entry

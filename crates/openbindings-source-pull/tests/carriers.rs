@@ -412,7 +412,7 @@ fn a_field_name_several_carriers_share_says_which_one() {
         r#"{"additions":{},"report":{"exhaustive":true,"added":[],"existing":[{"binding":"b","status":"unassessed","reasonCode":"r"}]}}"#,
     ))
     .unwrap_err();
-    assert_eq!(error.to_string(), "the carrier requires existing/message");
+    assert_eq!(error.to_string(), "a required carrier field is absent");
 }
 
 #[test]

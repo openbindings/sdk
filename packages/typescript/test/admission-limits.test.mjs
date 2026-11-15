@@ -446,7 +446,7 @@ test("an over-limit ordinary array is refused where its node count passes the li
     // 1 + 3 * 333333 = 1000000, so the next element's object passes the limit.
     const outcome = setup.schema.evaluate(Array(400_000).fill({ a: 0 }));
     assert.equal(outcome.status, "input-error");
-    assert.equal(outcome.error.code, "input-limit");
+    assert.equal(outcome.error.code, "node-limit");
     assert.equal(outcome.error.instancePointer, "/333333");
   } finally {
     setup.schema.dispose();

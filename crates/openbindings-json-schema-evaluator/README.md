@@ -101,6 +101,10 @@ maps have the same equality relation as `literal_equal`.
 Original uses heap frames, cooperative work checks and cumulative SDK storage
 reservations. Compiled evaluation recurses in the library, with static admission
 and a conservative peak scratch estimate within the default 48 MiB allowance.
+Evaluation work accounting uses fixed-width arithmetic on native and Wasm.
+Without a requested work cap it cannot report a work limit from counter overflow;
+caps representable on both targets stop at the same debit. Existing cumulative cap
+types and the TypeScript facade's 32-bit cap range are unchanged.
 It checks cancellation before and after the library call, not inside that call.
 The application-count ceiling is not a CPU deadline. Neither path promises total
 heap, process RSS or host-stack bounds. Hard interruption requires an isolated
@@ -178,6 +182,7 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
 | Limit | Default | What it bounds |
 | --- | --- | --- |
 | `evaluation_sdk_work_units` | no cap | Cooperative SDK evaluation work units |
+| `pattern_search_work_units` | 250,000,000 | SDK work charged to one uncancellable Original pattern search; `None` removes the ceiling |
 | `schema_resources` | no cap | Reached original resource construction |
 | `pattern_bytes` | 1 MiB | One pattern source and its expanded form |
 | `pattern_depth` | 32 | Pattern group nesting |
@@ -205,6 +210,18 @@ pattern budgets before becoming ready. Proof work, exact effect keys, annotation
 and decision-graph storage are charged, including custom meta-schema admission
 and retries after discovering a recursive component. Supported pattern matching borrows the input string;
 unknown matches reserve their exact text-key allowance before constructing it.
+
+Original pattern search checks cancellation before and after the matcher, never
+inside it. `pattern_search_work_units` refuses a search before entry when its
+charge, `(UTF-8 input bytes + 1) * prepared program weight`, exceeds the ceiling.
+The result is `NoVerdict` with reason `LimitExceeded` and code
+`pattern-search-work-limit`, distinct from the caller's cumulative
+`evaluation-work-limit`. Diagnostics contain no pattern or instance text.
+Raise the field or use `None` to remove the ceiling; either selects Original.
+Explicitly supplying the default keeps existing lane selection. Compiled work
+retains its own admission policy. This default treats uncancellable work like
+storage: the caller cannot stop it during the call. It is a work bound, not an
+elapsed-time ceiling; see the [measurements](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#uncancellable-pattern-searches-november-2026).
 
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning.
 Simple Boolean identities reuse an existing result without another proof-work
@@ -290,3 +307,18 @@ primitive operands and shared pattern programs, plus backend state when compiled
 state and search caches. No caller borrow is retained.
 See [custom evaluators](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md),
 [first use](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/first_use.rs), and [replacement](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/replacement.rs).
+
+`PreparedSchema::retained_bytes()` calls the optional `SchemaValidator` method.
+`DefaultValidator` returns `Some` on the SDK lane, counting the retained original
+environment, complete source snapshots, supplied resources, caches, plan maps,
+exact operands and pattern representations. It returns `None` when it retains
+a compiled `jsonschema` validator: the library does not expose its allocation
+capacities, and the SDK does not model its internals. Configuring
+`Limits::evaluation_sdk_work_units: Some(...)` selects the SDK lane.
+The query uses existing capacities and estimated collection occupancy; regex
+NFAs expose representation size. Process-wide packaged schemas and fixed format
+validators, allocator overhead and Wasm memory growth are excluded. Shared
+allocations are counted per owner, so shared clones report the same estimate.
+This is neither resident memory nor what dropping one handle frees. Only the
+query walks storage; preparation and evaluation do no accounting. Later shared
+cache growth can change the result. Custom validators default to `None`.

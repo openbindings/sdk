@@ -80,6 +80,47 @@ pub(crate) fn resolve_identifier(parent: Option<&str>, reference: &str) -> Optio
 }
 
 impl Supplied {
+    // Source arenas are counted by the enclosing owner, once per arena.
+    pub fn retained_bytes(&self) -> usize {
+        use openbindings_internal_json::backend::{btree_bytes, vec_bytes};
+        let policy = &self.policy;
+        let protected_nodes = if policy.protected.is_empty() {
+            0
+        } else {
+            1 + policy.protected.len().saturating_sub(11).div_ceil(8)
+        };
+        size_of_val(&*self.resources)
+            + 2 * size_of::<usize>()
+            + self
+                .resources
+                .iter()
+                .map(|resource| resource.uri.capacity())
+                .sum::<usize>()
+            + size_of::<InputPolicy>()
+            + 2 * size_of::<usize>()
+            + btree_bytes(&policy.names)
+            + policy
+                .names
+                .iter()
+                .map(|(key, values)| key.capacity() + vec_bytes(values))
+                .sum::<usize>()
+            + protected_nodes * (16 + 11 * size_of::<String>() + 2 * size_of::<usize>())
+            + policy.protected.iter().map(String::capacity).sum::<usize>()
+            + size_of_val(&*self.nodes)
+            + 2 * size_of::<usize>()
+            + self.nodes.get().map_or(0, |nodes| {
+                size_of_val(&**nodes)
+                    + nodes
+                        .iter()
+                        .map(|index| {
+                            index.retained_bytes()
+                                - size_of::<schema_index::SchemaIndex>()
+                                - 2 * size_of::<usize>()
+                        })
+                        .sum::<usize>()
+            })
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &ProjectedResource> {
         self.resources.iter()
     }

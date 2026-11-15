@@ -50,6 +50,10 @@ fn report(report: &ValidationReport) -> usize {
             .sum::<usize>()
 }
 impl Document {
+    pub(crate) fn retained_resolution(&self) -> Option<&Arc<SchemaSpace>> {
+        self.inner.resolution.get()
+    }
+
     /// Estimate heap bytes retained by this snapshot's shared storage now.
     ///
     /// Includes original source text, parsed nodes and buffers, and currently

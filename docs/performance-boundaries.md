@@ -17,6 +17,104 @@ arm64, Rust 1.99.0 and wasm-bindgen 0.2.129, with later dates stated locally.
 Matched candidate performance and final hosted-platform qualification require
 separate runs. The performance workflow's timing remains advisory.
 
+## Uncancellable pattern searches (November 2026)
+
+Original charges a pattern search as `(UTF-8 input bytes + 1) * prepared program
+weight`, then calls the unmodified matcher. Cancellation is observed before and
+after that call, never during it. The default `pattern_search_work_units`
+(`patternSearchWorkUnits` in TypeScript) is 250,000,000. A larger charge returns
+`no-verdict`, reason `limit-exceeded`, code `pattern-search-work-limit`, before
+searching. The separate code identifies this safety ceiling even when the caller
+has set no cumulative work cap, and its fixed diagnostic contains no document
+values. Callers can raise the ceiling or remove it with Rust `None` / TypeScript
+`null`; the latter uses the same numeric validation and defaults read from Wasm
+as the other evaluator limits.
+
+This follows the compiled lane's uncancellable-work policy below: a work bound
+chosen using reference-host measurements, not an elapsed-time ceiling. The limits
+principle leaves interruptible work to the caller. Work that cannot be cancelled
+gets a default like storage because the caller's other control is unavailable.
+It bounds one search, not the sum of searches or the whole request. A cumulative
+work cap remains optional, and hard interruption requires host isolation.
+
+Changing this field from its default selects Original, just like the other
+explicit evaluator allowances. The compiled selector compares values with
+`Limits::default()`, so omission and an explicitly supplied default preserve
+existing routing. Its own admission rules are unchanged. Both hostile counted
+repetitions in the review already select Original.
+
+The held work-counter repair accompanies this ceiling: `Graph` accounts in
+`u64` only when a cumulative cap exists, and pattern factors are widened before
+multiplication. An uncapped call has no ledger to overflow. Shared preparation
+receives the entire charge, split into pointer-sized chunks on wasm32. Remaining
+allowances clamp before conversion. Public cumulative cap types stay unchanged;
+TypeScript numeric limits remain nonnegative 32-bit integers.
+
+Calibration on 2026-11-14 used macOS 26.6.2 arm64, Rust 1.99.0 release,
+wasm-bindgen 0.2.129 and Node 22.19.0. For each pattern, the public ceiling
+located its exact program weight with an empty input; the measured late-mismatch
+input then spent almost 250,000,000 units. The Wasm run used a 50,331,647-byte
+reservation to keep every shape on Original, including the alternation. Three
+evaluations per shape gave:
+
+| Pattern family | Input bytes | Charge | Native median ms | Wasm median ms |
+| --- | ---: | ---: | ---: | ---: |
+| `nested-20` | 30,261 | 249,994,382 | 1.52 | 2.31 |
+| `nested-50` | 4,973 | 249,998,214 | 29.63 | 46.06 |
+| `nested-100` | 1,247 | 249,925,728 | 98.12 | 161.95 |
+| `nested-200` | 311 | 249,681,432 | 41.45 | 70.36 |
+| `loop-20` | 30,144 | 249,992,485 | 122.08 | 193.04 |
+| `loop-50` | 4,969 | 249,956,210 | 116.80 | 189.26 |
+| `loop-100` | 1,247 | 249,965,664 | 106.76 | 172.96 |
+| `loop-200` | 311 | 249,691,416 | 42.65 | 69.32 |
+| `nullable-200` | 310 | 249,627,571 | 76.42 | 126.21 |
+| `alternation` | 798,721 | 249,999,986 | 19.98 | 35.76 |
+
+The nested form is `^(?:a{1,N}){1,N}$`; the looping form is
+`^(?:(?:a{1,N}){1,N}|a)*$`; `nullable-200` uses `a{0,200}` in the nested
+form; `alternation` is `^(a|aa)*$`. Values are repeated `a` ending in `b`.
+The worst observed admitted sample was 122.23 ms native and 193.73 ms in Wasm.
+The chosen ceiling leaves conservative margin below the compiled lane's about
+800 ms of ordinary uncancellable application work on this reference host, while
+keeping both in the hundreds-of-milliseconds range. These finite shapes do not
+prove a maximum latency for every admitted pattern, machine or engine build.
+
+The review's two 200-by-200 patterns charge 800,261 and 800,293 units per input
+position. Both are refused at 2,001, 20,001 and 50,001 characters by default in
+Rust and TypeScript, with the same outcome and code. Removing the ceiling runs
+them to a verdict. The full native `redos-control` case (50,001 characters)
+returned `pattern-search-work-limit` in 0.185 ms by default, versus `fails` after
+20,672 ms with the ceiling removed. The 20,001-character nested form took
+0.109 ms versus 5,696 ms. The supplied TypeScript witness refused in 0.2-3.6 ms
+by default; removing the ceiling returned `fails` at 20,001 and 50,001 characters
+in 15,551 and 11,708 ms in one-shot runs. An ordinary anchored pattern still
+gives its usual verdict.
+The wide-counter regression uses an early mismatch at 20,001 characters with the
+search ceiling removed: no cumulative cap gives `fails`, while `u32::MAX` gives
+`evaluation-work-limit` on native and Wasm.
+
+Ordinary evaluation used the unchanged `tools/evaluator-bench` release instrument
+before and after, with 200,000 evaluations per fresh process and 11 alternating
+pairs in each of two batches. The simple pattern was `^[A-Za-z]+$`, the VM
+pattern `^(ab|cd)+$`, and the value `abcdabcd`. A reservation of 50,331,647 bytes
+selected Original; default settings retained compiled selection. All timed
+outcomes were `satisfies`. Medians in ns/value:
+
+| Workload | Before | After | Repeat before | Repeat after |
+| --- | ---: | ---: | ---: | ---: |
+| Simple, default lane | 59.54 | 59.13 | 59.98 | 59.60 |
+| Simple, Original | 641.44 | 652.80 | 653.30 | 662.99 |
+| VM, default lane | 73.69 | 71.56 | 74.17 | 70.61 |
+| VM, Original | 1,021.88 | 1,035.87 | 1,040.48 | 1,043.75 |
+
+The largest increase was 1.8%, 11.4 ns for Original simple patterns; the repeat
+was 1.5%, 9.7 ns. Repeat ranges overlapped for every workload. These small
+changes do not trigger the instrument's advisory timing threshold; the runs do
+not claim a speedup or establish zero cost. Both binaries were built with
+`cargo build --locked --release --manifest-path tools/evaluator-bench/Cargo.toml`;
+the same instrument sources, compiler and requests were used on both sides.
+Calibration and ordinary timing are separate from deployed Worker qualification.
+
 ## Per-owner retained storage (November 2026)
 
 Rust `ComparisonContext::retained_bytes()` estimates allocations kept alive by
@@ -32,11 +130,36 @@ that growth; the estimate is not an atomic heap snapshot or a hard admission cap
 The [retained-size qualification tool](../tools/retained-size-qualification/README.md)
 compares context estimates with requested live allocation bytes for cold and
 warmed contexts at 10, 100 and 500 operations. The factor-two test applies only
-to those shapes. Default prepared schemas and operations do not expose this
-method: their core generic wrapper and companion validator live in different
-crates, preventing a specialized inherent method on the schema wrapper.
-There is no estimate here for allocations hidden inside `jsonschema`, and no
-estimate promised for custom evaluators.
+to those shapes. Rust `SchemaValidator::retained_bytes` defaults to `None`;
+`PreparedSchema::retained_bytes` forwards it. The default evaluator estimates
+its SDK lane's original environment, source snapshots, supplied resources,
+completed caches, plan maps, operands and patterns. Shared storage is counted
+once within a validator and again for each separately queried owner. Regex NFA
+representation sizes and collection occupancy are estimates where capacities
+are not exposed. Process-wide packaged schemas and fixed format validators are
+excluded. The compiled `jsonschema` lane returns `None` because the library's
+retained allocations are opaque; its internals are neither modeled nor wrapped.
+Custom validators keep the default `None` unless they implement accounting.
+
+`PreparedOperation::retained_bytes` sums its document snapshot, operation name
+and present prepared-schema slots, returning `None` if any present slot does.
+Absent slots add nothing. Summing slots deliberately counts shared storage per
+owner, so an operation estimate can exceed its unique live allocation bytes.
+The qualification tool also checks SDK validator estimates against a counting
+allocator at 10, 100 and 500 operations, after dropping preparation inputs,
+and reports live bytes with `None` for the library lane. Queries do no retained
+bookkeeping. Preparation and evaluation never call them. This is a Rust API;
+the TypeScript facade has no corresponding method.
+
+
+The November 14 owner-ruling qualification on macOS 26.6.2 arm64 found SDK
+validator estimate/live ratios of 0.973, 1.001 and 1.008 at 10, 100 and 500
+operations. The compiled lane returned `None` at every size. Matched
+`tools/evaluator-bench` runs against `bc012c01` covered scalar, reference-heavy
+and SDK-lane missing-reference workloads. All 20 mode comparisons stayed within
+the timing thresholds; warm preparation and evaluation allocation counts,
+requested bytes and peak heap were unchanged. This shared-host qualification
+uses two batches of 20 pairs, not a portable latency or memory guarantee.
 
 ## Limits principle (November 2026)
 
@@ -287,12 +410,12 @@ Original. The final 40,000,000 ceiling keeps all 879 corpus slots below the
 product boundary for every value the default one-million-node parser admits:
 the largest tightened coefficient is 39. At the measured 20 ns per ordinary
 application the product is about 800 ms for that ordinary application cost,
-not an elapsed-time ceiling. A hostile pattern took 1.858 s in Node on
-2026-11-14; a timer-driven abort still took 2.018 s. Pattern work is outside
-that multiplication. Set `evaluationSdkWorkUnits` for cooperative work control;
-the [Workers guide](workers.md#limits-to-set) records the capped result. Original
-observes caller controls; its default work cap remains unset as described in
-[support.md](support.md).
+not an elapsed-time ceiling. Pattern work is outside that multiplication. Before
+the per-search ceiling above, a hostile pattern took 1.858 s in Node on
+2026-11-14; a timer-driven abort still took 2.018 s. Default limits now refuse
+that Original search before entry. Set `evaluationSdkWorkUnits` for cumulative
+work control; the [Workers guide](workers.md#limits-to-set) records the capped
+result. Original observes caller controls; its cumulative work cap remains unset.
 
 A two-reference `allOf` diamond with an operation input reference has
 `4 * 2^levels - 2` expanded applications: 14 levels fit the preparation ceiling,
@@ -398,7 +521,8 @@ recursive tree; median of ten fresh processes, one-minute load 2.1 to 3.4).
 
 ### Current execution and stack policy
 
-No caller evaluation work cap applies by default. Setting
+No cumulative evaluation work cap applies by default. The separate per-search
+ceiling above bounds uncancellable Original pattern work. Setting
 `Limits::evaluation_sdk_work_units` selects Original and bounds SDK-defined
 work debits. These units are not a wall-clock deadline. The default evaluation
 storage reservation is 48 MiB. Original exhaustion returns a limit no-verdict;

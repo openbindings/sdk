@@ -60,7 +60,11 @@ allocation failure can throw a bare `RuntimeError: unreachable`, with no SDK
 code, and leave subsequent preparations failing in that instance. Treat it as
 fatal for the isolate; see [Workers recovery](workers.md#memory-exhaustion).
 Value evaluation uses static compiled admission or Original heap frames and
-sampled stack checks. A caller-selected work cap selects Original. SDK limits
+sampled stack checks. A caller-selected cumulative work cap selects Original.
+Original pattern search has a default 250,000,000-unit ceiling per uncancellable
+search; oversized searches return `pattern-search-work-limit` before running.
+Changing `pattern_search_work_units` / `patternSearchWorkUnits` from its default
+selects Original; `None` / `null` removes this ceiling. SDK limits
 are not a hard CPU deadline or a whole-process memory ceiling. Comparison,
 preparation and pull relationship work budgets are optional and off by default.
 A time bound is the caller's choice through cancellation or the corresponding
