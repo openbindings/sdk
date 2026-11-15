@@ -201,3 +201,13 @@ Unknown codes in that domain and exact error data remain unchanged, subject to
 finite encoding limits and reserved-code admission. Providers
 own the no-output/no-operation-effect guarantee of `CONTEXT_REQUIRED`; the SDK
 rejects such a challenge after output has already committed.
+
+`PreparedOperation::retained_bytes()` returns an optional on-demand heap estimate
+for the document snapshot, operation name and present prepared-schema slots.
+An absent slot adds nothing; any present validator returning `None` makes the
+whole estimate `None`. Custom validators default to `None`; the default evaluator
+returns `Some` on its SDK lane and `None` on the compiled `jsonschema` lane.
+Shared storage is counted per owner, including across slots and clones. This is
+neither resident memory nor bytes freed by dropping one handle, and excludes
+allocator overhead and Wasm memory growth. No accounting runs in preparation or
+evaluation, and later cache growth can change the estimate.

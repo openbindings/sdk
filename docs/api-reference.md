@@ -245,6 +245,19 @@ or cancellation. TypeScript
 failure judges no instance. A missing operation or absent schema is found before
 preparation and is not a preparation failure.
 
+Rust `PreparedSchema::retained_bytes(&self) -> Option<usize>` asks its validator
+for an on-demand estimate of heap allocations it keeps alive. The defaulted
+`SchemaValidator::retained_bytes` returns `None` for custom validators unless
+they override it. The default evaluator returns `Some` on its SDK lane and
+`None` on its compiled `jsonschema` lane, whose allocations are opaque.
+`PreparedOperation::retained_bytes(&self) -> Option<usize>` adds the retained
+document, operation name and present schema slots; any present unknown estimate
+makes the result `None`. Absent slots add nothing. Shared allocations are counted
+per owner, including across slots; these are neither resident-memory readings
+nor bytes freed by dropping one handle. Allocator overhead, process-wide fixed
+schemas and Wasm memory growth are excluded. Later caches can grow the estimate.
+No accounting runs during preparation or evaluation. This API is Rust only.
+
 Schemas received as interface data, including a kind description's `sourceData`
 and `bindingData` and a context challenge's `schema`, can be prepared as their own
 roots. Supply the exact schema as an `ExternalSchema { uri, document }` under a

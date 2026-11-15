@@ -351,6 +351,15 @@ impl EvaluationRequest<'_> {
 }
 
 impl openbindings_internal_schema::OriginalEnvironment for SchemaEnvironment {
+    fn retained_bytes(&self) -> usize {
+        size_of::<EnvironmentInner>()
+            + 2 * size_of::<usize>()
+            + self
+                .inner
+                ._external
+                .environment_retained_bytes(self.inner._document.as_ref(), &self.inner.space)
+    }
+
     fn space(&self) -> &openbindings_internal_schema::SchemaSpace {
         &self.inner.space
     }

@@ -23,3 +23,15 @@ factor of two of requested live bytes. This empirical qualification is not a
 universal bound. Clone stability, schema-text coverage, growth and release of
 every measured allocation are checked. The original document tolerance remains
 25%. Run with `-- --nocapture` to print each estimate beside its allocator count.
+
+`validator_bytes` prepares one selected schema from the same 10, 100 and 500
+operation shapes, retaining an external object schema through two URI aliases.
+Preparation inputs are dropped before measuring the validator alone. The SDK
+lane must return `Some` within a factor of two of live requested bytes; the
+compiled `jsonschema` lane must return `None`, with its live count printed for
+comparison. Shared-pattern, wide-numeric and missing-reference cases exercise
+additional SDK-owned allocations. The tests also check clone stability, complete
+source-text coverage, growth, no retained query bookkeeping and complete release.
+Prepared operations sum their document and schema owners, so their estimates can
+count shared allocations more than once by design. The factor-two qualification
+applies to the individual validators, not that sum.

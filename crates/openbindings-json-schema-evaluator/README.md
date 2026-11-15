@@ -307,3 +307,18 @@ primitive operands and shared pattern programs, plus backend state when compiled
 state and search caches. No caller borrow is retained.
 See [custom evaluators](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md),
 [first use](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/first_use.rs), and [replacement](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/examples/replacement.rs).
+
+`PreparedSchema::retained_bytes()` calls the optional `SchemaValidator` method.
+`DefaultValidator` returns `Some` on the SDK lane, counting the retained original
+environment, complete source snapshots, supplied resources, caches, plan maps,
+exact operands and pattern representations. It returns `None` when it retains
+a compiled `jsonschema` validator: the library does not expose its allocation
+capacities, and the SDK does not model its internals. Configuring
+`Limits::evaluation_sdk_work_units: Some(...)` selects the SDK lane.
+The query uses existing capacities and estimated collection occupancy; regex
+NFAs expose representation size. Process-wide packaged schemas and fixed format
+validators, allocator overhead and Wasm memory growth are excluded. Shared
+allocations are counted per owner, so shared clones report the same estimate.
+This is neither resident memory nor what dropping one handle frees. Only the
+query walks storage; preparation and evaluation do no accounting. Later shared
+cache growth can change the result. Custom validators default to `None`.

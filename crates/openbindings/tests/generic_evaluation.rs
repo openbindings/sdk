@@ -352,3 +352,36 @@ fn local_reference_defect_is_a_preparation_cause_not_an_instance_verdict() {
         Some("https://example.test/external")
     );
 }
+
+#[test]
+fn validator_owner_wrappers_forward_estimates_and_include_their_allocation() {
+    struct Accounted([u8; 32]);
+    impl SchemaValidator for Accounted {
+        fn retained_bytes(&self) -> Option<usize> {
+            Some(self.0.len())
+        }
+        fn evaluate(&self, _: &JsonValue, _: Detail, _: &dyn WorkControl) -> ValueOutcome {
+            ValueOutcome::Satisfies
+        }
+    }
+    let boxed: Box<dyn SchemaValidator> = Box::new(Accounted([0; 32]));
+    let rc: Rc<dyn SchemaValidator> = Rc::new(Accounted([0; 32]));
+    let arc: std::sync::Arc<dyn SchemaValidator> = std::sync::Arc::new(Accounted([0; 32]));
+    assert_eq!(boxed.retained_bytes(), Some(64));
+    assert_eq!(rc.retained_bytes(), Some(64 + 2 * size_of::<usize>()));
+    assert_eq!(arc.retained_bytes(), rc.retained_bytes());
+    assert_eq!(rc.clone().retained_bytes(), rc.retained_bytes());
+    assert_eq!(arc.clone().retained_bytes(), arc.retained_bytes());
+    let custom: Box<dyn SchemaValidator> = Box::new(SendValidator(Cell::new(0)));
+    assert_eq!(custom.retained_bytes(), None);
+}
+
+#[test]
+fn custom_validator_without_estimate_returns_none_from_prepared_schema() {
+    let calls = Rc::new(Cell::new(0));
+    let prepared = selected()
+        .prepare(&LocalEvaluator(calls.clone()), &ExternalSchemas::default())
+        .unwrap();
+    assert_eq!(prepared.retained_bytes(), None);
+    assert_eq!(calls.get(), 0);
+}

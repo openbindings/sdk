@@ -150,6 +150,27 @@ impl<P: BindingInvoker, E: SchemaEvaluator> DefaultOperationInvoker<P, E> {
     }
 }
 impl<V: SchemaValidator> PreparedOperation<V> {
+    /// Estimate heap bytes this operation keeps alive now, including its
+    /// document snapshot, operation name and each present prepared schema.
+    ///
+    /// Returns `None` if any present schema's validator supplies no estimate;
+    /// an absent direction adds nothing. Shared storage is counted per owner,
+    /// including storage shared between schema slots and the document. Clones
+    /// sharing validator storage therefore report the same estimate. This is
+    /// neither resident memory nor what dropping one handle frees. Allocator
+    /// overhead and Wasm memory growth are excluded. Accounting runs only
+    /// when asked, using existing capacities; later caches can grow the result.
+    pub fn retained_bytes(&self) -> Option<usize> {
+        let schemas = self
+            .schemas
+            .iter()
+            .flatten()
+            .try_fold(0usize, |bytes, schema| {
+                schema.retained_bytes().map(|retained| bytes + retained)
+            })?;
+        Some(self.interface.document().retained_bytes() + self.operation.capacity() + schemas)
+    }
+
     /// Original document supplying binding meaning and schema reference context.
     pub fn interface(&self) -> &ConformantDocument {
         &self.interface

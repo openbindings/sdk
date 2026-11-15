@@ -130,11 +130,36 @@ that growth; the estimate is not an atomic heap snapshot or a hard admission cap
 The [retained-size qualification tool](../tools/retained-size-qualification/README.md)
 compares context estimates with requested live allocation bytes for cold and
 warmed contexts at 10, 100 and 500 operations. The factor-two test applies only
-to those shapes. Default prepared schemas and operations do not expose this
-method: their core generic wrapper and companion validator live in different
-crates, preventing a specialized inherent method on the schema wrapper.
-There is no estimate here for allocations hidden inside `jsonschema`, and no
-estimate promised for custom evaluators.
+to those shapes. Rust `SchemaValidator::retained_bytes` defaults to `None`;
+`PreparedSchema::retained_bytes` forwards it. The default evaluator estimates
+its SDK lane's original environment, source snapshots, supplied resources,
+completed caches, plan maps, operands and patterns. Shared storage is counted
+once within a validator and again for each separately queried owner. Regex NFA
+representation sizes and collection occupancy are estimates where capacities
+are not exposed. Process-wide packaged schemas and fixed format validators are
+excluded. The compiled `jsonschema` lane returns `None` because the library's
+retained allocations are opaque; its internals are neither modeled nor wrapped.
+Custom validators keep the default `None` unless they implement accounting.
+
+`PreparedOperation::retained_bytes` sums its document snapshot, operation name
+and present prepared-schema slots, returning `None` if any present slot does.
+Absent slots add nothing. Summing slots deliberately counts shared storage per
+owner, so an operation estimate can exceed its unique live allocation bytes.
+The qualification tool also checks SDK validator estimates against a counting
+allocator at 10, 100 and 500 operations, after dropping preparation inputs,
+and reports live bytes with `None` for the library lane. Queries do no retained
+bookkeeping. Preparation and evaluation never call them. This is a Rust API;
+the TypeScript facade has no corresponding method.
+
+
+The November 14 owner-ruling qualification on macOS 26.6.2 arm64 found SDK
+validator estimate/live ratios of 0.973, 1.001 and 1.008 at 10, 100 and 500
+operations. The compiled lane returned `None` at every size. Matched
+`tools/evaluator-bench` runs against `bc012c01` covered scalar, reference-heavy
+and SDK-lane missing-reference workloads. All 20 mode comparisons stayed within
+the timing thresholds; warm preparation and evaluation allocation counts,
+requested bytes and peak heap were unchanged. This shared-host qualification
+uses two batches of 20 pairs, not a portable latency or memory guarantee.
 
 ## Limits principle (November 2026)
 

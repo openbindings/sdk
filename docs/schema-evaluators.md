@@ -73,6 +73,20 @@ same verdict. Observe `WorkControl` during both stages and retain everything
 needed after the document, resources and request are dropped, including what
 explanations read.
 
+`SchemaValidator::retained_bytes(&self) -> Option<usize>` defaults to `None`.
+Custom evaluators need not implement it and make no size promise by default.
+An implementation returning `Some` estimates the heap allocations its validator
+keeps alive from current capacities, including retained sources and caches.
+Count shared storage per owner; exclude inline storage, allocator overhead,
+process-wide fixed schemas and Wasm memory growth. This is neither resident
+memory nor the bytes dropping one handle frees. Compute only when asked, with
+no preparation or per-value accounting. `PreparedSchema` forwards the answer;
+`PreparedOperation` adds its document, name and present slots, returning `None`
+if any present validator does. `Box`, `Rc` and `Arc` validators forward the
+answer and include their own heap allocation. The default evaluator answers
+`Some` on its SDK lane and `None` when it retains a compiled `jsonschema`
+validator, since that library does not expose its allocation capacities.
+
 `EvaluationRequest` borrows the selected original `Schema` and `ExternalSchemas`.
 `environment(limits, control)` returns an owned `SchemaEnvironment` with original
 sources, inventories and typed reference queries. The bounded environment is

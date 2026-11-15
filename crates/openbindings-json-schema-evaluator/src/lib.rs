@@ -149,6 +149,23 @@ impl std::fmt::Debug for DefaultValidator {
     }
 }
 impl SchemaValidator for DefaultValidator {
+    /// Estimate the SDK lane's retained sources, environment, caches and plan
+    /// from current capacities. Shared clones count the same allocations.
+    /// Collection occupancy and regex NFA representation sizes are estimates.
+    /// Excludes process-wide fixed schemas and format validators, allocator
+    /// overhead and Wasm growth; this is neither resident memory nor what
+    /// dropping one handle frees. Accounting runs only when asked.
+    ///
+    /// Returns `None` when the compiled `jsonschema` lane is retained: that
+    /// library does not expose its allocation capacities. Setting
+    /// [`Limits::evaluation_sdk_work_units`] to `Some` selects the SDK lane.
+    fn retained_bytes(&self) -> Option<usize> {
+        match &self.compiled {
+            compiled::Lane::Original(_) => Some(self.plan.retained_bytes()),
+            compiled::Lane::Compiled(_) => None,
+        }
+    }
+
     fn evaluate(
         &self,
         value: &JsonValue,

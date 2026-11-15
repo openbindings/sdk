@@ -21,6 +21,8 @@ mod primitive;
 mod readings;
 mod refinement;
 mod regex_format;
+#[path = "../retained.rs"]
+mod retained;
 mod stack;
 mod storage;
 mod value_predicates;
