@@ -254,6 +254,9 @@ impl Arena {
         // Arc header, arena allocation, and all separately allocated buffers.
         2 * size_of::<usize>()
             + size_of::<Self>()
+            // This query initializes the position mutex. On the pinned Apple
+            // std implementation its pthread backing is a separate 64-byte box.
+            + if cfg!(target_vendor = "apple") { 64 } else { 0 }
             + self.source.len()
             + vec_bytes(&self.nodes)
             + vec_bytes(&self.items)

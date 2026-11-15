@@ -25,7 +25,8 @@ pub struct PreparationLimits {
     pub max_sdk_work_units: Option<usize>,
     /// Conservative reservations for storage held at once; default 512 MiB.
     /// External schema registration reserves each distinct root it retains once;
-    /// clones of one root share that reservation.
+    /// clones of one root share that reservation. Registration charges held
+    /// buffer capacities and releases its temporary indexes after each walk.
     /// Local syntax checks and traversal scratch release reservations when dropped;
     /// retained indexes and programs stay charged. Mixed construction estimates
     /// conservatively stay charged until their owning construction ends.

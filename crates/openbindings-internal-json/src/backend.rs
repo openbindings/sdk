@@ -1620,10 +1620,14 @@ pub fn retained_bytes(value: &crate::JsonValue) -> usize {
     value.owner.retained_bytes()
 }
 /// Deterministic retained-arena reservation, including the maximum lazy source
-/// position index. Shared views have the same owner identity (`occurrence().0`).
+/// position index. For a selected subtree, the standalone parser's backing
+/// capacities and pending-item scratch instead bound its detached construction. Shared views have the same owner identity (`occurrence().0`).
 /// Uses representation capacities, never allocator statistics. The extra source
 /// checkpoints also cover lookups performed after the owner is registered.
 pub fn retained_reservation(value: &crate::JsonValue) -> usize {
+    if value.id != 0 {
+        return standalone_storage(value);
+    }
     // Reserve fixed synchronization backing too: some targets lazily allocate
     // the position mutex on its first use. This is a platform-independent bound.
     retained_bytes(value).saturating_add(128).saturating_add(
@@ -1634,6 +1638,128 @@ pub fn retained_reservation(value: &crate::JsonValue) -> usize {
             .saturating_div(4096)
             .saturating_mul(2 * size_of::<usize>()),
     )
+}
+
+// Profile of the pinned flat parser when rebasing an already admitted subtree.
+// Read its existing nodes, never the unrelated parent's storage. Node and index
+// vectors grow by powers of two; item batches and the pending stack follow the
+// same close order as Parser. Decoding can briefly keep a valid prefix of an
+// unpaired string, and its backing stays after that prefix is truncated.
+fn standalone_storage(value: &crate::JsonValue) -> usize {
+    fn capacity(len: usize) -> usize {
+        if len == 0 {
+            0
+        } else {
+            len.next_power_of_two().max(4)
+        }
+    }
+    let arena = &value.owner;
+    let end = arena.nodes[value.id].span.end;
+    let mut nodes = 0;
+    let mut indexed = 0;
+    let mut slots = 0;
+    let mut decoded = 0;
+    let mut decoded_peak = 0;
+    let mut strings = 0;
+    let mut unpaired = 0;
+    let mut pending = 0usize;
+    let mut pending_peak = 0usize;
+    let mut items = 0usize;
+    let mut item_capacity = 0usize;
+    let mut open = NO_PARENT;
+    for (id, node) in arena
+        .nodes
+        .iter()
+        .enumerate()
+        .skip(value.id)
+        .take_while(|(_, n)| n.span.start < end)
+    {
+        while open != NO_PARENT && node.span.start >= arena.nodes[open as usize].span.end {
+            close_storage(
+                arena,
+                &mut open,
+                &mut pending,
+                &mut items,
+                &mut item_capacity,
+            );
+        }
+        nodes += 1;
+        match node.kind {
+            Kind::String { text, name } => {
+                if text == Text::UNPAIRED {
+                    unpaired += 1;
+                    let prefix: usize =
+                        char::decode_utf16(arena.unpaired_units(id).expect("unpaired token"))
+                            .map_while(Result::ok)
+                            .map(char::len_utf8)
+                            .sum();
+                    decoded_peak = decoded_peak.max(decoded + prefix);
+                } else if text.decoded().is_some() {
+                    strings += 1;
+                    decoded += arena.string(id).expect("scalar token").len();
+                    decoded_peak = decoded_peak.max(decoded);
+                }
+                pending += usize::from(name);
+            }
+            Kind::Object { len, .. } if len >= 16 => {
+                indexed += 1;
+                slots += len as usize;
+            }
+            _ => {}
+        }
+        if id != value.id && matches!(arena.nodes[node.parent as usize].kind, Kind::Array { .. }) {
+            pending += 1;
+        }
+        pending_peak = pending_peak.max(pending);
+        if node.is_container() {
+            open = id as u32;
+            pending_peak = pending_peak.max(64);
+        }
+    }
+    while open != NO_PARENT {
+        close_storage(
+            arena,
+            &mut open,
+            &mut pending,
+            &mut items,
+            &mut item_capacity,
+        );
+        if open != NO_PARENT && (open as usize) < value.id {
+            open = NO_PARENT;
+        }
+    }
+    [
+        size_of::<Arena>() + 2 * size_of::<usize>(),
+        value.bytes().len(),
+        capacity(nodes).saturating_mul(size_of::<crate::raw::Node>()),
+        item_capacity.saturating_mul(size_of::<u32>()),
+        capacity(pending_peak).saturating_mul(size_of::<u32>()),
+        decoded_peak.saturating_mul(2).min(value.bytes().len()),
+        capacity(strings).saturating_mul(size_of::<usize>()),
+        capacity(unpaired).saturating_mul(size_of::<u32>()),
+        capacity(indexed).saturating_mul(size_of::<(u32, std::ops::Range<usize>, usize)>()),
+        slots.saturating_mul(size_of::<(u64, u32)>()),
+    ]
+    .into_iter()
+    .fold(0, usize::saturating_add)
+}
+fn close_storage(
+    arena: &Arena,
+    open: &mut u32,
+    pending: &mut usize,
+    items: &mut usize,
+    capacity: &mut usize,
+) {
+    let node = &arena.nodes[*open as usize];
+    let (Kind::Object { len, .. } | Kind::Array { len, .. }) = node.kind else {
+        unreachable!()
+    };
+    *items += len as usize;
+    if *items > *capacity {
+        *capacity = (*items).max(*capacity * 2).max(4);
+    }
+    *pending -= len as usize;
+    *open = node.parent;
 }
 
 pub fn pointer_retained_bytes(pointer: &crate::Pointer) -> usize {

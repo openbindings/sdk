@@ -381,7 +381,11 @@ Pass partial overrides to `Schema.prepare` or `ExternalSchemas.prepare` under
 work accepts `null`. Registration takes the same budgets through
 `new ExternalSchemas(entries, { limits, signal })` or
 `resources.with(uri, value, { limits, signal })`. Each call chooses its own
-policy. Preparation returns a refusal; registration throws `SdkError` with code
+policy. Registration counts each distinct retained source once, follows index
+capacity and releases traversal and normalization scratch. Its allowance includes
+the supplied JSON arena; preparation can reuse that already registered arena.
+The [Workers guide](../../docs/workers.md) measures the entire recipe with these
+registration options. Preparation returns a refusal; registration throws `SdkError` with code
 `resource`. Supplied owners remain usable after either refusal. See the dated Rust [host-specific 250 ms suggestion](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026).
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning;
 simple Boolean identities add no proof-work unit. Growing loops retain cooperative

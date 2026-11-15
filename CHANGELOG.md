@@ -4,6 +4,16 @@
 
 ### Fixed
 
+- Registering external schemas charges the preparation allowance for the storage registration holds, as preparation
+  has since the previous change, where it charged estimates. The smallest allowance that registers 3,000 supplied
+  records falls from 19.7 MiB to 9.6 MiB in Wasm, and from 21.7 MiB to 11.6 MiB natively, where the charge now equals
+  what a counting allocator sees; registration is 17 to 22 percent faster. Defaults and the limit's meaning are
+  unchanged.
+- The Workers guide's recommended settings now admit the workloads it says they admit: its supplied-records recipe
+  had been refused at its own 8 MiB, because the measurement runner registered with default limits. The runner now
+  registers with each row's limits and measures the guide's whole recipe (parse, validate, register, prepare,
+  evaluate) with the guide's own option objects, which a test keeps equal to the guide's code block. The guide starts
+  at 16 MiB for 3,000 supplied records or 16,000 links, and gives the 49,000-link chain 8 MiB of evaluation storage.
 - Schema comparison could answer Compatible for a standalone draft-07 or draft-04 root, for a value that flows and
   is refused: as the context's own document without a base, or as a separately parsed copy, the root was read as
   2020-12. A schema outside an OBI document now keeps the dialect JSON Schema assigns it on every route, with or

@@ -65,7 +65,7 @@ for (const capped of [false, true])
     for (const [kind, n, supplied] of [["records", 3000, false], ["records", 3000, true], ["chain", 49000, false]]) {
       const r = prepare(kind, n, { supplied, preparationLimits: allowance(cap * MiB),
         ...(capped ? { limits: work(1e8) } : {}) });
-      cells.push(`${r.status}, ${mib(r.growthBytes)}`);
+      cells.push(`${r.stage ?? "prepare"}: ${r.status}, ${mib(r.growthBytes)}`);
     }
     sweep.push([capped ? "100,000,000" : "none", cap, ...cells]);
   }
@@ -128,6 +128,36 @@ table("Limit calibration", ["Parameters", "Result / code", "Linear MiB", "Growth
       r.afterBytes === undefined ? "" : mib(r.afterBytes), r.growthBytes === undefined ? "" : mib(r.growthBytes),
       r.ms.toFixed(3), r.evaluateMs?.toFixed(3) ?? ""];
   }));
+
+console.error("Complete guide recipe");
+const recipeCases = [
+  ...[1, 2, 8, 16, 24, 32].flatMap(size => ["many", "nested"].map(kind => ({ kind, bytes: size === 32 ? 33554000 : size * MiB }))),
+  { kind: "array", n: 999000 }, { kind: "object", n: 499000 },
+  { kind: "ids", n: 333320, bytes: 32 * MiB },
+  { kind: "ids", n: 40000, bytes: 4190000 },
+  ...[4190000, 8380000].map(bytes => ({ kind: "ids", n: 80000, bytes, pieces: "?#f" })),
+  { kind: "array", n: 250000 }, { kind: "object", n: 125000 },
+  { kind: "deep", n: 9990 }, { kind: "findings", n: 100000 },
+  ...[false, true].flatMap(supplied => [[10, false], [100, false], [300, false], [1000, false], [3000, false], [3000, true]]
+    .map(([n, distinct]) => ({ kind: "records", n, supplied, distinct }))),
+  ...[1000, 4000, 16000, 32000, 49000].map(n => ({ kind: "chain", n })),
+  { kind: "hostile" },
+  { kind: "chain", n: 49000, preparationLimits: allowance(64 * MiB) },
+  ...[32000, 49000].map(n => ({ kind: "chain", n, preparationLimits: allowance(64 * MiB),
+    limits: { evaluationSdkReservationBytes: 8 * MiB } })),
+];
+const recipeRows = [];
+for (const parameters of recipeCases) {
+  for (const registration of ["constructor", "with"]) {
+    const r = run({ ...parameters, recipe: true, registration });
+    // These are the guide's stated completions at its documented allowances.
+    if (parameters.kind === "records" || (parameters.kind === "chain" && (parameters.n <= 16000 || parameters.limits)))
+      assert.equal(r.status, "satisfies", JSON.stringify({ parameters, registration, r }));
+    recipeRows.push([JSON.stringify(parameters), registration, r.stage, r.status, r.code ?? "",
+      mib(r.afterBytes), r.ms.toFixed(3)]);
+  }
+}
+table("Complete guide recipe", ["Workload", "Registration", "Last stage", "Outcome", "Code", "Linear MiB", "Total ms"], recipeRows);
 
 // Entry ownership is separate from the preparation tables above. One synchronous
 // turn deliberately leaves every returned record undisposed, with no GC/yield.

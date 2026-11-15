@@ -1,5 +1,6 @@
 //! The normative schema-position walk. Unknown keywords remain opaque.
 use crate::dialect::{Dialect, Profile};
+use crate::preparation::{Scratch, reserve};
 use crate::{JsonKind, JsonRef, JsonValue, identifiers::Identifiers};
 use openbindings_internal_json::backend::{node, ref_id};
 mod references;
@@ -242,8 +243,15 @@ impl SchemaIndex {
         roots: impl IntoIterator<Item = JsonRef<'a>>,
         bases: Bases<'a>,
     ) -> Self {
-        Self::build_roots_checked(source, roots, bases, &Profile::from_uri, &mut |_| Ok(()))
-            .expect("unbounded inventory")
+        Self::build_roots_checked::<false>(
+            source,
+            roots,
+            bases,
+            &Profile::from_uri,
+            &mut |_| Ok(()),
+            &|| false,
+        )
+        .expect("unbounded inventory")
     }
     pub(crate) fn supplied_nodes_bounded(
         value: &JsonValue,
@@ -261,11 +269,15 @@ impl SchemaIndex {
         control: &dyn crate::Control,
         resolve_profile: &dyn Fn(&str) -> Option<Profile>,
     ) -> Result<Self, crate::Failure> {
-        control.charge_allocation(512)?;
+        let scratch = Scratch::new(control);
+        if let Some(uri) = retrieval {
+            use crate::Control;
+            scratch.charge_allocation((uri.len() + 23) & !7)?;
+        }
         let bases = retrieval.map_or(Bases::None, |uri| {
             Bases::Ordinary(Vec::new(), Arc::from(uri))
         });
-        Self::build_roots_checked(
+        Self::build_roots_checked::<true>(
             value,
             std::iter::once(value.view()),
             bases,
@@ -279,17 +291,18 @@ impl SchemaIndex {
                         "schema inventory exceeds its configured node limit",
                     ));
                 }
-                control.charge_allocation(96)?;
                 Ok(())
             },
+            control,
         )
     }
-    fn build_roots_checked<'a>(
+    fn build_roots_checked<'a, const ACCOUNT: bool>(
         source: &'a JsonValue,
         roots: impl IntoIterator<Item = JsonRef<'a>>,
         mut bases: Bases<'a>,
         resolve_profile: &dyn Fn(&str) -> Option<Profile>,
         check: &mut dyn FnMut(usize) -> Result<(), crate::Failure>,
+        control: &dyn crate::Control,
     ) -> Result<Self, crate::Failure> {
         let external = !matches!(bases, Bases::Compared(_));
         let full = !matches!(bases, Bases::None);
@@ -298,9 +311,13 @@ impl SchemaIndex {
             profiles: external.then(Vec::new),
             ..Self::default()
         };
+        let scratch = Scratch::new(control);
         let mut compared = Vec::new();
         let mut stack: Vec<(u32, u32)> = Vec::new();
         for root in roots {
+            if ACCOUNT {
+                reserve(&mut stack, &scratch)?;
+            }
             stack.push((ref_id(root) as u32, u32::MAX));
             while let Some((id, parent)) = stack.pop() {
                 check(out.nodes.len())?;
@@ -372,6 +389,9 @@ impl SchemaIndex {
                 let declared = candidate_id
                     .filter(|_| !id_suppressed && fragment.is_none() && !unsupported_identifier);
                 let resource = if declared.is_some() {
+                    if ACCOUNT {
+                        reserve(&mut out.parent_resources, control)?;
+                    }
                     out.parent_resources.push((index + 1, parent_resource));
                     index + 1
                 } else {
@@ -386,13 +406,33 @@ impl SchemaIndex {
                                 0 => Some(&**initial),
                                 r => base_of(of, r).map(|b| &**b),
                             };
-                            let base = text
-                                .and_then(|s| {
-                                    crate::input_policy::resolve_identifier(parent_base, s)
-                                })
-                                .map(Arc::<str>::from);
+                            let normalization = Scratch::new(control);
+                            if ACCOUNT {
+                                use crate::Control;
+                                normalization.charge_allocation(text.map_or(0, |s| {
+                                    parent_base
+                                        .map_or(0, str::len)
+                                        .saturating_add(s.len())
+                                        .saturating_add(1)
+                                        .saturating_mul(8)
+                                }))?;
+                            }
+                            let base = text.and_then(|s| {
+                                crate::input_policy::resolve_identifier(parent_base, s)
+                            });
+                            if ACCOUNT && let Some(base) = &base {
+                                control.charge_allocation((base.len() + 23) & !7)?;
+                            }
+                            let base = base.map(Arc::<str>::from);
+                            drop(normalization);
                             if let Some(base) = &base {
+                                if ACCOUNT {
+                                    reserve(&mut out.bases, control)?;
+                                }
                                 out.bases.push((index, base.clone()));
+                            }
+                            if ACCOUNT {
+                                reserve(of, &scratch)?;
                             }
                             of.push((resource, base));
                         }
@@ -419,6 +459,9 @@ impl SchemaIndex {
                             .as_str()
                             .is_some_and(|name| profile.is_some_and(|d| d.anchor_name(name)))
                     {
+                        if ACCOUNT {
+                            reserve(&mut out.anchors, control)?;
+                        }
                         out.anchors.push(Anchor {
                             resource,
                             node: index,
@@ -442,6 +485,10 @@ impl SchemaIndex {
                     ) {
                         stopped = Some(error);
                     } else {
+                        if ACCOUNT && let Err(error) = reserve(&mut stack, &scratch) {
+                            stopped = Some(error);
+                            return;
+                        }
                         stack.push((ref_id(child) as u32, index));
                     }
                 };
@@ -454,12 +501,18 @@ impl SchemaIndex {
                     return Err(error);
                 }
                 stack[pending..].reverse();
+                if ACCOUNT {
+                    reserve(&mut out.nodes, control)?;
+                }
                 out.nodes.push(SchemaNode {
                     id,
                     depth,
                     resource,
                 });
                 if let Some(profiles) = &mut out.profiles {
+                    if ACCOUNT {
+                        reserve(profiles, control)?;
+                    }
                     profiles.push(profile);
                 }
             }
@@ -467,6 +520,13 @@ impl SchemaIndex {
         drop(stack);
         out.located = full;
         let mut anchors = std::mem::take(&mut out.anchors);
+        let sort = Scratch::new(control);
+        if ACCOUNT && anchors.len() > 20 {
+            use crate::Control;
+            sort.charge_allocation(
+                (anchors.len() / 2).max(4096 / size_of::<Anchor>()) * size_of::<Anchor>(),
+            )?;
+        }
         anchors.sort_by(|a, b| {
             a.resource
                 .cmp(&b.resource)

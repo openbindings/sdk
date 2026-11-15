@@ -2,6 +2,8 @@
 #[path = "resources_retained.rs"]
 mod retained;
 use crate::{document::DocumentInner, schema::references::SchemaSpace, *};
+use openbindings_internal_json::allocation::tree;
+use openbindings_internal_schema::preparation::Scratch;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
@@ -248,8 +250,8 @@ impl ExternalSchemas {
     }
     /// Register under caller-selected retained-storage, inventory and identity budgets, with
     /// cooperative cancellation. Each distinct root arena is reserved once, before
-    /// retaining it; clones share that charge. The deterministic estimate includes
-    /// parsed buffers and possible lazy source-position storage. A yielded value
+    /// retaining it; clones share that charge. Charges follow held buffer capacities;
+    /// temporary indexes and traversal buffers release their charges when dropped. A yielded value
     /// is already allocated by the caller, so this cannot prevent allocation of
     /// the first rejected item. Failed attempts retain no set.
     ///
@@ -273,6 +275,8 @@ impl ExternalSchemas {
         limits: &PreparationLimits,
         control: &dyn openbindings_internal_schema::Control,
     ) -> Result<Self, ExternalSchemaError> {
+        let staging = Scratch::new(control);
+        let owner_storage = Scratch::new(control);
         let mut by_uri = BTreeMap::new();
         let mut retrieval_bytes = 0usize;
         let mut owners = BTreeSet::new();
@@ -280,9 +284,12 @@ impl ExternalSchemas {
             control
                 .charge_work(resource.uri.len().saturating_add(1))
                 .map_err(registration_failure)?;
-            control
-                .charge_allocation(resource.uri.len().saturating_mul(8).saturating_add(1024))
-                .map_err(registration_failure)?;
+            let normalization = Scratch::new(control);
+            openbindings_internal_schema::Control::charge_allocation(
+                &normalization,
+                resource.uri.len().saturating_mul(8),
+            )
+            .map_err(registration_failure)?;
             let exceeded = |resource: &str| ExternalSchemaError {
                 kind: ExternalSchemaErrorKind::Limit {
                     resource: resource.into(),
@@ -317,9 +324,25 @@ impl ExternalSchemas {
             }
             resource.uri = crate::uri::compared_id(None, &resource.uri)
                 .ok_or_else(|| invalid("invalid retrieval URI"))?;
-            resource.document = retained_resource(resource.document, &mut owners, control)?;
+            drop(normalization);
+            control
+                .charge_allocation(resource.uri.capacity())
+                .map_err(registration_failure)?;
+            resource.document =
+                retained_resource(resource.document, &mut owners, control, &owner_storage)?;
+            let count = by_uri.len();
+            openbindings_internal_schema::Control::charge_allocation(
+                &staging,
+                tree(count + 1, size_of::<String>(), size_of::<ExternalSchema>())
+                    - tree(count, size_of::<String>(), size_of::<ExternalSchema>())
+                    + resource.uri.len(),
+            )
+            .map_err(registration_failure)?;
             let uri = resource.uri.clone();
-            if by_uri.insert(uri.clone(), resource).is_some() {
+            if let std::collections::btree_map::Entry::Vacant(entry) = by_uri.entry(uri) {
+                entry.insert(resource);
+            } else {
+                let uri = resource.uri;
                 return Err(ExternalSchemaError {
                     kind: ExternalSchemaErrorKind::RepeatedIdentity,
                     uri,
@@ -327,7 +350,15 @@ impl ExternalSchemas {
                 });
             }
         }
-        let resources: Vec<_> = by_uri.into_values().collect();
+        let count = by_uri.len();
+        control
+            .charge_allocation(count * size_of::<ExternalSchema>())
+            .map_err(registration_failure)?;
+        let mut resources = Vec::with_capacity(count);
+        resources.extend(by_uri.into_values());
+        drop(staging);
+        drop(owners);
+        drop(owner_storage);
         let input_policy = openbindings_internal_schema::Supplied::new_bounded(
             resources
                 .iter()
@@ -341,7 +372,7 @@ impl ExternalSchemas {
         )
         .map_err(registration_failure)?;
         control
-            .charge_allocation(512)
+            .charge_allocation(size_of::<ExternalSchemasInner>() + 2 * size_of::<usize>())
             .map_err(registration_failure)?;
         Ok(Self {
             inner: Arc::new(ExternalSchemasInner {
@@ -496,13 +527,13 @@ impl std::fmt::Debug for ExternalSchemaError {
     }
 }
 
-// The record reservation covers the ordered owner set as well as the resource
-// indexes. Root clones share an immutable arena; selected subtrees are rebased
+// Root clones share an immutable arena; selected subtrees are rebased
 // so registration never pins an otherwise unrelated parent document.
 fn retained_resource(
     value: JsonValue,
     owners: &mut BTreeSet<usize>,
     control: &dyn openbindings_internal_schema::Control,
+    owner_storage: &dyn openbindings_internal_schema::Control,
 ) -> Result<JsonValue, ExternalSchemaError> {
     use openbindings_internal_json::backend;
     let scratch = if backend::node_id(&value) == 0 {
@@ -511,7 +542,7 @@ fn retained_resource(
         control
             .charge_work(value.bytes().len())
             .map_err(registration_failure)?;
-        let bytes = value.bytes().len().saturating_mul(128).saturating_add(1024);
+        let bytes = backend::retained_reservation(&value);
         control
             .charge_allocation(bytes)
             .map_err(registration_failure)?;
@@ -522,7 +553,13 @@ fn retained_resource(
     let owner = backend::occurrence(value.view()).0;
     if !owners.contains(&owner) {
         control
-            .charge_allocation(backend::retained_reservation(&value))
+            .charge_allocation(backend::retained_bytes(&value))
+            .map_err(registration_failure)?;
+        owner_storage
+            .charge_allocation(
+                tree(owners.len() + 1, size_of::<usize>(), 0)
+                    - tree(owners.len(), size_of::<usize>(), 0),
+            )
             .map_err(registration_failure)?;
         owners.insert(owner);
     }

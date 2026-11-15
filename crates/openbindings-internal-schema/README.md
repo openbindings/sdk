@@ -7,7 +7,11 @@ Evaluation and comparison share this crate's `canonical_resolved_uri` normalizer
 and `normalized_hierarchical_uri_text` shortcut for JSON Schema resource equivalence.
 The `uri`
 module keeps spelling-preserving resolution for document conformance and
-retrieval registration, whose identity rules are separate.
+retrieval registration, whose identity rules are separate. Supplied registration
+reserves vector capacity before growth and releases temporary index and URI
+normalization storage with its construction scope. The core registration test
+qualifies this ledger against the shared counting allocator, including source
+arenas, shared owners and detached subtrees.
 Applications use `openbindings` for document validation and an explicit schema
 evaluator for operation values.
 

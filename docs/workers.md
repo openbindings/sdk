@@ -10,13 +10,15 @@ JavaScript and Wasm. **Wasm linear memory only grows**: whatever one request
 makes it grow to stays for the isolate's life. Disposal lets its allocator reuse
 space; it does not shrink `memory.buffer.byteLength`.
 
-The tables below measure that byte length in fresh Node v22.23.0 processes on
-Darwin arm64, using the package built at `d02c04e9` on 2026-11-14. They reproduce
-the lab's Node/workerd workload; all comparable linear-memory figures are within
-5% of the lab. Timings differ by more than 5% on many rows and use this tree's
-results. Run `node tools/workers-memory/run.mjs` from the repository root against
-the built package to regenerate the tables; see the [runner instructions](../tools/workers-memory/README.md).
-The instrument is the SDK Wasm instance's `memory.buffer.byteLength`, with a
+The tables below measure linear-memory capacity in fresh Node v22.23.0
+processes on Darwin arm64 on 2026-11-15, using the registration repair based on
+`3fcabf67`. The release Wasm SHA-256 is
+`c2cf03227365463e11d87ee37eb08186a800849e7e818cd87cd757f6ad15b1f8`.
+Run `node tools/workers-memory/run.mjs` from the repository root against the
+built package to regenerate the tables; see the [runner instructions](../tools/workers-memory/README.md).
+The runner completed 363 fresh-process observations, including the full recipe.
+Timings are single cold observations, separate from the repeated registration
+performance comparison. The instrument is the SDK Wasm instance's `memory.buffer.byteLength`, with a
 fresh process per row and per preparation-allowance search trial.
 
 **Local workerd enforces neither an isolate memory limit nor a CPU limit.**
@@ -39,11 +41,11 @@ stream, before buffering it all; an SDK byte limit cannot bound the host's copy.
 | JSON `maxBytes` | 4 MiB | Choose the largest tested input whose worst shape leaves preparation/evaluation room. Copied identifiers at 4 MiB reached 45.875 MiB; with a body, about 50 MiB. At 8 MiB they reached 59.875 MiB, exceeding the 64 MiB target once the body is added. A byte refusal still grew linear memory by 4.063 MiB at the 4 MiB limit. |
 | JSON `maxNodes` | 250,000 | Reserve about 16 MiB for node-dense admission: the roughly 250,000-node shapes reached 14.688-15.438 MiB, and refusal at this cap reached 16.125 MiB. Scale from measured node-dense shapes, not document bytes alone. |
 | JSON `maxDepth` | 10,000 (default) | Keep the existing qualified depth ceiling: 9,990 array levels grew memory by 1.125 MiB. This is not a stack-byte guarantee. |
-| `preparationLimits.maxSdkReservationBytes` | 8 MiB for up to 3,000 tested records or 4,000 links | Smallest tested row admitting these shapes; use 16 MiB for 16,000 links or 64 MiB for 49,000. Choose by the table below, then measure its linear high-water plus the body's bytes against the host budget. Reservation bytes cannot be subtracted from that budget as if they were actual memory growth. |
-| `preparationLimits.maxSdkWorkUnits` | 100,000,000 | Smallest tested decade completing both large preparations when memory permits: 1,000,000 completed the records, but 10,000,000 still refused the chain. The completing chain took 108 ms here; lower and remeasure for a smaller CPU budget. |
+| `preparationLimits.maxSdkReservationBytes` | 16 MiB for up to 3,000 supplied records or 16,000 links | Registration includes the supplied source arena: 3,000 records need 9.632 MiB, so 8 MiB refuses. Contained records need 6.312 MiB to prepare. Use 64 MiB for 49,000 links and also raise evaluation storage to 8 MiB. Measure total capacity plus body bytes against the host budget. Reservation bytes are not memory growth. |
+| `preparationLimits.maxSdkWorkUnits` | 100,000,000 | Smallest tested decade completing both large preparations when memory permits: 1,000,000 completed the records, but 10,000,000 still refused the chain. The complete qualified chain recipe took 287.359-303.201 ms, including 116.793-130.887 ms preparing. Lower and remeasure for a smaller CPU budget. |
 | `limits.patternSearchWorkUnits` | 250,000,000 (default) | Bounds one Original pattern search; insufficient work returns `pattern-search-work-limit`. Raise it or use `null` to remove the ceiling; either change selects Original. This is not a deadline. |
-| `limits.evaluationSdkWorkUnits` | 100,000,000 | Smallest tested decade deciding both large values: 1,000,000 returned no-verdict for the records, as did 10,000,000 for the chain. The hostile pattern returned no-verdict in 3.43 ms with `evaluation-work-limit`, versus 1.858 s before the default search ceiling. Default limits now refuse that search with `pattern-search-work-limit`. Use this for hostile work, not memory sizing. Units are not a deadline. |
-| `limits.evaluationSdkReservationBytes` | 4 MiB | Smallest tested allowance completing the 3,000-record value; 1 MiB returned `semantic-analysis-memory-limit`. Qualify it together with preparation and admission. This is SDK accounting, not all allocation. |
+| `limits.evaluationSdkWorkUnits` | 100,000,000 | Smallest tested decade deciding both large values: 1,000,000 returned no-verdict for the records, as did 10,000,000 for the chain. The hostile pattern returned no-verdict in 3.526 ms with `evaluation-work-limit`, versus 1.858 s before the default search ceiling. Default limits now refuse that search with `pattern-search-work-limit`. Use this for hostile work, not memory sizing. Units are not a deadline. |
+| `limits.evaluationSdkReservationBytes` | 4 MiB | Completes the 3,000-record value and 16,000-link chain; 1 MiB refuses the records. The 49,000-link chain needs 8 MiB in the complete recipe; at 4 MiB it returns `semantic-analysis-memory-limit`. This is SDK accounting, not all allocation. |
 | Validation `maxFindings` | 100 | Smallest nonzero retention tested. On 100,000 invalid operations it saved 2.813 MiB versus 4,096 findings; it is secondary to admission limits. Truncation does not change rule conclusions. |
 
 Apply JSON limits to documents, supplied resources **and values**. Ordinary
@@ -55,7 +57,7 @@ exact owner, then dispose it. For example, reuse these option objects:
 const MiB = 1024 * 1024;
 const jsonLimits = { maxBytes: 4 * MiB, maxNodes: 250_000, maxDepth: 10_000 };
 const preparationLimits = {
-  maxSdkReservationBytes: 8 * MiB, // up to 3,000 tested records or 4,000 links
+  maxSdkReservationBytes: 16 * MiB, // up to 3,000 supplied records or 16,000 links
   maxSdkWorkUnits: 100_000_000,
 };
 const prepareOptions = {
@@ -67,10 +69,13 @@ const prepareOptions = {
 };
 // Document.parse(text, { limits: jsonLimits })
 // document.validate({ limits: { maxFindings: 100 } })
-// schema.prepare(prepareOptions)
-// resources.prepare(uri, prepareOptions)
+// parseJson(resourceText, { limits: jsonLimits })
 // new ExternalSchemas(entries, { limits: preparationLimits })
 // resources.with(uri, exactValue, { limits: preparationLimits })
+// schema.prepare({ ...prepareOptions, resources })
+// resources.prepare(uri, prepareOptions)
+// parseJson(valueText, { limits: jsonLimits })
+// prepared.evaluate(exactValue)
 ```
 
 `validateDocument(text, { limits: jsonLimits })` accepts admission limits only;
@@ -110,10 +115,10 @@ that as a general admission rule. Set bytes and nodes together.
 
 ## Preparation memory
 
-These preparation tables were rerun on 2026-11-15 with held-storage accounting
-on owner-rulings `1159bc32`, using Node v22.23.0 on Darwin arm64. The Wasm
-SHA-256 is `d32152c2f64ea22a35d0333041e8680d13fe85c39d03a1b13b1005c7b612ccb1`.
-The unchanged runner completed all 276 fresh-process observations.
+The tables below were rerun with the same release build as the document and
+complete-recipe tables. The default-limit capacities and contained preparation
+thresholds reproduced the previous measurements; the supplied sweep now also
+applies its selected allowance during registration.
 
 Each record has eight properties, two required, with integer, string, number,
 boolean, array and enum checks and no additional properties. "Supplied" here
@@ -183,24 +188,27 @@ not exact byte minima.
 | chain | 49,000 | 44.000 | 44.250 | 2.938 | 15.06 |
 
 The 3,000-record allowance falls from the previous 105 MiB to 6.312 MiB.
-Start at 8 MiB for the tested records or up to 4,000 links, then qualify the
-application's actual capacity against its host budget. This is a starting
+Start at 8 MiB for contained records or up to 4,000 links. Use 16 MiB when
+registering 3,000 supplied records or preparing 16,000 links, then qualify
+the application's actual capacity against its host budget. This is a starting
 policy for those shapes, not a guarantee that an arbitrary schema fits.
 
 Setting `preparationLimits.maxSdkReservationBytes` gave these outcomes and
-linear-memory growth across preparation. Records are 3,000 contained/supplied;
+linear-memory growth across preparation, or across registration if it refuses.
+Registration receives the same allowance. Records are 3,000 contained/supplied;
 the chain has 49,000 links. Each cell starts from a fresh process.
 
 | Allowance MiB | Records, contained / supplied | Chain |
 | ---: | --- | --- |
-| 8 | ready / ready, 0 / 0 MiB | refused, 0 MiB |
+| 8 | prepare ready / register refused, 0 / 0 MiB | prepare refused, 0 MiB |
 | 16 | ready / ready, 0 / 0 MiB | refused, 0 MiB |
 | 32 | ready / ready, 0 / 0 MiB | refused, 2.938 MiB |
 | 64 | ready / ready, 0 / 0 MiB | ready, 2.938 MiB |
 | 512 (default) | ready / ready, 41.500 / 41.750 MiB | ready, 73.625 MiB |
 
-Refusals have `failure.kind: "limit"` and
-`failure.details.resource: "preparation-sdk-reservation-bytes"`. All allowed a
+Preparation refusals have `failure.kind: "limit"` and
+`failure.details.resource: "preparation-sdk-reservation-bytes"`. Registration
+throws `SdkError` with code `resource`. All allowed a
 later small preparation and evaluation in the same instance. No tested growth
 exceeded its allowance, but this is **not a cap on linear-memory growth**:
 reservations omit allocator overhead, prior admission/registration, and some
@@ -209,10 +217,113 @@ allocated. The 512 MiB default exceeds the isolate ceiling.
 
 Current policy selects Original for nondefault preparation allowances. Repeating
 the sweep with `evaluationSdkWorkUnits: 100_000_000` produced the same admission outcomes;
-at the default preparation allowance it selected Original and grew 0 / 0 MiB
+including the supplied registration refusal at 8 MiB. At the default preparation
+allowance it selected Original and grew 0 / 0 MiB
 for records and 2.938 MiB for the chain. This cheaper lane is an observation of
 current policy, not a memory guarantee from the work cap. Use preparation
 reservations for preparation storage and evaluation work units for work.
+
+## Registration memory
+
+Registration keeps the supplied JSON arena and its identity index. It counts each
+shared arena once, follows collection capacity and releases temporary index and
+normalization storage. That retained source is already available to preparation,
+so registration and preparation have different minimum allowances.
+
+These byte-exact Node searches confirm that the successful allowance minus one
+byte refuses; both use 100,000,000 registration work units. Before is `3fcabf67`.
+
+| Supplied records | Before MiB | After MiB |
+| ---: | ---: | ---: |
+| 1,000 | 6.023 | 2.500 |
+| 3,000 | 19.691 | 9.632 |
+
+The native counting allocator measures the source arena once plus peak held
+registration storage, excluding released parsing scratch. Across 39 record,
+chain, shared-owner, identifier and subtree samples, charge/held-heap is
+1.000000-1.102068, within the same 1.0-1.7 qualification used for preparation.
+Native 1,000 and 3,000 records need exactly 3,146,176 and 12,198,288 bytes,
+both 1.000000 times their measured held heap. Before, the ratios were 2.174401
+and 1.864741. Native widths differ from Wasm; these are not Wasm-growth ratios.
+The repeated release registration comparison improved production native time 17-22% and
+Node time 19-21%; native held memory fell by 104 bytes per tested shape and
+Wasm capacity was unchanged. Commands and instruments are in the
+[runner instructions](../tools/workers-memory/README.md#registration-and-the-complete-guide-recipe).
+
+## Complete guide recipe
+
+Every documented shape below uses the code block's JSON limits for the document,
+supplied resource and value, 100 retained validation findings, the selected
+registration limits, and the preparation/evaluation limits together. Each row
+runs twice in fresh processes: constructor / `with()`. All owners remain alive
+until the synchronous recipe finishes. Both modes have the same outcome. Values separated by `/` in either measurement
+column are constructor / `with()`.
+
+The starting options are 16 MiB for registration/preparation and 4 MiB for
+evaluation. Explicit larger-chain rows change only the allowances shown.
+A refusal stops the recipe at that stage. Contained workloads register one
+Boolean resource to exercise both registration APIs. Annotation-only array,
+object and deep JSON documents also select that Boolean schema for preparation
+and evaluation; other contained workloads select their documented schema.
+The original document remains alive. Nested-schema admission can succeed while
+preparation refuses its independent schema-depth limit. The 250,000 array and
+125,000 object shapes exceed 250,000 total nodes once the document wrapper is
+included. Copied-ID and findings rows also show why admission-only results do
+not promise a completed request.
+
+| Workload | Outcome / stopping stage | Linear high-water MiB | Complete recipe ms |
+| --- | --- | ---: | ---: |
+| many, 1 MiB | satisfies | 4.750 | 78.839 / 70.456 |
+| nested, 1 MiB | prepare: schema-depth-limit | 4.750 | 72.695 / 70.615 |
+| many, 2 MiB | satisfies | 7.500 | 102.927 / 99.158 |
+| nested, 2 MiB | prepare: schema-depth-limit | 7.500 | 85.313 / 81.714 |
+| many, 8 MiB | parse document: byte-limit | 5.938 | 31.504 / 29.657 |
+| nested, 8 MiB | parse document: byte-limit | 5.938 | 26.908 / 27.605 |
+| many, 16 MiB | parse document: byte-limit | 5.938 | 30.118 / 31.241 |
+| nested, 16 MiB | parse document: byte-limit | 5.938 | 27.942 / 29.026 |
+| many, 24 MiB | parse document: byte-limit | 5.938 | 33.001 / 32.391 |
+| nested, 24 MiB | parse document: byte-limit | 5.938 | 29.403 / 29.070 |
+| many, 32 MiB | parse document: byte-limit | 5.938 | 34.075 / 36.101 |
+| nested, 32 MiB | parse document: byte-limit | 5.938 | 30.171 / 30.593 |
+| array, 999,000 | parse document: node-limit | 16.125 | 19.911 / 26.118 |
+| object, 499,000 | parse document: byte-limit | 5.938 | 29.895 / 27.208 |
+| 333,320 copied IDs, about 32 MiB | parse document: byte-limit | 5.938 | 37.432 / 32.158 |
+| 40,000 copied IDs, about 4 MiB | prepare: preparation-sdk-reservation-bytes | 30.312 | 223.590 / 215.276 |
+| 80,000 copied IDs, about 4 MiB, with fragments | validate: schema-mismatch | 45.875 | 306.425 / 336.509 |
+| 80,000 copied IDs, about 8 MiB, with fragments | parse document: byte-limit | 5.938 | 29.550 / 28.404 |
+| array, 250,000 | parse document: node-limit | 14.688 | 12.608 / 12.548 |
+| object, 125,000 | parse document: node-limit | 15.438 | 22.324 / 17.829 |
+| deep, 9,990 | satisfies | 3.250 | 50.361 / 55.791 |
+| findings, 100,000 | parse document: node-limit | 16.188 | 21.514 / 21.670 |
+| 10 records, contained | satisfies | 2.750 | 84.413 / 52.867 |
+| 100 records, contained | satisfies | 2.938 | 59.789 / 71.099 |
+| 300 records, contained | satisfies | 3.938 / 4.062 | 70.635 / 71.381 |
+| 1,000 records, contained | satisfies | 7.562 | 110.050 / 103.105 |
+| 3,000 records, contained | satisfies | 17.938 | 176.638 / 204.031 |
+| 3,000 records, contained, distinct | satisfies | 18.062 | 194.913 / 210.845 |
+| 10 records, supplied | satisfies | 2.688 | 53.261 / 58.291 |
+| 100 records, supplied | satisfies | 2.688 | 61.669 / 64.214 |
+| 300 records, supplied | satisfies | 4.000 / 3.875 | 73.962 / 79.957 |
+| 1,000 records, supplied | satisfies | 7.000 | 110.132 / 112.704 |
+| 3,000 records, supplied | satisfies | 17.625 | 220.149 / 210.401 |
+| 3,000 records, supplied, distinct | satisfies | 17.750 | 245.184 / 228.045 |
+| 1,000 links | satisfies | 2.875 | 59.397 / 62.397 |
+| 4,000 links | satisfies | 3.750 | 77.846 / 85.646 |
+| 16,000 links | satisfies | 8.312 | 137.411 / 149.242 |
+| 32,000 links | prepare: preparation-sdk-reservation-bytes | 12.375 | 157.573 / 149.419 |
+| 49,000 links | prepare: preparation-sdk-reservation-bytes | 18.188 | 190.571 / 189.511 |
+| hostile pattern | evaluate: evaluation-work-limit | 10.250 | 59.259 / 56.930 |
+| 49,000 links, 64 MiB preparation, 4 MiB evaluation | evaluate: semantic-analysis-memory-limit | 21.125 | 284.772 / 287.593 |
+| 32,000 links, 64 MiB preparation, 8 MiB evaluation | satisfies | 14.375 | 216.934 / 218.320 |
+| 49,000 links, 64 MiB preparation, 8 MiB evaluation | satisfies | 22.000 / 22.938 | 287.359 / 303.201 |
+
+The 3,000-record supplied recipe reaches 17.625 MiB linear capacity, or
+17.750 MiB with distinct names, with both registration APIs. The qualified
+49,000-link recipe reaches 22.000-22.938 MiB and completes in 287.359-303.201 ms.
+Its document is 1,790,902 UTF-8 bytes; retain room for the host body, supplied
+resource/value texts, JavaScript objects and concurrent requests as well.
+These complete-recipe observations support the starting settings only for the
+listed completing shapes; they are not a blanket schema admission guarantee.
 
 ## Handler habits
 

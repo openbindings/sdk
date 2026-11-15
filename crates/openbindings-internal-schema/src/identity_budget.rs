@@ -30,7 +30,9 @@ pub fn measure(
             .ok_or_else(exceeded)?;
         Ok(())
     };
+    let scratch = crate::preparation::Scratch::new(control);
     let mut bases = HashMap::new();
+    reserve_base(&mut bases, &scratch)?;
     bases.insert(0, retrieval.map(str::len));
     if let Some(retrieval) = retrieval {
         charge(retrieval.len())?;
@@ -59,6 +61,7 @@ pub fn measure(
             if let Some(length) = length {
                 charge(length)?;
             }
+            reserve_base(&mut bases, &scratch)?;
             bases.insert(node.resource, length);
         }
         if profile
@@ -89,4 +92,25 @@ pub fn measure(
         }
     }
     Ok(used)
+}
+
+// Pinned HashMap backing includes the separately allocated replacement while
+// reserve moves entries. Length bounds die with this one analysis walk.
+fn reserve_base(
+    bases: &mut HashMap<u32, Option<usize>>,
+    control: &dyn Control,
+) -> Result<(), Failure> {
+    use openbindings_internal_json::backend::hash_bytes;
+    if bases.len() == bases.capacity() {
+        let previous = hash_bytes(bases);
+        let buckets = if bases.capacity() == 0 {
+            4
+        } else {
+            (bases.capacity() * 8 / 7).next_power_of_two() * 2
+        };
+        control.charge_allocation(buckets * (size_of::<(u32, Option<usize>)>() + 1) + 16)?;
+        bases.reserve(1);
+        control.release_allocation(previous);
+    }
+    Ok(())
 }
