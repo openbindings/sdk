@@ -2,7 +2,12 @@
 import init from "./wasm/openbindings_wasm.js";
 import * as wasm from "./wasm/openbindings_wasm.js";
 import signature from "./wasm/openbindings_wasm_signature.js";
-import { SdkError } from "./diagnostics.js";
+import {
+  SdkError,
+  requireUsable,
+  wasmCall,
+  wasmFailure,
+} from "./diagnostics.js";
 
 /** Host input for WebAssembly initialization. A compiled module or bytes avoids fetching; URL/string/Request inputs and the default initializer may use host loading. Schema interpretation and evaluation perform no resource I/O. */
 export type WasmInput =
@@ -17,10 +22,15 @@ let initialization: Promise<void> | undefined;
 
 let ready = false;
 
-/** Initialize this module instance once before using SDK APIs. Concurrent calls share one promise; a failed attempt can be retried, including one given a WebAssembly module that is not this package's, which is refused before it is instantiated. Requires host crypto.getRandomValues (request-scoped hosts should call inside a request). Throws SdkError for initialization/entropy failures. Without input, Node reads the installed Wasm asset from disk; browsers fetch the module-relative asset. Supplying bytes/module bypasses default loading in every host. */
+/** Initialize this module instance once before using SDK APIs. Concurrent calls share one promise; loading/configuration failures can be retried, including one given a WebAssembly module that is not this package's, which is refused before it is instantiated. A Wasm runtime trap permanently rejects with SdkError code wasm-trap; initialize cannot replace that instance. Requires host crypto.getRandomValues (request-scoped hosts should call inside a request). Throws SdkError for initialization/entropy failures. Without input, Node reads the installed Wasm asset from disk; browsers fetch the module-relative asset. Supplying bytes/module bypasses default loading in every host. */
 export function initialize(
   input?: WasmInput | Promise<WasmInput>,
 ): Promise<void> {
+  try {
+    requireUsable();
+  } catch (error) {
+    return Promise.reject(error);
+  }
   return (initialization ??= (async () => {
     let module = await input;
     // Check before entering Rust: the engine's randomized hash tables require
@@ -49,10 +59,11 @@ export function initialize(
       );
     }
     await init({ module_or_path: await packageModule(module) });
-    wasm.initializeRuntime();
+    wasmCall(() => wasm.initializeRuntime());
     ready = true;
   })().catch((error) => {
     initialization = undefined;
+    error = wasmFailure(error);
     if (error instanceof SdkError) throw error;
     const failure = new SdkError(
       "wasm-initialization",
@@ -120,6 +131,7 @@ async function packageModule(
 
 /** @internal */
 export function requireReady(): void {
+  requireUsable();
   if (!ready)
     throw new SdkError(
       "not-initialized",

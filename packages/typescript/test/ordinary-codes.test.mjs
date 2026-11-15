@@ -113,13 +113,13 @@ function limitsAgreeOnCause(value, text, exactCode, message) {
       () => sdk.ExactJson.from(value),
       (error) => {
         assert.equal(Object.getPrototypeOf(error), RangeError.prototype);
-        assert.equal(error.code, "input-limit");
+        assert.equal(error.code, exactCode);
         assert.equal(error.message, message);
         return true;
       },
     );
-    assert.equal(schema.evaluate(value).error.code, "input-limit");
-    assert.equal(schema.explain(value).error.code, "input-limit");
+    assert.equal(schema.evaluate(value).error.code, exactCode);
+    assert.equal(schema.explain(value).error.code, exactCode);
     assert.equal(sdk.parseJson(text).error.code, exactCode);
     assert.equal(schema.evaluateJson(text).error.code, exactCode);
   } finally {
@@ -127,7 +127,7 @@ function limitsAgreeOnCause(value, text, exactCode, message) {
   }
 }
 
-test("ordinary and exact depth refusals retain their different codes", () => {
+test("ordinary and exact depth refusals use depth-limit", () => {
   let value = null;
   for (let i = 0; i < 10_001; i++) value = [value];
   limitsAgreeOnCause(
@@ -138,7 +138,7 @@ test("ordinary and exact depth refusals retain their different codes", () => {
   );
 });
 
-test("ordinary and exact node refusals retain their different codes", () => {
+test("ordinary and exact node refusals use node-limit", () => {
   limitsAgreeOnCause(
     Array(1_000_000).fill(null),
     "[" + "null,".repeat(999_999) + "null]",
@@ -147,7 +147,7 @@ test("ordinary and exact node refusals retain their different codes", () => {
   );
 });
 
-test("ordinary character and Rust UTF-8 byte refusals carry input-limit", () => {
+test("ordinary character and Rust UTF-8 byte refusals carry byte-limit", () => {
   const ascii = "x".repeat(33_554_432);
   limitsAgreeOnCause(
     ascii,
@@ -168,9 +168,11 @@ test("nested exact owners use the same limit code and caller exceptions are unto
   const text = "[".repeat(10_000) + "null" + "]".repeat(10_000);
   const exact = sdk.parseJson(text).value;
   try {
-    assert.throws(
-      () => sdk.ExactJson.from([exact]),
-      (error) => error instanceof RangeError && error.code === "input-limit",
+    limitsAgreeOnCause(
+      [exact],
+      "[" + text + "]",
+      "depth-limit",
+      "The ordinary value exceeds the admitted JSON limits; parse it with parseJson and larger limits.",
     );
   } finally {
     exact.dispose();
@@ -188,6 +190,25 @@ test("nested exact owners use the same limit code and caller exceptions are unto
     () => sdk.ExactJson.from(proxy),
     (error) => error === sentinel && !Object.hasOwn(error, "code"),
   );
+});
+
+test("nested exact owners preserve aggregate node and byte limit codes", () => {
+  for (const [text, code] of [
+    ["[" + "null,".repeat(499_999) + "null]", "node-limit"],
+    [JSON.stringify("☃".repeat(6_000_000)), "byte-limit"],
+  ]) {
+    const exact = sdk.parseJson(text).value;
+    try {
+      limitsAgreeOnCause(
+        [exact, exact],
+        "[" + text + "," + text + "]",
+        code,
+        "The ordinary value exceeds the admitted JSON limits; parse it with parseJson and larger limits.",
+      );
+    } finally {
+      exact.dispose();
+    }
+  }
 });
 
 test("metadata exposes exactly the six JSON kinds", () => {

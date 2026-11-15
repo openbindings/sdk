@@ -84,6 +84,26 @@ if (before.sha256 !== after.sha256)
   throw new Error(
     "Rust source changed during the Wasm build; rebuild the stable source.",
   );
+// Bindgen also registers raw owners internally, separately from the facade's
+// registry. Guard those callbacks too: none may reenter a trapped instance or
+// throw from GC. Refuse a generator change that leaves a callback uncovered.
+const bindingsPath = path.join(output, "openbindings_wasm.js");
+const bindings = await readFile(bindingsPath, "utf8");
+const callbacks = /new FinalizationRegistry\(ptr => (wasm\.\w+\(ptr, 1\))\)/g;
+const guarded = bindings.replace(
+  callbacks,
+  (_, call) => `new FinalizationRegistry(ptr => finalizeWasm(() => ${call}))`,
+);
+if (
+  !bindings.match(callbacks)?.length ||
+  bindings.match(callbacks).length !==
+    bindings.match(/new FinalizationRegistry\(/g)?.length
+)
+  throw new Error("Unrecognized Wasm finalizer bindings.");
+await writeFile(
+  bindingsPath,
+  'import { finalizeWasm } from "../diagnostics.js";\n' + guarded,
+);
 // The generated bindings keep the first instance they finalize, even when its
 // start then fails, so a module that instantiates but is not this one would
 // leave them unusable. Record this module's imports and exports, which the

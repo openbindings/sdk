@@ -120,7 +120,7 @@ test("explained problems locate the value's node and the document's keyword", ()
       byteOffset: offset,
       ...position(text, offset),
     });
-    assert.equal(value.locate("/items/2"), null);
+    assert.equal(value.locate("/items/2"), undefined);
     const keyword = "/operations/op/input/properties/items/items/type";
     assert.deepEqual(problem.schema, { retrievalUri: null, pointer: keyword });
     const at = source.indexOf('"integer"');
@@ -131,10 +131,10 @@ test("explained problems locate the value's node and the document's keyword", ()
     });
     assert.equal(
       proof.locate({ retrievalUri: null, pointer: "/operations/op/absent" }),
-      null,
+      undefined,
     );
     const empty = own(new sdk.ExternalSchemas());
-    assert.equal(empty.locate(problem.schema), null);
+    assert.equal(empty.locate(problem.schema), undefined);
     assert.throws(
       () => proof.locate({ pointer: keyword }),
       (error) =>
@@ -203,7 +203,7 @@ test("supplied resources locate their keywords, including through unpaired names
       byteOffset: at,
       ...position(resourceText, at),
     });
-    assert.equal(proof.locate(problem.schema), null);
+    assert.equal(proof.locate(problem.schema), undefined);
     // A JavaScript string holds the unpaired unit; the pointer crosses exactly.
     const lone = "/$defs/\ud800/type";
     const offset = resourceText.indexOf('"string"');
@@ -214,7 +214,7 @@ test("supplied resources locate their keywords, including through unpaired names
     });
     assert.equal(
       resources.locate({ retrievalUri: uri, pointer: "/$defs/\udc00/type" }),
-      null,
+      undefined,
     );
   }));
 
@@ -233,7 +233,7 @@ test("at selects the node locate reports, including through unpaired names", () 
     // A pointer naming no node selects nothing either way.
     for (const pointer of ["/\udc00", "/\ud800/\udc00x/2", "/\ud800/\udc00"]) {
       assert.equal(value.at(pointer), undefined);
-      assert.equal(value.locate(pointer), null);
+      assert.equal(value.locate(pointer), undefined);
     }
     // A malformed pointer selects nothing, as it does without unpaired units.
     assert.equal(value.at("/\ud800/~2"), undefined);

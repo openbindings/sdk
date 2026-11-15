@@ -19,6 +19,14 @@
   (`None` / `null`). The two hostile patterns from the review, which ran 6 to 21 seconds and could not be cancelled,
   are now refused in under 2 ms.
 
+
+- TypeScript turns a Wasm runtime trap (memory exhausted, for one) into an `SdkError` with code `wasm-trap`, and marks
+  the instance unusable: every later SDK call fails at once with the same code, where it used to half work.
+  Disposal after a trap is safe and finalizers never throw.
+- TypeScript `locate` returns `undefined`, not `null`, for an unavailable location, as every other optional read does.
+- TypeScript ordinary values refused at an admission limit report `byte-limit`, `node-limit` or `depth-limit`, the
+  codes exact text reports for the same causes, where they reported `input-limit`.
+
 ### Fixed
 
 - The evaluator's work counter was pointer-width, so on wasm32 a pattern charge above 2^32 was reported as a work

@@ -207,19 +207,24 @@ reservations for preparation storage and evaluation work units for work.
 
 ## Memory exhaustion
 
-An allocation failure currently throws a bare `WebAssembly.RuntimeError`
-(`RuntimeError: unreachable`), not an `SdkError`, with no SDK code. Under a
-64 MiB Wasm cap, the 49,000-link preparation trapped and a subsequent integer
-preparation trapped too, although small-document validation still worked.
-This was reproduced in Node on this tree and measured in local workerd on
-2026-11-14, where the maintainer reran it.
+A Wasm runtime trap, including allocation failure, throws `SdkError` with code
+`wasm-trap` and the fixed message `The OpenBindings WebAssembly instance trapped
+and can no longer be used.` The SDK marks this module instance unusable: every
+later SDK operation, including validation and preparation, fails immediately with
+that code. `initialize()` rejects with the same code and cannot replace it.
+Disposing existing owners remains safe and idempotent; cleanup skips Wasm after
+a trap, and finalizers never throw. The original runtime error is not attached.
 
-Treat an SDK Wasm trap as fatal for the isolate: mark the instance unusable,
-return an error such as 503 and reject subsequent SDK requests there. Resume
-only in a fresh isolate; `initialize()` caches its first successful instance
-and cannot replace it. Whether the platform recycles an isolate after a trap
-is unmeasured. Turning memory exhaustion into a distinct SDK error remains
-an open decision, not current behavior.
+The failure witness is a 49,000-link preparation under a 64 MiB Wasm cap.
+Before this boundary guard, its bare `RuntimeError: unreachable` left preparation
+broken while small-document validation still worked. That behavior was reproduced
+in Node and local workerd on 2026-11-14. The package's child-Node regression now
+caps memory with `--wasm-max-mem-pages=1024` and checks the stable error, immediate
+follow-up refusals and safe disposal.
+
+Treat `wasm-trap` as fatal for the isolate: return an error such as 503 and resume
+only in a fresh isolate. Whether the deployed platform recycles an isolate after
+a trap is unmeasured.
 
 For local failure probes, workerd's
 `v8Flags = ["--wasm-max-mem-pages=2048"]` caps linear memory at 128 MiB

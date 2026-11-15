@@ -75,7 +75,7 @@ export function decode<T>(text: string): T {
   return camel(JSON.parse(text), new Map()) as T;
 }
 
-/** Thrown SDK misuse or configuration failure. Expected parse, conformance and schema outcomes use result unions. Messages explain; codes identify. */
+/** Thrown SDK misuse, configuration failure or fatal wasm-trap. A trap makes this module instance unusable; later calls throw the same code, including initialize(). Disposal remains safe. Expected parse, conformance and schema outcomes use result unions. Messages explain; codes identify. */
 export class SdkError extends Error {
   /** Construct a structured thrown error with a broad code, explanatory message and optional original-source location. */
   constructor(
@@ -91,10 +91,56 @@ export class SdkError extends Error {
   }
 }
 
+let trapped: SdkError | undefined;
+
+/** @internal */
+export function requireUsable(): void {
+  if (trapped) throw trapped;
+}
+
+/** @internal */
+export function wasmFailure(error: unknown): unknown {
+  if (error instanceof WebAssembly.RuntimeError)
+    return (trapped ??= new SdkError(
+      "wasm-trap",
+      "The OpenBindings WebAssembly instance trapped and can no longer be used.",
+    ));
+  return error;
+}
+
+/** @internal */
+export function wasmCall<T>(call: () => T): T {
+  requireUsable();
+  try {
+    return call();
+  } catch (error) {
+    throw wasmFailure(error);
+  }
+}
+
+/** Cleanup skips a trapped instance; a first trap during release is still reported. @internal */
+export function freeRaw(raw: { free(): void } | undefined): void {
+  if (!raw || trapped) return;
+  try {
+    raw.free();
+  } catch (error) {
+    throw wasmFailure(error);
+  }
+}
+
+/** Finalizers must neither reenter a trapped instance nor throw. @internal */
+export function finalizeWasm(call: () => void): void {
+  try {
+    wasmCall(call);
+  } catch {
+    // A finalizer has no caller to receive a failure.
+  }
+}
+
 /** @internal */
 export function sdkCall<T>(call: () => T): T {
   try {
-    return call();
+    return wasmCall(call);
   } catch (error) {
     if (typeof error === "string") {
       try {
@@ -119,6 +165,7 @@ export function sdkCall<T>(call: () => T): T {
 
 /** @internal */
 export function failure(error: unknown): InputFailure {
+  error = wasmFailure(error);
   let info: InputFailure["error"];
   try {
     info = decode(String(error));
@@ -142,7 +189,9 @@ export type JsonEncodingErrorCode =
   | "non-enumerable-property"
   | "symbol-key"
   | "invalid-json-object"
-  | "encoding-limit";
+  | "byte-limit"
+  | "node-limit"
+  | "depth-limit";
 
 /** An atomic edit was refused. code is stable; inputPointer locates invalid caller JSON input when available. The document remains unchanged. */
 export class EditError extends SdkError {

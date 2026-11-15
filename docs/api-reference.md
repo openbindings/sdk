@@ -216,6 +216,14 @@ owner. `value()` and `document()` do acquire owners. Exact traversal cursors and
 yielded member/value also have independent lifetimes. Finalizers are best effort;
 disposal is not a promise that process RSS or Wasm capacity shrinks.
 
+TypeScript catches `WebAssembly.RuntimeError` at its Wasm boundary, including
+allocation traps, and throws `SdkError` with code `wasm-trap` and fixed text:
+`The OpenBindings WebAssembly instance trapped and can no longer be used.` The
+module instance becomes unusable. All later SDK operations fail immediately with
+that code; `initialize()` rejects and cannot replace it. Disposal remains safe
+and idempotent, skips Wasm after a trap, and finalizers never throw. The original
+runtime error is not attached as a cause. Resume work in a fresh module instance.
+
 ## Schemas and value results
 
 A `Schema` owns its original location and conformant context. Rust
@@ -338,8 +346,12 @@ accessors, sparse arrays and unsupported object forms without running getters or
 `toJSON`; use exact parsing for original number tokens and raised admission limits.
 `ExactJson.from` keeps standard `TypeError` and `RangeError` classes and fixed
 messages, with stable `.code` properties. Shape failures use the existing
-ordinary admission vocabulary. All ordinary admission limits use `input-limit`;
-exact-text admission retains `byte-limit`, `node-limit` and `depth-limit`.
+ordinary admission vocabulary. Ordinary and exact-text admission use the same
+`byte-limit`, `node-limit` and `depth-limit` codes, including aggregate limits
+reached with nested exact owners. `input-limit` remains only for a bridge
+admission limit without an identified cause. TypeScript ordinary conversion
+permits 10,000 nested containers and refuses 10,001; Rust's ordinary Serde
+conversion permits 128 and refuses 129. Those conversion depths are unchanged.
 Caller exceptions remain unchanged. The definitions describe each separate
 encoding and evaluation budget.
 
@@ -375,7 +387,9 @@ Value problems have an instance pointer relative to the evaluated value and a
 `SchemaOrigin` with `retrieval_uri` (TypeScript `retrievalUri`) plus an original schema
 pointer. Null retrieval URI means the document. `JsonValue::locate`,
 `ConformantDocument::locate` and `ExternalSchemas::locate` compute source positions
-when requested; TypeScript offers corresponding `locate()` methods. No synthetic
+when requested; TypeScript offers corresponding `locate()` methods with return
+type `SourceLocation | undefined`. An unavailable source or node returns
+`undefined`. No synthetic
 schema coordinate is substituted for an unavailable origin.
 
 Cheap failures contain no problems. An explanation may be incomplete because of

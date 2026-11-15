@@ -6,6 +6,8 @@ import {
   decode,
   failure,
   sdkCall,
+  requireUsable,
+  wasmCall,
 } from "./diagnostics.js";
 import type { ParseResult, SourceLocation } from "./diagnostics.js";
 import {
@@ -14,6 +16,7 @@ import {
   adoptMany,
   canonicalRaw,
   finalizer,
+  freeRaw,
   handle,
   handles,
   registerHandle,
@@ -121,7 +124,9 @@ function validationOptions(
 /** Return a fresh frozen copy of default validation-report retention allowances. Requires initialization. */
 export function validationLimits(): Readonly<ValidationLimits> {
   requireReady();
-  const [maxFindings, maxPointerBytes] = wasm.validationLimits();
+  const [maxFindings, maxPointerBytes] = wasmCall(() =>
+    wasm.validationLimits(),
+  );
   return Object.freeze({
     maxFindings: maxFindings!,
     maxPointerBytes: maxPointerBytes!,
@@ -272,7 +277,7 @@ export function versionPolicy(): {
   appliedSpecRevision: string;
 } {
   requireReady();
-  return decode(wasm.versionPolicy());
+  return decode(wasmCall(() => wasm.versionPolicy()));
 }
 
 /** Classify strict SemVer: stable 0.2.x is supported, prereleases/other well-formed lines unsupported, invalid syntax malformed. Build metadata does not affect support and numeric components have no machine-integer ceiling. */
@@ -281,7 +286,9 @@ export function checkVersion(
 ): "supported" | "malformed" | "unsupported" {
   requireReady();
   scalar(version);
-  return wasm.checkVersion(version) as ReturnType<typeof checkVersion>;
+  return wasmCall(() => wasm.checkVersion(version)) as ReturnType<
+    typeof checkVersion
+  >;
 }
 
 /** Exact snapshot operations shared by draft and conformant owners. */
@@ -292,15 +299,17 @@ abstract class DocumentSnapshot extends Managed {
   }
   /** Copy the original UTF-8 bytes, including formatting. */
   toBytes(): Uint8Array {
-    return documentRaw(this).toBytes();
+    return wasmCall(() => documentRaw(this).toBytes());
   }
   /** Retain an independent exact JSON owner. Dispose it separately. */
   value(): ExactJson {
-    return new ExactJson(documentRaw(this).value());
+    return new ExactJson(wasmCall(() => documentRaw(this).value()));
   }
   /** The admission limits retained by this snapshot and applied to its edits. */
   get limits(): Readonly<JsonLimits> {
-    const [maxBytes, maxNodes, maxDepth] = documentRaw(this).limits();
+    const [maxBytes, maxNodes, maxDepth] = wasmCall(() =>
+      documentRaw(this).limits(),
+    );
     return Object.freeze({
       maxBytes: maxBytes!,
       maxNodes: maxNodes!,
@@ -309,6 +318,7 @@ abstract class DocumentSnapshot extends Managed {
   }
   /** Inspect original schema references without fetching resources or claiming conformance. Missing or malformed openbindings declarations use 0.2's rules without adding a limitation; well-formed unsupported versions and duplicate member names are refused. */
   references(options: ReferenceOptions = {}): ReferenceReport {
+    requireUsable();
     const { resources, aborted, maxReportBytes } = referenceOptions(options),
       empty = resources ? undefined : new ExternalSchemas();
     try {
@@ -348,7 +358,7 @@ const documentToken = Symbol("document owner");
 export class Document extends DocumentSnapshot {
   /** Estimate heap bytes held by this snapshot's shared storage now: source text, parsed nodes and buffers, and built indexes, conformance reports and the schema resolution cached for preparation without supplied resources (a resolution built with supplied resources is held by that resource set and not counted). Clones and proofs share storage, so charge a snapshot once; a proof reaches it through asDocument(). Reads existing capacities without parsing, validating or building caches. Later namespace lookups can add entries and aliases, schema queries can add their inventory and identities, and location lookups can add two machine words per 4096 source bytes with geometrically reserved capacity capped at floor(sourceBytes / 4096) checkpoints (8 bytes each on Wasm). Call again to include growth. Tree/hash storage is estimated. Excludes separately owned external resources, validators, process-wide packaged schemas, allocator overhead and Wasm memory growth. */
   retainedBytes(): number {
-    return handle<wasm.WasmDocument>(this).retainedBytes();
+    return wasmCall(() => handle<wasm.WasmDocument>(this).retainedBytes());
   }
   private constructor(raw: wasm.WasmDocument, token: symbol) {
     if (token !== documentToken)
@@ -385,14 +395,17 @@ export class Document extends DocumentSnapshot {
   /** Create an empty OBI declaring the supported authoring version. Validate separately to obtain proof. */
   static create(): Document {
     requireReady();
-    return adoptDocument(wasm.WasmDocument.create());
+    return adoptDocument(wasmCall(() => wasm.WasmDocument.create()));
   }
   /** Retain a separate owner sharing this immutable revision. */
   retain(): Document {
-    return adoptDocument(handle<wasm.WasmDocument>(this).retain());
+    return adoptDocument(
+      wasmCall(() => handle<wasm.WasmDocument>(this).retain()),
+    );
   }
   /** Assess all rules; the conformant branch owns a new ConformantDocument. The original owner keeps its revision. Other branches retain evidence or a version refusal. Omitted limits use the cached default assessment; selected retention never changes rule evidence or the conclusion. Custom reports do not replace the default cache. */
   validate(options?: ValidationOptions): DocumentValidation {
+    requireUsable();
     return assessDocument(
       this,
       options === undefined ? undefined : validationOptions(options),
@@ -405,7 +418,11 @@ export class Document extends DocumentSnapshot {
       sdkCall(() => call(editableRaw(next)));
     } catch (error) {
       next.dispose();
-      if (error instanceof SdkError && error.code !== "disposed-handle")
+      if (
+        error instanceof SdkError &&
+        error.code !== "disposed-handle" &&
+        error.code !== "wasm-trap"
+      )
         throw new EditError(error.code, error.message);
       throw error;
     }
@@ -424,7 +441,7 @@ export class Document extends DocumentSnapshot {
     // What the edit writes is bounded by the limits this document keeps.
     exact.chunks.push(
       encodeOrdinary(value, { editBatch: true }, exact, {
-        limits: handle<wasm.WasmDocument>(this).limits(),
+        limits: wasmCall(() => handle<wasm.WasmDocument>(this).limits()),
         document: true,
       }),
     );
@@ -434,11 +451,13 @@ export class Document extends DocumentSnapshot {
       Math.min(exact.envelopeNodes, 0xffffffff),
     ]);
     return this.#commit((raw) => {
-      const result = raw.editEncoded(
-        exact.chunks,
-        new Uint32Array(exact.indices),
-        values,
-        envelope,
+      const result = wasmCall(() =>
+        raw.editEncoded(
+          exact.chunks,
+          new Uint32Array(exact.indices),
+          values,
+          envelope,
+        ),
       );
       // The native call returns every temporarily transferred owner on failure too.
       // Reattach them before reporting the error; aliases and finalizers stay valid.
@@ -458,15 +477,20 @@ export class Document extends DocumentSnapshot {
   }
   /** Replace or insert a value at an RFC 6901 pointer. A segment may hold an unpaired UTF-16 unit, so a finding's pointer addresses the member it reports. Exact owners are borrowed; ordinary values are checked without invoking getters/toJSON. */
   set(pointer: string, value: JsonInput): Document {
+    requireUsable();
     // Only a pointer holding an unpaired unit needs the batch route, whose JSON
     // escapes keep it exact across the bridge.
     if (isExact(value) && wellFormed(pointer))
-      return this.#commit((raw) => raw.set(pointer, jsonRaw(value)));
+      return this.#commit((raw) =>
+        wasmCall(() => raw.set(pointer, jsonRaw(value))),
+      );
     else return this.edit([{ op: "set", pointer, value }]);
   }
   /** Remove an existing member/array element at an RFC 6901 pointer, which may hold an unpaired UTF-16 unit as a finding's can. Throws EditError on refusal; removing the root is not supported. */
   remove(pointer: string): Document {
-    if (wellFormed(pointer)) return this.#commit((raw) => raw.remove(pointer));
+    requireUsable();
+    if (wellFormed(pointer))
+      return this.#commit((raw) => wasmCall(() => raw.remove(pointer)));
     else return this.edit([{ op: "remove", pointer }]);
   }
 }
@@ -508,17 +532,21 @@ export class ConformantDocument extends DocumentSnapshot {
     ): DocumentValidation => {
       const raw = documentRaw(document);
       const transfer = limits
-        ? (raw as wasm.WasmDocument).validateWithLimits(
-            limits.maxFindings,
-            limits.maxPointerBytes,
+        ? wasmCall(() =>
+            (raw as wasm.WasmDocument).validateWithLimits(
+              limits.maxFindings,
+              limits.maxPointerBytes,
+            ),
           )
-        : raw.validate();
+        : wasmCall(() => raw.validate());
       try {
-        const result = decode<DocumentReport>(transfer.report());
-        const proof = transfer.takeConformant();
+        const result = decode<DocumentReport>(
+          wasmCall(() => transfer.report()),
+        );
+        const proof = wasmCall(() => transfer.takeConformant());
         if (!proof) return result;
         if (result.status !== "report") {
-          proof.free();
+          freeRaw(proof);
           throw new Error("Validation transfer invariant.");
         }
         return {
@@ -527,7 +555,7 @@ export class ConformantDocument extends DocumentSnapshot {
           report: result.report,
         };
       } finally {
-        transfer.free();
+        freeRaw(transfer);
       }
     };
   }
@@ -540,7 +568,7 @@ export class ConformantDocument extends DocumentSnapshot {
   }
   /** Acquire an independent editable document owner; its changes do not affect this proof. */
   asDocument(): Document {
-    return adoptDocument(conformantRaw(this).asDocument());
+    return adoptDocument(wasmCall(() => conformantRaw(this).asDocument()));
   }
   /** Consume this proof and return an independent editable owner. Every alias of this proof becomes disposed; independently retained owners survive. */
   intoDocument(): Document {
@@ -647,12 +675,16 @@ export class ConformantDocument extends DocumentSnapshot {
       throw error;
     }
   }
-  /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. null for a location in a supplied resource, or a pointer that names no node in this revision. Line and column are computed on this call from the original text. A malformed location throws SdkError with code invalid-schema-location. */
-  locate(at: SchemaOrigin): SourceLocation | null {
+  /** Locate a schema location in this document: the node its pointer names, with line and column in the document's text. undefined for a location in a supplied resource, or a pointer that names no node in this revision. Line and column are computed on this call from the original text. A malformed location throws SdkError with code invalid-schema-location. */
+  locate(at: SchemaOrigin): SourceLocation | undefined {
     conformantRaw(this);
     // Reading the location can run caller code, so the handle is taken after it.
     const location = schemaLocationText(at);
-    return decode(sdkCall(() => conformantRaw(this).locate(location)));
+    return (
+      decode<SourceLocation | null>(
+        sdkCall(() => conformantRaw(this).locate(location)),
+      ) ?? undefined
+    );
   }
 }
 
@@ -668,25 +700,27 @@ export class Operation extends Managed {
   /** Retain an independent owner of this same immutable declaration. */
   retain(): Operation {
     return adopt(
-      canonicalRaw(this, wasm.WasmOperation).retain(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmOperation).retain()),
       Operation.fromRaw,
     );
   }
   /** Retain the same document proof as a separately disposable owner. */
   document(): ConformantDocument {
     return adopt(
-      canonicalRaw(this, wasm.WasmOperation).document(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmOperation).document()),
       adoptConformant,
     );
   }
   /** Retain the original declaration, including extension fields and exact tokens. */
   value(): ExactJson {
-    return new ExactJson(canonicalRaw(this, wasm.WasmOperation).value());
+    return new ExactJson(
+      wasmCall(() => canonicalRaw(this, wasm.WasmOperation).value()),
+    );
   }
   get #fields(): OperationMetadata {
     const raw = canonicalRaw(this, wasm.WasmOperation);
     return (this.#metadata ??= freezeMetadata(
-      decode<OperationMetadata>(raw.metadata()),
+      decode<OperationMetadata>(wasmCall(() => raw.metadata())),
     ));
   }
   /** Exact primary key in this declaration’s namespace. */
@@ -711,27 +745,30 @@ export class Operation extends Managed {
   }
   /** Retain the input schema in its original context; undefined when absent. Does not prepare or evaluate it. */
   input(): Schema | undefined {
-    const raw = operationRaw(this).input();
+    const raw = wasmCall(() => operationRaw(this).input());
     return raw ? adopt(raw, Schema.fromRaw) : undefined;
   }
   /** Retain the output schema in its original context; undefined when absent. Does not prepare or evaluate it. */
   output(): Schema | undefined {
-    const raw = operationRaw(this).output();
+    const raw = wasmCall(() => operationRaw(this).output());
     return raw ? adopt(raw, Schema.fromRaw) : undefined;
   }
   /** Retain bindings in lexical order, without ranking or selection. */
   bindings(): readonly Binding[] {
-    return adoptMany(operationRaw(this).bindings(), Binding.fromRaw);
+    return adoptMany(
+      wasmCall(() => operationRaw(this).bindings()),
+      Binding.fromRaw,
+    );
   }
   /** Retain examples in lexical key order; undefined means absent and an empty array means present-empty. Dispose each owner. */
   examples(): readonly Example[] | undefined {
-    const rows = operationRaw(this).examples();
+    const rows = wasmCall(() => operationRaw(this).examples());
     return rows ? adoptMany(rows, Example.fromRaw) : undefined;
   }
   /** Retain an example by its operation-local key; undefined when absent. */
   example(key: string): Example | undefined {
     scalar(key);
-    const raw = operationRaw(this).example(key);
+    const raw = wasmCall(() => operationRaw(this).example(key));
     return raw ? adopt(raw, Example.fromRaw) : undefined;
   }
 }
@@ -748,25 +785,27 @@ export class Binding extends Managed {
   /** Retain an independent owner of this same immutable declaration. */
   retain(): Binding {
     return adopt(
-      canonicalRaw(this, wasm.WasmBinding).retain(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).retain()),
       Binding.fromRaw,
     );
   }
   /** Retain the same document proof as a separately disposable owner. */
   document(): ConformantDocument {
     return adopt(
-      canonicalRaw(this, wasm.WasmBinding).document(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).document()),
       adoptConformant,
     );
   }
   /** Retain the original declaration, including extension fields and exact tokens. */
   value(): ExactJson {
-    return new ExactJson(canonicalRaw(this, wasm.WasmBinding).value());
+    return new ExactJson(
+      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).value()),
+    );
   }
   get #fields(): BindingMetadata {
     const raw = canonicalRaw(this, wasm.WasmBinding);
     return (this.#metadata ??= freezeMetadata(
-      decode<BindingMetadata>(raw.metadata()),
+      decode<BindingMetadata>(wasmCall(() => raw.metadata())),
     ));
   }
   /** Exact primary key in this declaration’s namespace. */
@@ -779,7 +818,7 @@ export class Binding extends Managed {
   }
   /** Retain exact opaque data. Undefined means absent; explicit null remains a value. */
   data(): ExactJson | undefined {
-    const raw = canonicalRaw(this, wasm.WasmBinding).data();
+    const raw = wasmCall(() => canonicalRaw(this, wasm.WasmBinding).data());
     return raw ? new ExactJson(raw) : undefined;
   }
   /** Declared primary operation key; never an alias. */
@@ -805,13 +844,16 @@ export class Binding extends Managed {
   /** Retain the referenced operation from this same conformant snapshot. */
   operation(): Operation {
     return adopt(
-      canonicalRaw(this, wasm.WasmBinding).operation(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).operation()),
       Operation.fromRaw,
     );
   }
   /** Retain the referenced source from this same conformant snapshot. */
   source(): Source {
-    return adopt(canonicalRaw(this, wasm.WasmBinding).source(), Source.fromRaw);
+    return adopt(
+      wasmCall(() => canonicalRaw(this, wasm.WasmBinding).source()),
+      Source.fromRaw,
+    );
   }
 }
 
@@ -826,23 +868,28 @@ export class Source extends Managed {
   }
   /** Retain an independent owner of this same immutable declaration. */
   retain(): Source {
-    return adopt(canonicalRaw(this, wasm.WasmSource).retain(), Source.fromRaw);
+    return adopt(
+      wasmCall(() => canonicalRaw(this, wasm.WasmSource).retain()),
+      Source.fromRaw,
+    );
   }
   /** Retain the same document proof as a separately disposable owner. */
   document(): ConformantDocument {
     return adopt(
-      canonicalRaw(this, wasm.WasmSource).document(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmSource).document()),
       adoptConformant,
     );
   }
   /** Retain the original declaration, including extension fields and exact tokens. */
   value(): ExactJson {
-    return new ExactJson(canonicalRaw(this, wasm.WasmSource).value());
+    return new ExactJson(
+      wasmCall(() => canonicalRaw(this, wasm.WasmSource).value()),
+    );
   }
   get #fields(): SourceMetadata {
     const raw = canonicalRaw(this, wasm.WasmSource);
     return (this.#metadata ??= freezeMetadata(
-      decode<SourceMetadata>(raw.metadata()),
+      decode<SourceMetadata>(wasmCall(() => raw.metadata())),
     ));
   }
   /** Exact primary key in this declaration’s namespace. */
@@ -855,7 +902,7 @@ export class Source extends Managed {
   }
   /** Retain exact opaque data. Undefined means absent; explicit null remains a value. */
   data(): ExactJson | undefined {
-    const raw = canonicalRaw(this, wasm.WasmSource).data();
+    const raw = wasmCall(() => canonicalRaw(this, wasm.WasmSource).data());
     return raw ? new ExactJson(raw) : undefined;
   }
   /** Exact declared kind name, without URI normalization or kind interpretation. */
@@ -876,25 +923,27 @@ export class Dependency extends Managed {
   /** Retain an independent owner of this same immutable declaration. */
   retain(): Dependency {
     return adopt(
-      canonicalRaw(this, wasm.WasmDependency).retain(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmDependency).retain()),
       Dependency.fromRaw,
     );
   }
   /** Retain the same document proof as a separately disposable owner. */
   document(): ConformantDocument {
     return adopt(
-      canonicalRaw(this, wasm.WasmDependency).document(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmDependency).document()),
       adoptConformant,
     );
   }
   /** Retain the original declaration, including extension fields and exact tokens. */
   value(): ExactJson {
-    return new ExactJson(canonicalRaw(this, wasm.WasmDependency).value());
+    return new ExactJson(
+      wasmCall(() => canonicalRaw(this, wasm.WasmDependency).value()),
+    );
   }
   get #fields(): DependencyMetadata {
     const raw = canonicalRaw(this, wasm.WasmDependency);
     return (this.#metadata ??= freezeMetadata(
-      decode<DependencyMetadata>(raw.metadata()),
+      decode<DependencyMetadata>(wasmCall(() => raw.metadata())),
     ));
   }
   /** Exact primary key in this declaration’s namespace. */
@@ -916,12 +965,13 @@ export class Dependency extends Managed {
   /** Retain the referenced operation from this same conformant snapshot. */
   operation(): Operation {
     return adopt(
-      canonicalRaw(this, wasm.WasmDependency).operation(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmDependency).operation()),
       Operation.fromRaw,
     );
   }
   /** Exact kind-name comparison. An absent filter accepts all names. */
   acceptsKind(kind: string): boolean {
+    requireUsable();
     if (typeof kind !== "string")
       throw new TypeError("Expected a kind name string.");
     return sdkCall(() =>
@@ -942,25 +992,27 @@ export class Example extends Managed {
   /** Retain an independent owner of this same immutable declaration. */
   retain(): Example {
     return adopt(
-      canonicalRaw(this, wasm.WasmExample).retain(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmExample).retain()),
       Example.fromRaw,
     );
   }
   /** Retain the same document proof as a separately disposable owner. */
   document(): ConformantDocument {
     return adopt(
-      canonicalRaw(this, wasm.WasmExample).document(),
+      wasmCall(() => canonicalRaw(this, wasm.WasmExample).document()),
       adoptConformant,
     );
   }
   /** Retain the original declaration, including extension fields and exact tokens. */
   value(): ExactJson {
-    return new ExactJson(canonicalRaw(this, wasm.WasmExample).value());
+    return new ExactJson(
+      wasmCall(() => canonicalRaw(this, wasm.WasmExample).value()),
+    );
   }
   get #fields(): ExampleMetadata {
     const raw = canonicalRaw(this, wasm.WasmExample);
     return (this.#metadata ??= freezeMetadata(
-      decode<ExampleMetadata>(raw.metadata()),
+      decode<ExampleMetadata>(wasmCall(() => raw.metadata())),
     ));
   }
   /** Exact example key, local to its declaring operation. */
@@ -973,12 +1025,12 @@ export class Example extends Managed {
   }
   /** Retain the exact example input, without validating it against the operation schema. Undefined means absent; null remains a value. */
   input(): ExactJson | undefined {
-    const raw = canonicalRaw(this, wasm.WasmExample).input();
+    const raw = wasmCall(() => canonicalRaw(this, wasm.WasmExample).input());
     return raw ? new ExactJson(raw) : undefined;
   }
   /** Retain the exact example output, without validating it against the operation schema. Undefined means absent; null remains a value. */
   output(): ExactJson | undefined {
-    const raw = canonicalRaw(this, wasm.WasmExample).output();
+    const raw = wasmCall(() => canonicalRaw(this, wasm.WasmExample).output());
     return raw ? new ExactJson(raw) : undefined;
   }
 }

@@ -1,4 +1,5 @@
 /** Optional testing entry for ownership assertions after SDK initialization. */
+import { wasmCall } from "./diagnostics.js";
 import { requireReady } from "./runtime.js";
 import { liveStorageOwners as liveOwners } from "./wasm/openbindings_wasm.js";
 
@@ -12,5 +13,5 @@ import { liveStorageOwners as liveOwners } from "./wasm/openbindings_wasm.js";
  */
 export function liveStorageOwners(): number {
   requireReady();
-  return liveOwners();
+  return wasmCall(() => liveOwners());
 }
