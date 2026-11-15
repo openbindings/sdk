@@ -33,6 +33,12 @@
   function. Schemas, exact JSON, documents, proofs, resource sets and prepared schemas stay owners, and a forgotten
   schema or exact value still keeps its whole document in Wasm memory until it is disposed or finalized.
 
+
+- Preparation charges its allowance for the storage it actually holds, at the time it holds it, where it charged
+  conservative estimates many times larger. The smallest allowance that prepares 3,000 records falls from 105 MiB
+  to 6.3 MiB and 1,000 records from 36 MiB to 2.1 MiB; on its own workloads the charge is 1.0 to 1.7 times a
+  counting allocator's held bytes. Defaults and lane selection are unchanged.
+
 ### Added
 
 - `SchemaValidator::retained_bytes()`, defaulting to `None`, with `PreparedSchema::retained_bytes()` and

@@ -211,7 +211,6 @@ impl ExternalSchemas {
         )?;
         // Reserve URI normalization scratch and a possible owned failure URI
         // before either can copy caller text.
-        control.charge_allocation(uri.len().saturating_mul(8).saturating_add(256))?;
         let find = |uri: &str| {
             self.inner
                 .resources
@@ -222,6 +221,7 @@ impl ExternalSchemas {
         if let Some(index) = find(uri) {
             return Ok(index);
         }
+        control.charge_allocation(uri.len().saturating_mul(8).saturating_add(256))?;
         let normalized = crate::uri::compared_id(None, uri);
         normalized.and_then(|uri| find(&uri)).ok_or_else(|| {
             PreparationFailure::new(PreparationFailureKind::Resolution {

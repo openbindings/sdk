@@ -229,6 +229,11 @@ unit. Growing annotation and match-count loops keep explicit cooperative checks;
 a fast result never clears an exhausted shared preparation attempt.
 
 Storage reservations bound conservative estimates of storage held at once.
+Preparation charges collection capacities, owned pattern programs and cold fixed
+compiler state. Shared owners are charged once. Fixed dependency construction
+uses a version-bound profile qualified against requested live heap; this excludes
+allocator metadata, stack and RSS. An existing const payload is not copied by
+fixed syntax admission and has no source-sized syntax storage charge.
 Local syntax checks, traversal scratch and nested meta-evaluation scratch release
 reservations when dropped; retained programs and indexes stay charged. Mixed
 construction estimates conservatively stay charged with their owner.

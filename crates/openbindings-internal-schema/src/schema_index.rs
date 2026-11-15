@@ -261,6 +261,7 @@ impl SchemaIndex {
         control: &dyn crate::Control,
         resolve_profile: &dyn Fn(&str) -> Option<Profile>,
     ) -> Result<Self, crate::Failure> {
+        control.charge_allocation(512)?;
         let bases = retrieval.map_or(Bases::None, |uri| {
             Bases::Ordinary(Vec::new(), Arc::from(uri))
         });
@@ -278,7 +279,7 @@ impl SchemaIndex {
                         "schema inventory exceeds its configured node limit",
                     ));
                 }
-                control.charge_allocation(512)?;
+                control.charge_allocation(96)?;
                 Ok(())
             },
         )

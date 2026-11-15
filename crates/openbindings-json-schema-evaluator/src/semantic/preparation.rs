@@ -1,6 +1,7 @@
 //! Prepare activated original schema locations under one shared allowance.
 //! A local undefined predicate does not bypass admission of other activated
 //! branches. Syntax admission separately covers declared schema positions.
+pub(super) mod memory;
 mod queries;
 use super::*;
 use openbindings_internal_schema::Control;
@@ -31,8 +32,14 @@ pub(super) fn invalid_schema(construction: &Construction<'_>, node: usize) -> Pr
         .as_ref()
         .map_or(0, String::len);
     if let Some(remaining) = (64usize * 1024).checked_sub(bytes)
-        && backend::location_pointer_size(original.value.view(), remaining).is_some()
+        && let Some(pointer) = backend::location_pointer_size(original.value.view(), remaining)
     {
+        if let Err(failure) = construction
+            .control()
+            .charge_allocation(bytes + pointer + 64)
+        {
+            return failure.into();
+        }
         let at = space.location(node);
         failure.origin = Some(SchemaOrigin::new(at.resource, at.pointer));
     }
@@ -102,8 +109,7 @@ pub(super) fn meta_syntax(
                     .positions
                     .get(&backend::ref_id(child))
                 {
-                    control.charge_allocation(32)?;
-                    queue.push(child);
+                    memory::push(&mut queue, child, control)?;
                 }
             }
             control.release_allocation(64);
@@ -155,7 +161,7 @@ pub(super) fn check_from(
         if visited.contains(&node) {
             continue;
         }
-        scratch.charge_allocation(1024)?;
+        memory::set(&mut visited, &scratch)?;
         visited.insert(node);
         let original = space.node(node);
         if original.depth > 256 {
@@ -220,14 +226,14 @@ pub(super) fn check_from(
             && let Some(format) = schema.get("format")
         {
             let format = formats::Format::prepare(format, control)?;
-            control.charge_allocation(128)?;
+            memory::map(&mut formats, 0, control)?;
             formats.insert(node, format);
         }
         if let Some(pattern) = schema.get("pattern")
             && let Some(source) = pattern.as_str()
         {
             let reading = construction.pattern(source)?;
-            control.charge_allocation(512)?;
+            memory::map(&mut readings, 0, control)?;
             readings.insert(backend::occurrence(pattern), reading);
         }
         if let Some(entries) = schema.get("patternProperties").and_then(|v| v.members()) {
@@ -235,7 +241,7 @@ pub(super) fn check_from(
                 control.check()?;
                 if let Some(pattern) = entry.name.as_str() {
                     let reading = construction.pattern(pattern)?;
-                    control.charge_allocation(512)?;
+                    memory::map(&mut readings, 0, control)?;
                     readings.insert(backend::occurrence(entry.name), reading);
                 }
             }
@@ -255,7 +261,7 @@ pub(super) fn check_from(
             if let Some(reference) = schema.get(keyword).and_then(|v| v.as_str()) {
                 // Each original occurrence retains its own keyword/effect
                 // identity even when immutable static query results are shared.
-                control.charge_allocation(1024)?;
+                memory::map(&mut queries, 0, control)?;
                 let query = shared_queries.query(node, reference, control)?;
                 queries.insert((node, ReferenceKind::for_keyword(keyword)), query.clone());
                 match query.as_ref() {
@@ -353,8 +359,7 @@ pub(super) fn check_from(
                         .positions
                         .get(&backend::ref_id(child))
                     {
-                        scratch.charge_allocation(64)?;
-                        queue.push_back(child);
+                        memory::enqueue(&mut queue, child, &scratch)?;
                     }
                 }
                 scratch.release_allocation(64);
@@ -367,7 +372,7 @@ pub(super) fn check_from(
         // This replaces the 128-byte leaf-set estimate and also charges every
         // non-leaf descriptor, before allocation or publication.
         control.check()?;
-        control.charge_allocation(128 + std::mem::size_of::<readings::Fields>())?;
+        memory::map(&mut fields, 0, control)?;
         fields.insert(node, present);
     }
     // Count original query occurrences, even when their immutable results are

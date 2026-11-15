@@ -177,11 +177,19 @@ impl Lane {
         reading: &dyn Fn(&str) -> Result<Option<crate::pattern::Shared>, PreparationFailure>,
     ) -> Result<Self, PreparationFailure> {
         use openbindings_internal_schema::OriginalEnvironment;
-        let (mut features, reach) =
-            match admission::select(plan, limits, preparation, attempt, reading)? {
-                Err(reason) => return Ok(Self::Original(reason)),
-                Ok(admission::Admitted { features, reach }) => (features, reach),
-            };
+        let admission_scratch = openbindings_internal_schema::preparation::Scratch::new(attempt);
+        let (mut features, reach) = match admission::select(
+            plan,
+            limits,
+            preparation,
+            &admission_scratch,
+            attempt,
+            reading,
+        )? {
+            Err(reason) => return Ok(Self::Original(reason)),
+            Ok(admission::Admitted { features, reach }) => (features, reach),
+        };
+        drop(admission_scratch);
         attempt.check().map_err(PreparationFailure::from)?;
         control.check()?;
         let environment = plan.compiled_environment();

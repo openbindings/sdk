@@ -908,6 +908,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "openbindings-allocation-test-counter"
+version = "0.0.0"
+
+[[package]]
 name = "openbindings-context"
 version = "0.2.0-alpha.1"
 dependencies = [
@@ -982,6 +986,7 @@ dependencies = [
 name = "openbindings-json-schema-evaluator"
 version = "0.2.0-alpha.1"
 dependencies = [
+ "openbindings-allocation-test-counter",
  "jsonschema",
  "openbindings",
  "openbindings-internal-json",

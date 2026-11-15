@@ -176,15 +176,21 @@ impl Potential {
         maximum_bytes: usize,
         control: &dyn Control,
     ) -> Result<BTreeSet<String>, Failure> {
-        Ok(Self::walk(
+        let scratch = crate::preparation::Scratch::new(control);
+        let requests = Self::walk(
             supplied,
             &BTreeMap::new(),
             maximum_positions,
             maximum_bytes,
-            control,
+            &scratch,
             true,
         )?
-        .requests)
+        .requests;
+        control.charge_allocation(
+            openbindings_internal_json::allocation::tree(requests.len(), 24, 0)
+                + requests.iter().map(String::capacity).sum::<usize>(),
+        )?;
+        Ok(requests)
     }
 
     fn walk<'a>(
@@ -476,7 +482,17 @@ impl Potential {
             ));
         }
         self.positions += 1;
-        control.charge_allocation(256)?;
+        let next = if pending.len() == pending.capacity() {
+            (pending.capacity() * 2).max(4)
+        } else {
+            pending.capacity()
+        };
+        control.charge_allocation(
+            (next - pending.capacity()) * size_of::<(JsonRef<'_>, Scope, (bool, bool))>(),
+        )?;
+        if next > pending.capacity() {
+            pending.reserve_exact(next - pending.len());
+        }
         pending.push((value, scope, state));
         Ok(())
     }

@@ -27,6 +27,8 @@ pub struct Attempt<'a> {
     control: &'a dyn Control,
     maximum_allocation: usize,
     allocated: AtomicUsize,
+    #[cfg(feature = "test-support")]
+    peak: AtomicUsize,
     allocation_spent: AtomicBool,
 }
 
@@ -49,7 +51,7 @@ fn exceeded(resource: &'static str) -> Failure {
 /// conservative scratch/copy capacity before starting either expansion pass.
 pub(crate) fn identities(bytes: usize, control: &dyn Control) -> Result<(), Failure> {
     control.check()?;
-    let Some(allocation) = bytes.checked_mul(64) else {
+    let Some(allocation) = bytes.checked_mul(8) else {
         control.allocation_limit_reached();
         return Err(exceeded("preparation-sdk-reservation-bytes"));
     };
@@ -75,6 +77,8 @@ impl<'a> Attempt<'a> {
             control,
             maximum_allocation,
             allocated: AtomicUsize::new(0),
+            #[cfg(feature = "test-support")]
+            peak: AtomicUsize::new(0),
             allocation_spent: AtomicBool::new(false),
         };
         let result = match maximum_work.into() {
@@ -140,7 +144,11 @@ impl Control for Attempt<'_> {
                 Ordering::Relaxed,
                 Ordering::Relaxed,
             ) {
-                Ok(_) => break,
+                Ok(_) => {
+                    #[cfg(feature = "test-support")]
+                    self.peak.fetch_max(total, Ordering::Relaxed);
+                    break;
+                }
                 Err(current) => used = current,
             }
         }
@@ -208,6 +216,22 @@ impl Control for Scratch<'_> {
     }
     fn allocation_is_exhausted(&self) -> bool {
         self.control.allocation_is_exhausted()
+    }
+}
+
+/// Test/probe telemetry only; does not inspect the allocator or alter policy.
+#[cfg(feature = "test-support")]
+pub mod audit {
+    thread_local! {pub static LAST_PEAK:std::cell::Cell<usize>=const{std::cell::Cell::new(0)};}
+}
+#[cfg(feature = "test-support")]
+impl Drop for Attempt<'_> {
+    fn drop(&mut self) {
+        audit::LAST_PEAK.set(
+            audit::LAST_PEAK
+                .get()
+                .max(self.peak.load(Ordering::Relaxed)),
+        );
     }
 }
 

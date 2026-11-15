@@ -33,6 +33,15 @@ impl Program {
         };
         Self::owner_bytes().checked_add(backing)
     }
+    fn allocation_bytes(&self) -> Option<usize> {
+        let owner = 16 + size_of::<Self>();
+        let backing = match self {
+            Self::Simple { matcher, .. } => 16 + size_of::<Simple>() + matcher.heap_bytes(),
+            Self::Vm { engine, .. } => 16 + engine.get_nfa().memory_usage(),
+            _ => 0,
+        };
+        owner.checked_add(backing)
+    }
     fn owner_bytes() -> usize {
         // Keep the inline matcher footprint for admission, so shared ownership
         // does not change the existing pattern memory or reservation limits.

@@ -113,11 +113,25 @@ fn preparation_memory_releases_local_checks_and_refuses_large_positions() {
         )
         .unwrap();
     let wide = supplied(serde_json::json!({"const": literal.repeat(64)}));
-    let failure = wide
+    let value = JsonValue::parse(serde_json::json!(literal.repeat(64)).to_string()).unwrap();
+    let ready = wide
         .prepare_with_control(
             "https://memory.test/entry",
             &evaluator,
             &limits,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+    assert!(matches!(ready.evaluate(&value), ValueOutcome::Satisfies));
+    let tight = PreparationLimits {
+        max_sdk_reservation_bytes: 1024,
+        ..Default::default()
+    };
+    let failure = wide
+        .prepare_with_control(
+            "https://memory.test/entry",
+            &evaluator,
+            &tight,
             &AtomicBool::new(false),
         )
         .unwrap_err();
@@ -127,6 +141,13 @@ fn preparation_memory_releases_local_checks_and_refuses_large_positions() {
             resource: "preparation-sdk-reservation-bytes".into()
         }
     );
+    wide.prepare_with_control(
+        "https://memory.test/entry",
+        &evaluator,
+        &limits,
+        &AtomicBool::new(false),
+    )
+    .unwrap();
 }
 
 #[test]

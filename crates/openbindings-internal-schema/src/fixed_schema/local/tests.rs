@@ -403,7 +403,9 @@ fn impossible_extents_refuse_instead_of_wrapping_or_erasing_exhaustion() {
     assert!(subtract(usize::MAX, 0).is_err());
     let control = unlimited();
     assert_eq!(
-        reserve_bytes(usize::MAX, &control).unwrap_err().reason,
+        reserve_bytes(usize::MAX, usize::MAX, &control)
+            .unwrap_err()
+            .reason,
         FailureReason::LimitExceeded
     );
     assert!(control.exhausted.load(Ordering::Relaxed));
@@ -480,5 +482,39 @@ fn unread_unknown_payloads_keep_their_names_and_preserve_bounded_checks() {
             JsonValue::parse(r#"{"x-pad":{"type":0},"requ\u0069red":["same","same"]}"#).unwrap();
         assert!(!dialect_validity(&value, dialect).unwrap());
         assert!(!bounded(&value, dialect, 1_000_000, 1_000_000, &unlimited()).unwrap());
+    }
+}
+
+#[test]
+fn const_payload_has_no_local_syntax_storage() {
+    let graph = actual();
+    for (edition, resource) in [
+        (
+            "draft7",
+            "https://openbindings.invalid/foreign-meta/draft-07/schema#",
+        ),
+        (
+            "draft2019",
+            "https://openbindings.invalid/foreign-meta/draft/2019-09/meta/validation",
+        ),
+        (
+            "draft2020",
+            "https://openbindings.invalid/internal-meta/meta/validation",
+        ),
+    ] {
+        assert_eq!(
+            graph[edition]["resources"][resource]["properties"]["const"],
+            json!(true)
+        );
+    }
+    for dialect in EDITIONS {
+        for payload in [json!("x".repeat(262_144)), json!([1, {"a": [true, null]}])] {
+            let value = JsonValue::parse(json!({"const": payload}).to_string()).unwrap();
+            dialect_validity(&value, dialect).unwrap();
+            let result = Attempt::run(None, 1024, &unlimited(), |control| {
+                reserve(value.view(), dialect, control)
+            });
+            assert!(result.unwrap().is_ok());
+        }
     }
 }
