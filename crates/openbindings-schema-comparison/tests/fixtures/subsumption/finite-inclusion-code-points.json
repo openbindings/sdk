@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "description": "String length counts Unicode code points, as JSON Schema does: the constant U+1F600, written as a surrogate-pair escape, has length 1.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": "\ud83d\ude00"
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string",
+          "maxLength": 1
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -772,46 +772,36 @@
       "path": "subsumption/finite-const-before-type.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "indeterminate",
-      "findings": [
-        "type"
-      ]
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "subsumption/finite-enum-absent-type.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "indeterminate",
-      "findings": [
-        "type"
-      ]
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "subsumption/finite-enum-before-type.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "indeterminate",
-      "findings": [
-        "type"
-      ]
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "subsumption/finite-length-bound.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "indeterminate",
-      "findings": [
-        "length-bounds"
-      ]
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "subsumption/finite-numeric-bound-output.json",
       "mode": "subsume",
       "direction": "output",
-      "verdict": "indeterminate",
-      "findings": [
-        "numeric-bounds"
-      ]
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "subsumption/finite-real-type-failure.json",
@@ -985,10 +975,8 @@
       "path": "subsumption/const-minimum.json",
       "mode": "subsume",
       "direction": "input",
-      "verdict": "indeterminate",
-      "findings": [
-        "numeric-bounds"
-      ]
+      "verdict": "compatible",
+      "findings": []
     },
     {
       "path": "subsumption/definitions-false-receiver.json",
@@ -1970,6 +1958,238 @@
       "direction": "input",
       "verdict": "compatible",
       "findings": []
+    },
+    {
+      "path": "subsumption/finite-other-type-keyword.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "const"
+      ]
+    },
+    {
+      "path": "subsumption/finite-mixed-enum-other-type-output.json",
+      "mode": "subsume",
+      "direction": "output",
+      "verdict": "incompatible",
+      "findings": [
+        "enum"
+      ]
+    },
+    {
+      "path": "subsumption/finite-top-object-keywords.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "const"
+      ]
+    },
+    {
+      "path": "subsumption/finite-top-items.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "const"
+      ]
+    },
+    {
+      "path": "subsumption/finite-same-type-keyword.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "enum"
+      ]
+    },
+    {
+      "path": "subsumption/finite-object-required.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "const"
+      ]
+    },
+    {
+      "path": "structural/defs-closed-object-ref-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/defs-retained-not-ref-incompatible.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "identity"
+      ]
+    },
+    {
+      "path": "subsumption/defs-false-variant-ref-incompatible.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "incompatible",
+      "findings": [
+        "union"
+      ]
+    },
+    {
+      "path": "structural/merge-empty-member-type-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/merge-empty-member-enum-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/merge-items-const-conflict-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/merge-union-variant-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/merge-empty-member-input-compatible.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-object-members.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-array-anyof.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-split-variants.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-code-points.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-nested-member.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-refused-value.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/finite-inclusion-receiving-pattern.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "type"
+      ]
+    },
+    {
+      "path": "subsumption/finite-inclusion-unapplied-pattern.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-anyof-boundary-variant.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-const-within-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-const-and-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/merge-additional-properties-const-conflict-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-const-outside-enum.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/finite-inclusion-const-enum-exact-equality.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "structural/merge-compared-schema-identical.json",
+      "mode": "identical",
+      "direction": "input",
+      "verdict": "compatible",
+      "findings": []
+    },
+    {
+      "path": "subsumption/merge-compared-schema-flowing-indeterminate.json",
+      "mode": "subsume",
+      "direction": "input",
+      "verdict": "indeterminate",
+      "findings": [
+        "outside-profile"
+      ]
     }
   ]
 }

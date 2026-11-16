@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-11-16 comparison profile amendment (unreleased)
+
+### Changed
+
+- The interface companions (context, invocation, kind description, schema comparison, source pull) and their
+  vendored fixtures are pinned to interfaces revision `8be6f6837f90da7091e5496a1686e34bf3b57c15`, which amends the
+  OB-2020-12 schema-comparison profile 0.1 in place and drops the unsatisfiable merge from the source-puller's list
+  of comparisons that cannot finish. The `APPLIED_INTERFACE_REVISION` constants change; the profile identifier and
+  version do not. The comparison corpus grows to 271 groups and 44 exact cases.
+- Breaking: an unsatisfiable merge (an empty `type` or `enum` intersection, or conflicting `const` values) is no
+  longer an error. It normalizes to `{"not":{}}` at its own position, the compared schema included, so identity and
+  directional comparison answer where they returned `UnsatisfiableMerge`. `ComparisonFailureKind::UnsatisfiableMerge`
+  is removed.
+- Breaking: the exact empty schema (`false`, or `{"not":{}}` after annotations are stripped) no longer keeps `$defs`
+  by itself, so a closed object reached through `$ref` is identical to the same object inline. Other retained content
+  still keeps definitions.
+- Breaking: some verdicts change. A flowing `const` or `enum` now proves Compatible when the receiving schema accepts
+  every value that can flow, checked exactly through `properties`, `additionalProperties`, `items` and `anyOf`; with
+  both keywords only the values both allow flow, and none flowing is Compatible where the profile's boundary rule
+  allows. Six corpus groups move from Indeterminate to Compatible. Whether an authored value that the receiver refuses
+  makes the position Incompatible is now judged per value: a keyword that cannot refuse that value (Top-equivalent, or
+  for another JSON type) no longer withholds the failure, so some Indeterminate answers become Incompatible.
+  Outside-profile, foreign-dialect, `oneOf` and retained `allOf` boundaries are unchanged. The literal proof's work
+  can move the cutoff of an explicitly configured comparison allowance.
+
 ## 2026-11-16 repairs (unreleased)
 
 ### Added

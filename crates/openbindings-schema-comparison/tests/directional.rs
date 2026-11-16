@@ -120,7 +120,7 @@ fn union_search_preserves_uncertainty_but_a_definitive_match_decides() {
     }
 }
 #[test]
-fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operations() {
+fn interface_reports_sorted_slots_missing_and_verdicts_without_discarding_operations() {
     let required = doc(
         r#"{"openbindings":"0.2.0","operations":{"z":{},"b":{"aliases":["old"],"output":{"allOf":[{"type":"string"},{"type":"integer"}]},"input":{"type":"number"}},"a":{"output":{"pattern":"secret"},"input":true}}}"#,
     );
@@ -153,18 +153,18 @@ fn interface_reports_sorted_slots_missing_and_failures_without_discarding_operat
             .collect::<Vec<_>>(),
         [
             ("a", InterfaceIssueKind::OutputIndeterminate),
-            ("b", InterfaceIssueKind::OutputFailure),
+            ("b", InterfaceIssueKind::OutputIndeterminate),
             ("b", InterfaceIssueKind::InputIncompatible),
             ("z", InterfaceIssueKind::Missing),
         ]
     );
     assert_eq!(
         (summary(&report)).map_err(|failure| failure.kind()),
-        Err(ComparisonFailureKind::UnsatisfiableMerge)
+        Ok(Verdict::Incompatible)
     );
     assert_eq!(
         (report.issues().nth(1).unwrap().failure()).map(|failure| failure.kind()),
-        Some(ComparisonFailureKind::UnsatisfiableMerge)
+        None
     );
     let opposite = check_interface(
         &provided,

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "A missing declared type beside flowing enum does not establish a type counterexample.",
+  "description": "Finite inclusion proves the untyped enum compatible: the receiving string type accepts each listed value.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -30,7 +30,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "indeterminate"
+      "verdict": "compatible"
     }
   }
 }

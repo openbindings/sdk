@@ -21,26 +21,51 @@ fn externally_assigned_dialects_keep_root_fragment_and_embedded_inheritance() {
     let mut count = 0;
     for block in vectors.split("```json\n").skip(1) {
         let vector: Value = serde_json::from_str(block.split("```").next().unwrap()).unwrap();
-        let supplied = |schema: &Value| {
+        let expected = block
+            .split("Expected profile verdict: **")
+            .nth(1)
+            .unwrap()
+            .split("**")
+            .next()
+            .unwrap();
+        let expected = match expected {
+            "compatible" => Verdict::Compatible,
+            "indeterminate" => Verdict::Indeterminate,
+            "incompatible" => Verdict::Incompatible,
+            other => panic!("unknown expected verdict: {other}"),
+        };
+        let supplied = |schema: SchemaInput| {
             vector["resources"].as_object().unwrap().iter().fold(
-                input(schema),
+                schema,
                 |context, (uri, resource)| {
                     context.with_resource(uri, JsonValue::parse(resource.to_string()).unwrap())
                 },
             )
         };
-        let target = supplied(&vector["target"]);
-        let candidate = supplied(&vector["candidate"]);
+        let target = if let Some(document) = vector.get("document") {
+            let document = JsonValue::parse(document.to_string()).unwrap();
+            let selected = document
+                .at(vector["pointer"].as_str().unwrap())
+                .unwrap()
+                .to_owned();
+            supplied(SchemaInput::new(selected, document))
+        } else {
+            supplied(input(&vector["target"]))
+        };
+        let candidate = supplied(input(&vector["candidate"]));
         for direction in [Direction::Input, Direction::Output] {
             let result =
                 compare(direction, &target, &candidate, &ComparisonLimits::default()).unwrap();
-            assert_eq!(result.verdict(), Verdict::Indeterminate, "{vector}");
-            assert_eq!(result.finding(), Some("outside-profile"));
+            assert_eq!(result.verdict(), expected, "{vector}");
+            assert_eq!(
+                result.finding(),
+                (expected == Verdict::Indeterminate).then_some("outside-profile")
+            );
         }
         assert!(identical(Some(&target), Some(&target), &ComparisonLimits::default()).unwrap());
         count += 1;
     }
-    assert_eq!(count, 5);
+    assert_eq!(count, 9);
     // A foreign descendant inherits without either $id or a local declaration.
     let root = json!({"$schema":"http://json-schema.org/draft-07/schema#","properties":{"p":{"type":"string"}}});
     let target = input(&json!({"$ref":"https://r.test/a#/properties/p"})).with_resource(
@@ -255,7 +280,20 @@ fn single_allof_deduplicates_enum_and_preserves_identity_context_and_errors() {
         );
     }
     let union = json!({"oneOf":[{"type":"string"}]});
-    let kept = json!({"$defs":{"d":false},"allOf":[union]});
+    let empty_definition = json!({"$defs":{"d":false},"allOf":[union]});
+    assert!(
+        identical(
+            Some(&input(&empty_definition)),
+            Some(&input(&union)),
+            &ComparisonLimits::default()
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        check(&empty_definition, &union).verdict(),
+        Verdict::Compatible
+    );
+    let kept = json!({"$defs":{"d":{"pattern":"x"}},"allOf":[union]});
     assert!(
         !identical(
             Some(&input(&kept)),
@@ -291,12 +329,14 @@ fn single_allof_deduplicates_enum_and_preserves_identity_context_and_errors() {
 }
 #[test]
 fn unresolved_failures_keep_located_keywords_and_boundaries_keep_their_finding() {
+    let finite = check(
+        &json!({"type":["string","integer"],"const":5}),
+        &json!({"type":"integer"}),
+    );
+    assert_eq!(finite.verdict(), Verdict::Compatible);
+    assert_eq!(finite.finding(), None);
+    assert_eq!(finite.reason(), None);
     let cases = [
-        (
-            json!({"type":["string","integer"],"const":5}),
-            json!({"type":"integer"}),
-            "type: candidate does not allow \"string\"; unresolved: flowing const or enum may exclude the failure",
-        ),
         (
             json!({"type":"integer","minimum":0.5}),
             json!({"type":"integer","minimum":1}),

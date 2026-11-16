@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "description": "The anyOf variant carrying a pattern accepts nothing in the finite test, but the string variant accepts \"a\", so the member and the whole constant are accepted.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": {
+            "m": "a"
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "m": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer",
+                  "pattern": "^x"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

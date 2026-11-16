@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "description": "Conflicting const values in items normalize items to the exact empty schema, so only the empty array is admitted.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "const": 1
+              },
+              {
+                "const": 2
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "array",
+          "items": false
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

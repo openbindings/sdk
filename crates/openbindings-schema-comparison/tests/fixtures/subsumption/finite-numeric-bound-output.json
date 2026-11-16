@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "A numeric-bound failure beside flowing enum is indeterminate; the profile does not infer inclusion from the listed values.",
+  "description": "Output: finite inclusion discharges the numeric-bound failure beside the candidate's enum, since the target's integer minimum 0 accepts 1 and 2.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -32,7 +32,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "indeterminate"
+      "verdict": "compatible"
     }
   }
 }

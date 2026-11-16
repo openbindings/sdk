@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "Untyped finite flow against a type restriction is indeterminate; the independent ordinary type failures keep this group incompatible.",
+  "description": "Untyped finite flow into a type that accepts every listed value is compatible by finite inclusion; the independent ordinary type failures keep this group incompatible.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"

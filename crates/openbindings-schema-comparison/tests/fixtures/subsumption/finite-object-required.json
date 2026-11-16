@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "description": "required applies to the object constant, so it still withholds the refused value: only keywords the Top rule treats as unconstrained, or that apply only to other types, cannot refuse it.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": {
+            "a": 1
+          },
+          "required": [
+            "a"
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": {
+            "a": 2
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

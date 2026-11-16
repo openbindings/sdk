@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "A numeric-bound failure beside flowing const is indeterminate.",
+  "description": "Finite inclusion discharges the numeric-bound failure beside flowing const: 0 satisfies the receiving exclusiveMinimum -2.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -27,7 +27,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "indeterminate"
+      "verdict": "compatible"
     }
   }
 }

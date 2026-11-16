@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "description": "A flowing maxLength cannot refuse the number 1, which flows and is refused by the candidate const: applicability is judged against the authored value's own type.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": 1,
+          "maxLength": 3
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": 2
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

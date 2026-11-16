@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "A type failure beside flowing const is unresolved without a finite-value inclusion rule.",
+  "description": "Finite inclusion discharges the type failure beside flowing const: the receiving integer type accepts the constant 5.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -31,7 +31,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "indeterminate"
+      "verdict": "compatible"
     }
   }
 }

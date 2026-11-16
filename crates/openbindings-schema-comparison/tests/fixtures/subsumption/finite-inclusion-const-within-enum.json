@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "description": "With both const and enum, only the values both allow flow: 1, which the receiving const 1 accepts; the enum's 2 never flows.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": 1,
+          "enum": [
+            1,
+            2
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": 1
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

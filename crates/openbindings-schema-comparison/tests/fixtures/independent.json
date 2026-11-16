@@ -91,8 +91,8 @@
       "right": {
         "schema_json": "{\"type\":\"integer\"}"
       },
-      "expected": "Failure(SchemaMerge)",
-      "reason": "Normalization step 2 conjoins the target with its siblings; string and integer have an empty type intersection."
+      "expected": "Different",
+      "reason": "The unsatisfiable merge normalizes to the exact empty schema, which differs from the other schema."
     },
     {
       "id": "ref-replaces-outside-sibling",
@@ -592,8 +592,8 @@
       "right": {
         "schema_json": "{}"
       },
-      "expected": "Failure(SchemaMerge)",
-      "reason": "An empty type intersection is an error, not Different."
+      "expected": "Different",
+      "reason": "The unsatisfiable merge normalizes to the exact empty schema, which differs from the other schema."
     },
     {
       "id": "unsatisfiable-const",
@@ -603,8 +603,8 @@
       "right": {
         "schema_json": "{}"
       },
-      "expected": "Failure(SchemaMerge)",
-      "reason": "Conflicting exact const values are an error."
+      "expected": "Different",
+      "reason": "The unsatisfiable merge normalizes to the exact empty schema, which differs from the other schema."
     },
     {
       "id": "unsatisfiable-enum",
@@ -614,8 +614,8 @@
       "right": {
         "schema_json": "{}"
       },
-      "expected": "Failure(SchemaMerge)",
-      "reason": "An empty exact enum intersection is an error."
+      "expected": "Different",
+      "reason": "The unsatisfiable merge normalizes to the exact empty schema, which differs from the other schema."
     },
     {
       "id": "per-keyword-bound-retention",

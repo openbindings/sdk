@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "description": "The enum lists 1.0, equal to the const value 1 by exact instance equality, so 1 flows and the receiving integer type accepts it.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": 1,
+          "enum": [
+            1.0
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

@@ -577,13 +577,13 @@
     },
     {
       "id": "allof-const-conflict",
-      "rule": "distinct exact consts make an unsatisfiable merge",
+      "rule": "distinct exact consts make the compared schema admit nothing, so it compares as a flowing root false",
       "mode": "subsume",
       "direction": "input",
       "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"allOf\":[{\"const\":9007199254740992},{\"const\":9007199254740993}]}}}}",
       "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{}}}}",
       "expected": {
-        "error": "schema"
+        "verdict": "indeterminate"
       },
       "numberTokens": {
         "left": [
@@ -595,13 +595,13 @@
     },
     {
       "id": "allof-empty-enum",
-      "rule": "distinct exact enum intersection is empty",
+      "rule": "a disjoint exact enum intersection makes the compared schema admit nothing, so it compares as a flowing root false",
       "mode": "subsume",
       "direction": "input",
       "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"allOf\":[{\"enum\":[9007199254740992]},{\"enum\":[9007199254740993]}]}}}}",
       "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{}}}}",
       "expected": {
-        "error": "schema"
+        "verdict": "indeterminate"
       },
       "numberTokens": {
         "left": [
@@ -968,6 +968,96 @@
           "1",
           "2"
         ]
+      }
+    },
+    {
+      "id": "below-slot-const-conflict",
+      "rule": "distinct exact consts below the compared schema normalize to the exact empty schema",
+      "mode": "identical",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"properties\":{\"a\":{\"allOf\":[{\"const\":9007199254740992},{\"const\":9007199254740993}]}}}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"properties\":{\"a\":false}}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740992",
+          "9007199254740993"
+        ],
+        "right": []
+      }
+    },
+    {
+      "id": "finite-inclusion-exact-bound",
+      "rule": "finite inclusion compares a listed value with a bound exactly",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":9007199254740993}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"integer\",\"maximum\":9007199254740992}}}}",
+      "expected": {
+        "verdict": "indeterminate"
+      },
+      "witness": {
+        "instanceJSON": "9007199254740993",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "9007199254740993"
+        ],
+        "right": [
+          "9007199254740992"
+        ],
+        "witness": [
+          "9007199254740993"
+        ]
+      }
+    },
+    {
+      "id": "finite-inclusion-exact-decimal",
+      "rule": "finite inclusion compares a listed decimal with a bound exactly",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"const\":0.10000000000000000001}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"number\",\"maximum\":0.1}}}}",
+      "expected": {
+        "verdict": "indeterminate"
+      },
+      "witness": {
+        "instanceJSON": "0.10000000000000000001",
+        "targetValid": true,
+        "candidateValid": false
+      },
+      "numberTokens": {
+        "left": [
+          "0.10000000000000000001"
+        ],
+        "right": [
+          "0.1"
+        ],
+        "witness": [
+          "0.10000000000000000001"
+        ]
+      }
+    },
+    {
+      "id": "finite-inclusion-integer-spelling",
+      "rule": "a listed number with a zero fractional part satisfies integer whatever its spelling",
+      "mode": "subsume",
+      "direction": "input",
+      "leftJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"enum\":[1.0,2e0]}}}}",
+      "rightJSON": "{\"openbindings\":\"0.2.0\",\"operations\":{\"test\":{\"input\":{\"type\":\"integer\"}}}}",
+      "expected": {
+        "verdict": "compatible"
+      },
+      "numberTokens": {
+        "left": [
+          "1.0",
+          "2e0"
+        ],
+        "right": []
       }
     }
   ]

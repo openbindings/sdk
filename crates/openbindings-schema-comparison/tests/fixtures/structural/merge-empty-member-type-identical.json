@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "description": "An empty type intersection at a property member below the compared schema normalizes that member to the exact empty schema rather than failing the comparison.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "allOf": [
+            {
+              "properties": {
+                "a": {
+                  "type": "integer"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "a": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "properties": {
+            "a": false
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

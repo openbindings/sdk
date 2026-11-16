@@ -27,7 +27,7 @@ pub use value::BindingRequest;
 /// Version of the binding and operation invocation interfaces, separate from core.
 pub const INTERFACE_VERSION: &str = "0.1.0";
 /// Immutable current interfaces revision targeted by this implementation.
-pub const APPLIED_INTERFACE_REVISION: &str = "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1";
+pub const APPLIED_INTERFACE_REVISION: &str = "8be6f6837f90da7091e5496a1686e34bf3b57c15";
 
 pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};
 

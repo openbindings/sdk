@@ -10,6 +10,8 @@ use crate::{
 };
 use std::{cmp::Ordering, fmt};
 
+mod finite;
+
 macro_rules! report {
     ($attempt:expr, $($arg:tt)*) => { report_text(format_args!($($arg)*), $attempt)? };
 }
@@ -343,6 +345,9 @@ fn walk_position(
     }
     let receiver_outside = outside(accepts, depth, attempt)?;
     if !receiver_outside && crate::normalize::top(receiver, depth, attempt)? {
+        return Ok(Comparison::compatible());
+    }
+    if !receiver_outside && finite(flow) && finite::inclusion(flow, receiver, depth, attempt)? {
         return Ok(Comparison::compatible());
     }
     // Emptiness is local to this position and precedes all failure sources.
@@ -810,7 +815,6 @@ fn values(
             )?
         }));
     }
-    let clean = only(flow, &["type", "const", "enum"], attempt)?;
     let source_enum = if get(flow, "const").is_some() && get(flow, "enum").is_some() {
         Some(Membership::new(
             array(flow, "enum"),
@@ -847,7 +851,7 @@ fn values(
             if admitted {
                 continue;
             }
-            let eligible = clean
+            let eligible = finite::eligible(flow, v, depth, attempt)?
                 && typed_value(flow, v, attempt)?
                 && if let Some(index) = &source_enum {
                     index.contains(v, depth + 1, attempt)?
@@ -1039,16 +1043,8 @@ fn conjoined(
     branches.push(value::copy(variant, depth + 1, attempt)?);
     match crate::merge::all_of(Object::new(), branches, depth + 1, attempt) {
         Ok(value) => Ok(Some(value)),
-        // This conjunction is an evidence probe, not an authored allOf. A local
-        // empty merge supplies no counterexample and is not a schema error.
-        Err(e)
-            if matches!(
-                e.kind(),
-                FailureKind::UnsatisfiableMerge | FailureKind::UnsupportedNormalization
-            ) =>
-        {
-            Ok(None)
-        }
+        // An unsupported evidence conjunction supplies no counterexample.
+        Err(e) if e.kind() == FailureKind::UnsupportedNormalization => Ok(None),
         Err(e) => Err(e),
     }
 }

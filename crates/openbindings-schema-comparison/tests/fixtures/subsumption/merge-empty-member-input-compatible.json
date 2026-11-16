@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "description": "The merged legacy member admits nothing, so it may not appear, and the empty flowing member discharges its obligation against the candidate's boolean member.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "allOf": [
+            {
+              "properties": {
+                "legacy": {
+                  "type": "integer"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "legacy": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "object",
+          "properties": {
+            "legacy": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

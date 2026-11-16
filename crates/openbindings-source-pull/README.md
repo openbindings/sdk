@@ -8,7 +8,7 @@ For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 
 This unpublished companion implements source-puller version
-0.1.0 at interfaces revision `eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`.
+0.1.0 at interfaces revision `8be6f6837f90da7091e5496a1686e34bf3b57c15`.
 It carries additions to one original document and the report of pulling one
 selected source. Kind implementations own source interpretation and projection.
 A report is a producer claim, not proof of live availability or fidelity.
@@ -16,7 +16,7 @@ A report is a producer claim, not proof of live availability or fidelity.
 The carriers preserve exact JSON, allowed output metadata and absence versus null.
 `OmittedEntry` borrows `item`, `existing`, `also_identifies`, `offered`, `through`
 and `identifier` through accessors using the pinned
-[Report contract's label forms](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/source-puller/README.md#report); absent
+[Report contract's label forms](https://github.com/openbindings/interfaces/blob/8be6f6837f90da7091e5496a1686e34bf3b57c15/source-puller/README.md#report); absent
 members stay `None`. Proposals carry restricted edit authority; retaining unknown metadata does not
 authorize copying it into a document. No TypeScript interface API is implied.
 

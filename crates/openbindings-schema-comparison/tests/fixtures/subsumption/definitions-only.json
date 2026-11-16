@@ -12,7 +12,9 @@
         "input": {
           "$defs": {
             "d": {
-              "not": {}
+              "not": {
+                "type": "string"
+              }
             }
           }
         }

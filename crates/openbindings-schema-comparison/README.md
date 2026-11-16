@@ -5,7 +5,7 @@ unknown issue as a refusal or propagate it rather than infer compatibility.
 
 Compare schemas by normalized identity or directional compatibility under profile
 `OB-2020-12` version `0.1`, pinned at interfaces revision
-`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. This unpublished companion is independent
+`8be6f6837f90da7091e5496a1686e34bf3b57c15`. This unpublished companion is independent
 of core document conformance and the value evaluator. It implements the profile's
 directional rules and interface-level fold, plus the source puller's reference
 rule for reuse and existing-entry identity.
@@ -138,7 +138,9 @@ A `$ref` inside a non-applicator keyword is data.
 An allOf with an outside-profile sibling or branch, a union, or an additionalProperties
 constraint that merging would loosen remains ordered. `nullable` stays outside the
 profile. `$defs` remains only on a schema whose own schema subtree carries a
-retained keyword. Unrelated schemas and non-schema carrier members cannot keep it. Union arrays at actual schema oneOf/anyOf
+retained keyword other than the exact empty schema (`false` or `{"not":{}}`
+after Boolean mapping and annotation stripping). Other retained content still
+keeps definitions. Unrelated schemas and non-schema carrier members cannot keep it. Union arrays at actual schema oneOf/anyOf
 positions compare as multisets with multiplicity; ordinary arrays, including
 const/enum and unknown-keyword contents, remain ordered. Boolean schemas map to objects everywhere, including additionalProperties and
 kept definitions. Kept definitions supply identity context, not directional
@@ -157,8 +159,10 @@ authored enum order intact, including the first failing value in a reason.
 Ambiguous duplicate object members are refused, including inside opaque data.
 Enum intersections emit each surviving exact value once, in first-occurrence
 order from the first enum-bearing branch, including a sole branch. Standalone enum order/multiplicity is
-preserved. Empty type/enum intersections and conflicting const values fail the
-merge rather than producing an identity answer. Other cross-keyword constraints
+preserved. Empty type/enum intersections and conflicting const values normalize
+their position to `{"not":{}}`, including the compared root. They compare exactly
+as authored `false`: identity holds, effective empty members are recognized,
+and non-identical root comparisons remain indeterminate. Other cross-keyword constraints
 remain separate fields as the table prescribes: merging const with enum or lower
 with upper bounds does not invoke a general satisfiability solver. An identical
 merged object can still admit no values; identity is a structural profile claim.
@@ -186,9 +190,9 @@ values. Each fourfold increase may use at most eight times the work: fixed-width
 cancellation polls by four, independently of input width. These are deterministic
 SDK work and poll checks, not duration guarantees.
 
-The fixture harness passes all 55 ordinary and 11 exact identity groups, and all
-186 ordinary and 29 exact directional groups, including expected normalization
-failures. No groups are skipped. All copied inputs are byte-identical to the pin,
+The fixture harness passes all 63 ordinary and 12 exact identity groups, and all
+208 ordinary and 32 exact directional groups. The nine supplied-resource and
+non-OBI prose vectors also pass. No groups are skipped. All copied inputs are byte-identical to the pin,
 with hashes in `tests/fixtures/README.md`.
 
 ## Directional comparison and interface checking
@@ -200,8 +204,9 @@ Both return `Result<Comparison, ComparisonFailure>`. `Comparison::verdict()` is
 and `finding()` distinguishes `outside-profile` boundaries from `unresolved`
 proof obligations and ineligible failures. Public
 `Debug` and diagnostic `Display` never disclose schema values or reason strings.
-Normalization failures, including unsatisfiable merges and resource refusals, are
-errors without a verdict. Ordinary `identical` changes only where the amended profile changes identity:
+Reference failures and resource refusals are errors without a verdict; an
+unsatisfiable merge is not an error but the empty schema `{"not":{}}` at its
+position. Ordinary `identical` changes only where the amended profile changes identity:
 retained reference targets participate, and `$defs` retention is schema-local.
 
 ```rust
@@ -247,6 +252,19 @@ proofs use nonnegative integral domains, including empty domains and zero-item
 arrays. Receiving Top and proved empty flowing length domains can end a position.
 AnyOf supports cross-form coverage and the profile's two limited counterexample
 rules. Uncovered pairwise variants alone remain indeterminate.
+
+Finite inclusion tests each flowing `const` or `enum` value against the whole
+receiver before other directional rules. With both keywords, only the const
+value also allowed by enum flows; an empty intersection proves inclusion where
+rule 0a allows compatibility. Other flowing constraints do not filter the list.
+Literal checks use exact numbers, integral-valued numbers for `integer`, Unicode
+code-point lengths, and recursive properties, additionalProperties, items and
+anyOf. Kept definitions do not constrain literals. Foreign dialects, outside
+keywords, oneOf and retained allOf refuse literal acceptance at their position;
+another anyOf variant can still accept. A refused literal alone supplies no
+incompatible verdict. Const/enum failure eligibility instead checks each authored
+value's type and finite constraints and disregards Top-equivalent or inapplicable
+keywords for that value.
 
 Every relevant member and later rule contributes. Incompatible dominates
 indeterminate, then compatible; an unresolved result never hides a later failure.

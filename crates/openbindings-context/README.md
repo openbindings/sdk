@@ -2,7 +2,7 @@
 
 Exact context objects and `{message, schema}` challenges shared by the optional
 interface companions. This applies the [context document at the pinned interface
-revision](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/context/README.md).
+revision](https://github.com/openbindings/interfaces/blob/8be6f6837f90da7091e5496a1686e34bf3b57c15/context/README.md).
 
 ```rust
 use openbindings::JsonValue;

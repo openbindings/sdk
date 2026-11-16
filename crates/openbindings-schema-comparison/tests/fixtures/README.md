@@ -1,18 +1,18 @@
 # Pinned schema-comparison test inputs
 
 Interface-derived inputs target revision
-`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. The crate's tests and guide state the
+`8be6f6837f90da7091e5496a1686e34bf3b57c15`. The crate's tests and guide state the
 supported interface/profile scope. All copied inputs retain the publication's bytes.
 Additional SDK controls are identified below;
 they are test evidence, not replacements for the pinned publication.
 
 | Fixture | Evidence owner | SHA-256 |
 | --- | --- | --- |
-| `exact-values.json` | Pinned interfaces | `e599762c405d2d0ea1e9dcdcaaa7dacc57ed900ee43af07b176cb7438e17ff4b` |
+| `exact-values.json` | Pinned interfaces | `3503c02d8c5895a95674409a6cbbb7f90b97f466ccffa3e73d93c18701a0a987` |
 | `exact-values.schema.json` | Pinned interfaces | `17189cb7a1acc6cca81e840935c0c05548d891f2f28553d657b07c9c156ce000` |
 | `fixture.schema.json` | Pinned interfaces | `a738f791905fb18fefd25434cd4de98073541bb39d2790fc6c6a03b6ab8fd683` |
-| `independent.json` | SDK controls | `1c8bb29a0d615f9deb7072b8a8861b3ba1c5916723b97b1b0c65bab943747ba8` |
-| `manifest.json` | Pinned interfaces | `960cd9aede81d3a2d7bb212b72c801f6afc0eee49456e82b3dd9e90442391ff6` |
+| `independent.json` | SDK controls | `b1fb34faa3480283135ea23d28dd97e0caf11c4712606fc3a71cbe70e31de185` |
+| `manifest.json` | Pinned interfaces | `57ef49a3df826ac4f4a39d8bcdc2de1c6ec7e3e26eb8f86d22144053064ba719` |
 | `manifest.schema.json` | Pinned interfaces | `d1cf9514daf1c78321736d38383181cddecc4e1e9a865d1458618f389734ae5e` |
 | `profile/allof-ref-pattern-indeterminate.json` | Pinned interfaces | `0861640e3213333d5f5c18c3dc67324a381d7e3de89213fb63f99becfc679b19` |
 | `profile/allof-ref-union-indeterminate.json` | Pinned interfaces | `28a8bdda62e767ba9016aa0551e7ed369cbc3af342bb02e76a0cf75908328e98` |
@@ -113,14 +113,14 @@ they are test evidence, not replacements for the pinned publication.
 | `subsumption/const-enum-input-incompatible.json` | Pinned interfaces | `54c89cb60300d87e81b7577137d8934d575c4e7acab3108bb5d7bf44e479ba6c` |
 | `subsumption/const-enum-output-compatible.json` | Pinned interfaces | `e50233e00e2265f6bf0b575c443e66f9f288096a4c3a60565b577e6f92ce3190` |
 | `subsumption/const-enum-output-incompatible.json` | Pinned interfaces | `5fa812e5e9003791dcefc41c1006b0db90178a0b6d5985929fd211f6aeaa7e72` |
-| `subsumption/const-minimum.json` | Pinned interfaces | `60cc2f6f44852d834322267718a298654a4148889782eba63d66aa88cf3a0a86` |
+| `subsumption/const-minimum.json` | Pinned interfaces | `b5d1ca7b3cafb5509a60b8505ceb64a25737256c4178b54ffac3ad27cb76bc13` |
 | `subsumption/cross-form-flowing-union.json` | Pinned interfaces | `2fd4758220d5001ceb54996e07dc897f023c46748674e9cf2da73367dffbbb9e` |
 | `subsumption/cross-form-single-string.json` | Pinned interfaces | `d0e79a2c4711d5d579827a2fb9514fd9130c484a4723a39b4ebc3e608fabce0a` |
 | `subsumption/cross-form-string-null.json` | Pinned interfaces | `b7685d6231713cb1e4af618f5be7a18a86a4eb3430ddef7eba55ecfe35097ff3` |
 | `subsumption/definitions-false-receiver.json` | Pinned interfaces | `fc5539f76d6cda21d944b002da80d8f6fc4234358cbf8d73215f3a64d099cc01` |
-| `subsumption/definitions-only.json` | Pinned interfaces | `4470c9dc70f71448828a6c6342820eb1e5f29afff9c70eec57bb0188fdb77b89` |
+| `subsumption/definitions-only.json` | Pinned interfaces | `95b2f4430e9e80e7b8a54cfbe52e7c93245377f0826f26c2210aa817e7081ff7` |
 | `subsumption/definitions-top-control.json` | Pinned interfaces | `460d7b0bd740677ff84494471616978a2124362b83eb19c752ff7ba9fa530240` |
-| `subsumption/definitions-true-receiver.json` | Pinned interfaces | `24a10f4112502b7332e7874a1dfe44b5c3a11f44fb7e4bcd6da6be84cb143059` |
+| `subsumption/definitions-true-receiver.json` | Pinned interfaces | `494d67c10a15a7761def77beec4fd245e9c5e2206a508eb7bfea76b8701994b1` |
 | `subsumption/effective-pattern-const-output.json` | Pinned interfaces | `7280a8e2ef0b302cf94559ee5bc0bcc2d11acd882d6bebff512e5a4adacd810e` |
 | `subsumption/effective-property-outside-indeterminate.json` | Pinned interfaces | `93d6608131af12a8aef218bc6b80177b0ef1f0531d8a34c0d3e15bbd8ee3ad52` |
 | `subsumption/effective-source-closed-compatible.json` | Pinned interfaces | `f620fab745421a68bd1f74e900ca4f0f2dd09e50eec278210147d712cfdf297d` |
@@ -131,13 +131,13 @@ they are test evidence, not replacements for the pinned publication.
 | `subsumption/empty-string-domain-before-union.json` | Pinned interfaces | `0f5becde6afb27774bd6a52bc4b5710ac4233917cdd1d21d768e0cdbf1abcd70` |
 | `subsumption/empty-string-domain-mixed-types.json` | Pinned interfaces | `f5c3ba8929f3a0e83926118f25695cddefc1aba4ad805870b7aec484a1e224e7` |
 | `subsumption/filtered-enum.json` | Pinned interfaces | `2ea19064cf480bb5182c3700b35fc6eea3da468703c8a650a72de30e9a987f23` |
-| `subsumption/finite-const-before-type.json` | Pinned interfaces | `bfc7281a4e8528efa438f1034cbb088c4073033ae9ae9d19e6e1360f9775290d` |
+| `subsumption/finite-const-before-type.json` | Pinned interfaces | `5695e84785712a475861e99009feca129b6c8d91c32adfe1e400f4d91de38557` |
 | `subsumption/finite-const-nested-patternproperties.json` | Pinned interfaces | `cc4a3e1f94141bde01fa3b69664021d4327577cd4aff412eae0427f4702e1987` |
 | `subsumption/finite-const-nested-prefixitems.json` | Pinned interfaces | `6a43a9084613117a167cbf7e61dfbfeb307d897114e84eb32fce970ef6d2f950` |
-| `subsumption/finite-enum-absent-type.json` | Pinned interfaces | `3a710349e3e53664891ae3aa854175cb7700c11a3055f756121c1fba8594acbf` |
-| `subsumption/finite-enum-before-type.json` | Pinned interfaces | `a660497132b196a1f7a90c3c93623eb8222ea66a90887b39916c287c1e2b82dc` |
-| `subsumption/finite-length-bound.json` | Pinned interfaces | `4519fec65bbb6241bf7adc35f4df5b2ae5176d2ba485af9c43da01aaa955dda9` |
-| `subsumption/finite-numeric-bound-output.json` | Pinned interfaces | `98325c9f4a91a01d4a9747737a5f35c028fb4c70432a1581662a5453d4b8b1d8` |
+| `subsumption/finite-enum-absent-type.json` | Pinned interfaces | `0364e7c6b9e1c9c30fea38a49a753c7ce247c9512c890260059ffcab7648eba0` |
+| `subsumption/finite-enum-before-type.json` | Pinned interfaces | `80d94d11a7e76fd0a9211ffc84d8419432d9f6f74163d2d1331dce7ae2781025` |
+| `subsumption/finite-length-bound.json` | Pinned interfaces | `8d92c820ad3f8a8032b1105aeb95eff118e933b7f2e0748d2a567ce2935a886f` |
+| `subsumption/finite-numeric-bound-output.json` | Pinned interfaces | `cb4202de4b451b8d4bb8e89952faf1f097288bf0eb2619f7d640440408826aa2` |
 | `subsumption/finite-real-type-failure.json` | Pinned interfaces | `2083c2bb74d31f2153974662afe2c8f7e478ba84bbdab46b5d335e73cedf1f6f` |
 | `subsumption/flowing-multipleof.json` | Pinned interfaces | `04416c53a312b69a672b6b959c5d219f042fbd8be43076dbf2cb36c67bf1b883` |
 | `subsumption/flowing-not-boundary.json` | Pinned interfaces | `76bb2ec1619c5242e95dc7bd8d6cf215061538b13caac16dd1f72f33b83a38c3` |
@@ -227,7 +227,7 @@ they are test evidence, not replacements for the pinned publication.
 | `subsumption/trivial-top-output-compatible.json` | Pinned interfaces | `2b7fc9bac0dc018716d7e1bb6d127b191267d872b418c5f7ea4036cc463648b0` |
 | `subsumption/trivial-top-output-incompatible.json` | Pinned interfaces | `3b2a775121a94a2202921bc150cfb06f059c71b1f3927ea3e5500f0251739246` |
 | `subsumption/type-sets-input-compatible.json` | Pinned interfaces | `6af00f8774a292d00736ce13409527eaeaed667b3d1bdd3533de153284fd2e6e` |
-| `subsumption/type-sets-input-incompatible.json` | Pinned interfaces | `5db098a12f268ac208e3917627dec86fd1750657990ae07cb07c779820237e72` |
+| `subsumption/type-sets-input-incompatible.json` | Pinned interfaces | `cda0447321315c80c73093ef174c4d8186f01046134d90012d1da4ec61b6259a` |
 | `subsumption/type-sets-output-compatible.json` | Pinned interfaces | `5770818c7d408ca0c7e4b55c276cc18f38cf036fc3db801f08945bfffadf7d80` |
 | `subsumption/type-sets-output-incompatible.json` | Pinned interfaces | `469dd7a9f58915034c8b94b1fc89d2c29e5070d47d7eac18d048018ae815642d` |
 | `subsumption/union-conjunctive-siblings.json` | Pinned interfaces | `490535e512bdc03f13230ed98b907601e7540e87c5bb173487d1a7d24e685975` |
@@ -255,4 +255,34 @@ they are test evidence, not replacements for the pinned publication.
 | `suppression/property-unconstrained-input-compatible.json` | Pinned interfaces | `a34a0f2076832477753d85510940886d3df5f92dbe0b1a4200b34b0da1e8aace` |
 | `suppression/unspecified-input-skipped-compatible.json` | Pinned interfaces | `5a16836cd98ab75686e18d2eaf7ba997a6a9411d1d7f7f222341e5036090d77e` |
 | `suppression/unspecified-output-skipped-compatible.json` | Pinned interfaces | `5635d5bf217cad20ecce4c9a5919982a6f7044711db6abb2b9f75b8be7eaf750` |
-| `external-resources.md` | Pinned interfaces | `1bb9faa76775e3d4db5bd1487b9fdec46a68a2cd43c9533707cc4917ef140e55` |
+| `external-resources.md` | Pinned interfaces | `f32d0a46c87d05e947884924f8e14d4dfe099cadaffd98ba52e53bbbc47c0976` |
+| `structural/defs-closed-object-ref-identical.json` | Pinned interfaces | `3ef24b82cea9b4f708d21bac5412db65b9935083adf84eb2d0492108202b52e8` |
+| `structural/defs-retained-not-ref-incompatible.json` | Pinned interfaces | `03b52c6da0a73694a5ab7c6fcaa2cf057cc5b429eab04d5ddc8a080e785d7f6b` |
+| `structural/merge-additional-properties-const-conflict-identical.json` | Pinned interfaces | `7629d2500bc11a2de08eeee04ae251e1966f25d70d23f1512fb911e842961758` |
+| `structural/merge-compared-schema-identical.json` | Pinned interfaces | `d82d5e158dbae3966a83636125e80076c08f107105e3f8a679d8270bad202a13` |
+| `structural/merge-empty-member-enum-identical.json` | Pinned interfaces | `d65619e3e9dcf8fb91a5935a36d460ebffc837485e99677046e08c1fc99dda6c` |
+| `structural/merge-empty-member-type-identical.json` | Pinned interfaces | `f008085138bd07a23c541da9dc60723cd6cc38cf80b3312a3a3ad11a8d740936` |
+| `structural/merge-items-const-conflict-identical.json` | Pinned interfaces | `820ef0081d38242c8e1207ff47b6c0cc458c83bdabafafe2b032959974cfed1b` |
+| `structural/merge-union-variant-identical.json` | Pinned interfaces | `9da691d96f1b13dee6d2bcc69ca412369633dc0e129babe5463268c84c0c7ff9` |
+| `subsumption/defs-false-variant-ref-incompatible.json` | Pinned interfaces | `3439e555b5c4bce06b53c8be46d662699404a8ffdff64aeb7e98caf0c2fe7a44` |
+| `subsumption/finite-inclusion-anyof-boundary-variant.json` | Pinned interfaces | `101335dce8fb446d3b0f085ef1f43c3fd3941d3454ec6400935348ee98a0553f` |
+| `subsumption/finite-inclusion-array-anyof.json` | Pinned interfaces | `1000bb06e372008ee4b63630c81561104bc98ec3b9c0786465b9c2051b8f3103` |
+| `subsumption/finite-inclusion-code-points.json` | Pinned interfaces | `348e283153aa5652c9eac133478ef820b9b5a74ba5fae5ff44e1af68ba86bd74` |
+| `subsumption/finite-inclusion-const-and-enum.json` | Pinned interfaces | `004e5a849e0de990788646e12912ecb5d6ffa48479c75bc6a9d651ca0a24cdf7` |
+| `subsumption/finite-inclusion-const-enum-exact-equality.json` | Pinned interfaces | `b52445cd89847900df7203321ab7c082ec79d02b406cf79bf5093dac24c43f6e` |
+| `subsumption/finite-inclusion-const-outside-enum.json` | Pinned interfaces | `43cc28f86c37a0284541da6676289f23ea3c85c432127c747654f6b2f5426754` |
+| `subsumption/finite-inclusion-const-within-enum.json` | Pinned interfaces | `5f3d006a90cc06c8bc858f259bdaabe513b61b0306dfed588d917147bd2dfb28` |
+| `subsumption/finite-inclusion-nested-member.json` | Pinned interfaces | `4f48f202cf912d492cd4e7ffb9afebd835e574f3fee5de16789de9756443f057` |
+| `subsumption/finite-inclusion-object-members.json` | Pinned interfaces | `7a0f1f7d8c14e3dc0e9c7278de446ff0c54d6561eb7f219f1a4591a602eb2430` |
+| `subsumption/finite-inclusion-receiving-pattern.json` | Pinned interfaces | `309a69158b635d42470fc6e3530934edf0235839754404251ac0d6b3c00dcf41` |
+| `subsumption/finite-inclusion-refused-value.json` | Pinned interfaces | `5dbd6779fd85956845aa2528948480ae6c764643c6e0da690e69e1be7abd886b` |
+| `subsumption/finite-inclusion-split-variants.json` | Pinned interfaces | `da05570850218ecfa118e0ef467d061ddbcda9a23e7bb33d4aa12aaea2bf501d` |
+| `subsumption/finite-inclusion-unapplied-pattern.json` | Pinned interfaces | `0380d48739296b074f0cf35977629dfd7ceb0d7f39b28827f284a6e4476b9228` |
+| `subsumption/finite-mixed-enum-other-type-output.json` | Pinned interfaces | `e35faf9cff12d3c5946c41ab2d398f56fb8a0cb6a56f40899c0a00268924f835` |
+| `subsumption/finite-object-required.json` | Pinned interfaces | `a06c1a12c9620da736956cdc0c9b271ea6882280edeed50d8f0005c652c62e8a` |
+| `subsumption/finite-other-type-keyword.json` | Pinned interfaces | `fe2e778075423ec82b5bc09506f9c13e4a26b5cf5c4a941703b839e5a001741a` |
+| `subsumption/finite-same-type-keyword.json` | Pinned interfaces | `537babf2097b95703f26a7d1d9f6e5768629d2d16c7a93c710b760ba22db1637` |
+| `subsumption/finite-top-items.json` | Pinned interfaces | `68055fe8a03ddc21bf96aef6694a08283603617f01ac17652fd954f1ba3c4b9d` |
+| `subsumption/finite-top-object-keywords.json` | Pinned interfaces | `5f2eb4188596513bdd28354b452b0c034243f704060ef018cbf7ad97fd9dc0bc` |
+| `subsumption/merge-compared-schema-flowing-indeterminate.json` | Pinned interfaces | `a38173a214ce18ec136141183b2d1acb72097d49181f151f9d1408cf3fe36659` |
+| `subsumption/merge-empty-member-input-compatible.json` | Pinned interfaces | `1f8c10647a07f2df7e08674a46ebda662fb8860afdf651d371330ff5675baa00` |
