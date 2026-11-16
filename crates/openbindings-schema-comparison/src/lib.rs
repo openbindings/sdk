@@ -70,4 +70,4 @@ pub const PROFILE_IDENTIFIER: &str = "OB-2020-12";
 /// Version of the comparison profile, independent of SDK and core spec versions.
 pub const PROFILE_VERSION: &str = "0.1";
 /// Exact publication used to define this companion's comparison rules.
-pub const APPLIED_INTERFACE_REVISION: &str = "addf8d845f6fd6c67da514c45d1a38819f1dae62";
+pub const APPLIED_INTERFACE_REVISION: &str = "8be6f6837f90da7091e5496a1686e34bf3b57c15";

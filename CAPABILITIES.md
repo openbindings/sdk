@@ -126,7 +126,7 @@ qualification scopes are recorded in [performance boundaries](docs/performance-b
 The optional [comparison companion](crates/openbindings-schema-comparison/README.md)
 implements normalized identity, directional compatibility and interface checking
 from `OB-2020-12` profile 0.1, amended in interfaces revision
-`addf8d845f6fd6c67da514c45d1a38819f1dae62`. It preserves optional
+`8be6f6837f90da7091e5496a1686e34bf3b57c15`. It preserves optional
 slots, exact numbers/strings, opaque keyword values and union multiplicity. Explicit
 caller roots, bases and resource records govern references; it performs no fetching
 and does not reuse core `$id` interpretation or value evaluation. Its identity answer

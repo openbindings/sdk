@@ -5,9 +5,10 @@
 ### Changed
 
 - The interface companions (context, invocation, kind description, schema comparison, source pull) and their
-  vendored fixtures are pinned to interfaces revision `addf8d845f6fd6c67da514c45d1a38819f1dae62`, which amends the
-  OB-2020-12 schema-comparison profile 0.1 in place. The `APPLIED_INTERFACE_REVISION` constants change; the profile
-  identifier and version do not. The comparison corpus grows to 271 groups and 44 exact cases.
+  vendored fixtures are pinned to interfaces revision `8be6f6837f90da7091e5496a1686e34bf3b57c15`, which amends the
+  OB-2020-12 schema-comparison profile 0.1 in place and drops the unsatisfiable merge from the source-puller's list
+  of comparisons that cannot finish. The `APPLIED_INTERFACE_REVISION` constants change; the profile identifier and
+  version do not. The comparison corpus grows to 271 groups and 44 exact cases.
 - Breaking: an unsatisfiable merge (an empty `type` or `enum` intersection, or conflicting `const` values) is no
   longer an error. It normalizes to `{"not":{}}` at its own position, the compared schema included, so identity and
   directional comparison answer where they returned `UnsatisfiableMerge`. `ComparisonFailureKind::UnsatisfiableMerge`

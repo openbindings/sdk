@@ -5,7 +5,7 @@ unknown issue as a refusal or propagate it rather than infer compatibility.
 
 Compare schemas by normalized identity or directional compatibility under profile
 `OB-2020-12` version `0.1`, pinned at interfaces revision
-`addf8d845f6fd6c67da514c45d1a38819f1dae62`. This unpublished companion is independent
+`8be6f6837f90da7091e5496a1686e34bf3b57c15`. This unpublished companion is independent
 of core document conformance and the value evaluator. It implements the profile's
 directional rules and interface-level fold, plus the source puller's reference
 rule for reuse and existing-entry identity.
