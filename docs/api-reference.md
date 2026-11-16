@@ -601,7 +601,10 @@ present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `with_base` and `with_resource` configure it, and `schema(exact_value)` selects a
 `SchemaInput`. Membership uses node identity, not JSON equality: an equal but
 separately parsed schema gives a detached input with its own root's assigned
-dialect and private call-local declarations. These do not override configured
+dialect and private call-local declarations. Non-OBI selections inherit their
+enclosing resource's dialect through JSON ancestry, including members that are
+not schema keywords; the default is 2020-12. Every OBI position uses 2020-12.
+Call-local declarations do not override configured
 declarations: a reached URI or anchor claimed by distinct occurrences fails with
 `InvalidReference`, even when their JSON content is identical.
 Pointer references still start at

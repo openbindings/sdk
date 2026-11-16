@@ -61,9 +61,12 @@ impl ComparisonContext {
     /// Select an exact schema, retaining this context independently of its owner.
     /// Membership is by node identity, not JSON equality: a separately parsed
     /// copy of the document or one of its schemas is a detached input.
-    /// Detached schemas and selections outside configured schema positions
-    /// keep their own root's assigned dialect and private call-local declarations;
-    /// selecting a value never adds it to the persistent document index.
+    /// A non-OBI selection inherits its enclosing resource's dialect through
+    /// JSON ancestry, including members that are not schema keywords. Every OBI
+    /// position uses 2020-12. Detached schemas keep their own root's dialect.
+    /// Detached schemas and selections outside configured schema positions have
+    /// private call-local declarations; selecting a value never adds it to the
+    /// persistent document index.
     /// Call-local declarations do not override configured declarations. A reached
     /// URI or anchor declared by distinct occurrences is ambiguous and fails with
     /// `InvalidReference`, even if the occurrences have identical JSON content.

@@ -233,6 +233,12 @@ schemas, including inherited declarations and embedded resources. Foreign identi
 includes the schema, assigned dialect and entire supplied context, without
 2020-12 rewrites.
 
+For a selected position in a non-OBI document, dialect inheritance follows JSON
+ancestry even through members that are not schema keywords. The enclosing
+resource's `$schema` applies, including a declaration on an embedded `$id`
+resource; the default is 2020-12. Every position in an OBI document uses 2020-12.
+This dialect decision does not add declarations to the resource index.
+
 Type-specific rules run only for flowing types. Effective object members compare
 in both directions over the union of declared names, then remaining names. Finite
 source constraints, numeric endpoint guards and flowing union siblings can make

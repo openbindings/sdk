@@ -1,4 +1,4 @@
-//! Lazy resource resolution. Schema ancestry never interprets carrier members.
+//! Lazy resource resolution. Declaration ancestry never interprets carrier members.
 use crate::ComparisonFailureKind as FailureKind;
 use crate::{ComparisonContext, ComparisonFailure as Failure, SchemaInput, budget::Attempt};
 use openbindings::{JsonKind, JsonRef, JsonValue};
@@ -201,8 +201,8 @@ impl Resources {
         })
     }
     // The origin distinguishes document-contained positions from external ones.
-    // Walk original schema ancestry, so an embedded resource without $schema
-    // inherits its containing dialect even when reached directly by its URI.
+    // Walk JSON ancestry, including opaque members, so selected positions and
+    // embedded resources inherit their containing resource's dialect.
     pub(crate) fn foreign(
         &self,
         schema: JsonRef<'_>,
@@ -214,10 +214,7 @@ impl Resources {
         let entry = &index.entries[scope];
         let root = index.entries[entry.origin].document.view();
         let obi = entry.origin == 0 && is_obi(root);
-        let local = (entry.origin == 0)
-            .then_some(index.local_root.as_ref())
-            .flatten();
-        if obi && local.is_none() {
+        if obi && index.local_root.is_none() {
             return Ok(None);
         }
         use openbindings_internal_schema::dialect::Dialect;
@@ -231,39 +228,31 @@ impl Resources {
             if backend::occurrence(node) == backend::occurrence(root) {
                 break;
             }
-            if local
-                .is_some_and(|root| backend::occurrence(node) == backend::occurrence(root.view()))
-            {
-                break;
-            }
-            let Some(parent) = enclosing(node) else {
+            let Some(parent) = backend::parent(node) else {
                 break;
             };
             node = parent;
         }
         // A detached selection can resolve back into the configured document.
-        let local =
-            local.filter(|root| backend::occurrence(node) == backend::occurrence(root.view()));
-        if obi && local.is_none() {
+        if obi && backend::occurrence(node) == backend::occurrence(root) {
             return Ok(None);
         }
-        let root = local.map_or(root, JsonValue::view);
+        let root = node;
         let mut dialect = None;
         let mut assigned = Some(Dialect::Draft202012);
         for node in ancestors.into_iter().rev() {
             attempt.work(1)?;
             let root = backend::occurrence(node) == backend::occurrence(root);
-            let id = node.get("$id");
+            let id = node.get("$id").and_then(|v| v.as_str());
             // A declaration changes dialect only at a schema resource root.
+            // Schema-map entries named $id are schemas, not identifiers.
             // Draft-07 reference objects suppress their sibling declarations;
             // fragment-only draft-07 identifiers do not introduce resources.
             let resource = root
                 || (id.is_some()
                     && !assigned.is_some_and(|d| d.reference_object(node))
                     && !(assigned == Some(Dialect::Draft7)
-                        && id
-                            .and_then(|v| v.as_str())
-                            .is_some_and(|s| s.starts_with('#'))));
+                        && id.is_some_and(|s| s.starts_with('#'))));
             if resource && let Some(declared) = node.get("$schema") {
                 dialect = Some(declared);
                 assigned = declared.as_str().and_then(Dialect::from_uri);

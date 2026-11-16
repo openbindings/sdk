@@ -18,6 +18,10 @@ These follow the 2026-11-16 decision panel's strong consensus on the review's AP
 
 ### Fixed
 
+- Schema comparison could answer Compatible for a schema selected under a member that is not a keyword of its
+  document's dialect (`/schemas/A` in a standalone draft-07 root), because the dialect walk stopped at that member
+  and read the position as 2020-12. A selected position now takes its enclosing resource's dialect through any
+  members; positions in an OBI document are still read as 2020-12.
 - An established failure is no longer lost when an allowance runs out: a position that has definitely failed (an
   array past `maxItems`, say) completes at once instead of visiting its items, so under the Workers guide's limits an
   array of `$ref` items answers `fails`, where it answered no verdict for memory. Unknowns never erase a definite

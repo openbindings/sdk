@@ -88,6 +88,95 @@ fn selected_descendants_inherit_their_standalone_or_detached_root_dialect() {
 }
 
 #[test]
+fn selected_positions_inherit_resource_dialects_through_arbitrary_members() {
+    let receiver = input(&json!({"type":"string","maxLength":1}));
+    for (dialect, expected) in [
+        (
+            Some("http://json-schema.org/draft-07/schema#"),
+            Verdict::Indeterminate,
+        ),
+        (
+            Some("https://json-schema.org/draft/2019-09/schema"),
+            Verdict::Indeterminate,
+        ),
+        (None, Verdict::Compatible),
+    ] {
+        let schema = json!({"$ref":"https://r.test/s","maxLength":1});
+        for (path, mut root) in [
+            ("/schemas/A", json!({"schemas":{"A":schema}})),
+            (
+                "/carrier/schemas/A",
+                json!({"carrier":{"schemas":{"A":schema}}}),
+            ),
+            ("/array/0/A", json!({"array":[{"A":schema}]})),
+            ("/definitions/A", json!({"definitions":{"A":schema}})),
+            (
+                "/definitions/A",
+                json!({"definitions":{"$id":{},"$schema":{},"A":schema}}),
+            ),
+        ] {
+            if let Some(dialect) = dialect {
+                root["$schema"] = json!(dialect);
+            }
+            let context = ComparisonContext::new(exact(&root)).with_base("https://r.test/root");
+            let selected =
+                supplied(context.schema(context.document().at(path).unwrap().to_owned()));
+            // In draft-07 the $ref hides maxLength, so "ab" flows to a
+            // receiver that refuses it. Other foreign dialects also stop proof.
+            assert_flow(&selected, &receiver, expected);
+            assert_flow(&selected, &selected, Verdict::Compatible);
+        }
+    }
+}
+
+#[test]
+fn selected_positions_use_the_nearest_declared_resource_dialect() {
+    let receiver = input(&json!({"type":"string","maxLength":1}));
+    for (outer, inner, expected) in [
+        (
+            "https://json-schema.org/draft/2020-12/schema",
+            "http://json-schema.org/draft-07/schema#",
+            Verdict::Indeterminate,
+        ),
+        (
+            "http://json-schema.org/draft-07/schema#",
+            "https://json-schema.org/draft/2020-12/schema",
+            Verdict::Compatible,
+        ),
+    ] {
+        let root = json!({"$schema":outer,"definitions":{"resource":{
+            "$id":"https://r.test/embedded","$schema":inner,
+            "carrier":{"schemas":{"A":{"$ref":"https://r.test/s","maxLength":1}}}
+        }}});
+        let context = ComparisonContext::new(exact(&root)).with_base("https://r.test/root");
+        let selected = supplied(
+            context.schema(
+                context
+                    .document()
+                    .at("/definitions/resource/carrier/schemas/A")
+                    .unwrap()
+                    .to_owned(),
+            ),
+        );
+        assert_flow(&selected, &receiver, expected);
+    }
+}
+
+#[test]
+fn obi_selections_keep_2020_12_through_arbitrary_members() {
+    let receiver = input(&json!({"type":"string","maxLength":1}));
+    let schema = json!({"$schema":"http://json-schema.org/draft-07/schema#","$ref":"https://r.test/s","maxLength":1});
+    let root = json!({"openbindings":"0.2.0","operations":{},
+        "$schema":"http://json-schema.org/draft-07/schema#",
+        "schemas":{"A":schema},"carrier":{"schemas":{"A":schema}}});
+    let context = ComparisonContext::new(exact(&root));
+    for path in ["/schemas/A", "/carrier/schemas/A"] {
+        let selected = supplied(context.schema(context.document().at(path).unwrap().to_owned()));
+        assert_flow(&selected, &receiver, Verdict::Compatible);
+    }
+}
+
+#[test]
 fn obi_positions_and_local_references_keep_the_2020_12_interpretation() {
     let receiver = input(&json!({"type":"string","maxLength":1}));
     for dialect in [
