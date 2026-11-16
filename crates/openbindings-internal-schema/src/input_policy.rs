@@ -1,5 +1,6 @@
 //! Immutable supplied-resource input policy. Association conflicts are retained
 //! for reached-resource admission, so an unused collision does not poison a job.
+use crate::preparation::{Scratch, reserve};
 use crate::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -171,6 +172,7 @@ impl Supplied {
         control: &dyn Control,
     ) -> Result<Self, Failure> {
         control.check()?;
+        let scratch = Scratch::new(control);
         let mut collected = Vec::new();
         let mut retrieval_bytes = 0usize;
         for resource in resources {
@@ -186,9 +188,15 @@ impl Supplied {
                 .checked_add(resource.uri.len())
                 .filter(|bytes| *bytes <= maximum_identity)
                 .ok_or_else(crate::identity_budget::exceeded)?;
+            control.charge_allocation(resource.uri.capacity())?;
+            reserve(&mut collected, &scratch)?;
             collected.push(resource);
         }
+        control.charge_allocation(
+            collected.len() * size_of::<ProjectedResource>() + 2 * size_of::<usize>(),
+        )?;
         let resources: Arc<[ProjectedResource]> = collected.into();
+        drop(scratch);
         Self::indexed(
             resources,
             maximum_nodes,
@@ -245,26 +253,40 @@ impl Supplied {
                 control,
             )?;
             policy.identity_bytes += bytes;
+            reserve(&mut indexes, control)?;
             indexes.push(index);
         }
-        crate::preparation::identities(policy.identity_bytes, control)?;
+        control.charge_work(policy.identity_bytes.saturating_mul(8))?;
         for (source, resource) in resources.iter().enumerate() {
             control.check()?;
+            let temporary = Scratch::new(control);
             let index = schema_index::SchemaIndex::supplied_profiled(
                 &resource.document,
                 Some(&resource.uri),
                 maximum_nodes,
-                control,
+                &temporary,
                 resolve_profile,
             )?;
+            let normalization = Scratch::new(control);
+            normalization.charge_allocation(resource.uri.len().saturating_mul(8))?;
             if let Some(root) = index.nodes.first()
                 && let Some(name) = canonical_uri(&resource.uri)
             {
+                policy.reserve_name(&name, source, root.id as usize, control)?;
                 policy.add_canonical_name(name, source, root.id as usize);
             }
+            drop(normalization);
             for (node, base) in index.declared_bases() {
                 control.check()?;
+                let normalization = Scratch::new(control);
+                normalization.charge_allocation(base.len().saturating_mul(8))?;
                 if let Some(name) = canonical_resolved_uri(base) {
+                    policy.reserve_name(
+                        &name,
+                        source,
+                        index.nodes[*node as usize].id as usize,
+                        control,
+                    )?;
                     policy.add_canonical_name(
                         name,
                         source,
@@ -274,15 +296,60 @@ impl Supplied {
             }
         }
         control.check()?;
+        // Vec -> Box shrinks its backing in place; only retained capacity stays.
+        let capacity = indexes.capacity();
+        let count = indexes.len();
+        let indexes = indexes.into_boxed_slice();
+        control.release_allocation((capacity - count) * size_of::<schema_index::SchemaIndex>());
+        control.charge_allocation(
+            size_of::<InputPolicy>()
+                + size_of::<OnceLock<Box<[schema_index::SchemaIndex]>>>()
+                + 4 * size_of::<usize>(),
+        )?;
         Ok(Self {
             resources,
             policy: Arc::new(policy),
-            nodes: Arc::new(OnceLock::from(indexes.into_boxed_slice())),
+            nodes: Arc::new(OnceLock::from(indexes)),
         })
     }
 }
 
 impl InputPolicy {
+    fn reserve_name(
+        &mut self,
+        name: &String,
+        source: usize,
+        node: usize,
+        control: &dyn Control,
+    ) -> Result<(), Failure> {
+        use openbindings_internal_json::allocation::tree;
+        if !self.names.contains_key(name) {
+            control.charge_allocation(
+                tree(
+                    self.names.len() + 1,
+                    size_of::<String>(),
+                    size_of::<Vec<(usize, usize)>>(),
+                ) - tree(
+                    self.names.len(),
+                    size_of::<String>(),
+                    size_of::<Vec<(usize, usize)>>(),
+                ) + name.capacity()
+                    + 4 * size_of::<(usize, usize)>(),
+            )?;
+        } else if let Some(holders) = self.names.get_mut(name)
+            && !holders.contains(&(source, node))
+        {
+            reserve(holders, control)?;
+        }
+        if crate::space::standard_identifier(name) && !self.protected.contains(name) {
+            control.charge_allocation(
+                tree(self.protected.len() + 1, size_of::<String>(), 0)
+                    - tree(self.protected.len(), size_of::<String>(), 0)
+                    + name.len(),
+            )?;
+        }
+        Ok(())
+    }
     // Retrieval names pass through canonical_uri; resolved declared bases pass
     // through canonical_resolved_uri. Neither path registers unchecked text.
     fn add_canonical_name(&mut self, name: String, source: usize, node: usize) {

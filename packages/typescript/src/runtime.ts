@@ -22,7 +22,7 @@ let initialization: Promise<void> | undefined;
 
 let ready = false;
 
-/** Initialize this module instance once before using SDK APIs. Concurrent calls share one promise; loading/configuration failures can be retried, including one given a WebAssembly module that is not this package's, which is refused before it is instantiated. A Wasm runtime trap permanently rejects with SdkError code wasm-trap; initialize cannot replace that instance. Requires host crypto.getRandomValues (request-scoped hosts should call inside a request). Throws SdkError for initialization/entropy failures. Without input, Node reads the installed Wasm asset from disk; browsers fetch the module-relative asset. Supplying bytes/module bypasses default loading in every host. */
+/** Initialize this module instance once before using SDK APIs. Concurrent calls share one promise; loading/configuration failures can be retried, including one given a WebAssembly module that is not this package's, which is refused before it is instantiated. Only a trap from SDK Wasm execution permanently rejects with SdkError code wasm-trap; initialize cannot replace that instance. Requires host crypto.getRandomValues (request-scoped hosts should call inside a request). Throws SdkError for initialization/entropy failures. Without input, Node reads the installed Wasm asset from disk; browsers fetch the module-relative asset. Supplying bytes/module bypasses default loading in every host. */
 export function initialize(
   input?: WasmInput | Promise<WasmInput>,
 ): Promise<void> {
@@ -58,12 +58,16 @@ export function initialize(
         new URL("./wasm/openbindings_wasm_bg.wasm", import.meta.url),
       );
     }
-    await init({ module_or_path: await packageModule(module) });
+    const compiled = await packageModule(module);
+    try {
+      await init({ module_or_path: compiled });
+    } catch (error) {
+      throw wasmFailure(error);
+    }
     wasmCall(() => wasm.initializeRuntime());
     ready = true;
   })().catch((error) => {
     initialization = undefined;
-    error = wasmFailure(error);
     if (error instanceof SdkError) throw error;
     const failure = new SdkError(
       "wasm-initialization",

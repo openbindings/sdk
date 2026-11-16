@@ -57,10 +57,11 @@ fn check(
     if enters {
         assert_eq!(verdict(&actual), Some(true));
     }
-    // Explain still uses Original, including its original resource policy.
+    // Explanation preserves the selected verdict even when Original's
+    // diagnostic resource policy cannot establish that verdict independently.
     assert_eq!(
         serialized(selected.evaluate(value, Detail::Explain, &HEALTHY)),
-        serialized(original.evaluate(value, Detail::Explain, &HEALTHY))
+        serialized(actual)
     );
 }
 

@@ -139,6 +139,8 @@ pub(super) fn order<L: Ledger>(
     right: JsonRef<'_>,
     ledger: &mut L,
 ) -> Result<Ordering, L::Error> {
+    let mut scratch = storage::Scratch::new(ledger);
+    let ledger = &mut *scratch;
     let mut pending: Vec<Frame<'_>> = Vec::new();
     let mut current = Some((left, right));
     let mut completed = None;
@@ -360,6 +362,29 @@ mod tests {
     use super::*;
     use openbindings::JsonValue;
     use std::sync::atomic::AtomicBool;
+
+    #[test]
+    fn comparison_scratch_releases_reservations_and_preserves_peak_refusal() {
+        let left = JsonValue::parse("1.0").unwrap();
+        let right = JsonValue::parse("2.0").unwrap();
+        let control = AtomicBool::new(false);
+        let mut graph = Graph::new(4096, None, 1024, &control);
+        graph.charge(128).unwrap();
+        let remaining = graph.remaining().bytes;
+        for _ in 0..100 {
+            assert_eq!(
+                order(left.view(), right.view(), &mut graph).unwrap(),
+                Ordering::Less
+            );
+            assert!(
+                !value_predicates::literal_equal(left.view(), right.view(), &mut graph).unwrap()
+            );
+            assert_eq!(graph.remaining().bytes, remaining);
+        }
+        let mut small = Graph::new(512, None, 1024, &control);
+        let failure = order(left.view(), right.view(), &mut small).unwrap_err();
+        assert_eq!(failure.code, "semantic-analysis-memory-limit");
+    }
 
     const MIXED: &[&str] = &[
         "null",

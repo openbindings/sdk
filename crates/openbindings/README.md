@@ -77,7 +77,12 @@ a time bound is the caller's choice through `WorkControl` cancellation or
 estimates of memory held at once. Collection capacities and shared owners are
 charged at their storage lifetimes; fixed dependency construction uses a
 version-bound profile qualified against requested live heap. Dropped scratch is released and retained
-indexes/programs stay charged. See the dated
+indexes/programs stay charged. External registration uses the same accounting:
+each distinct source arena is counted once, both index walks follow vector
+capacity, and temporary indexes are released before continuing. Selected
+subtrees use the flat parser's capacity profile when detached. Registration's
+counting-allocator qualification lives in `tests/registration_accounting.rs`.
+See the dated
 [host-specific 250 ms suggestion](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026).
 Each preparation is independent. Ownership and thread-safety follow the concrete
 validator; the default evaluator shares compiled state when cloned.

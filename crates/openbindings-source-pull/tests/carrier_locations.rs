@@ -127,3 +127,28 @@ fn public_category_labels_are_never_formatted() {
         }
     }
 }
+
+#[test]
+fn public_request_and_validation_labels_remain_matchable_without_being_formatted() {
+    use openbindings_source_pull::{PullValidationError, RequestError};
+    let request = RequestError::Shape("PRIVATE_CALLER_LABEL");
+    let validation = PullValidationError::LimitExceeded("PRIVATE_CALLER_LABEL");
+    assert!(matches!(
+        request,
+        RequestError::Shape("PRIVATE_CALLER_LABEL")
+    ));
+    assert!(matches!(
+        validation,
+        PullValidationError::LimitExceeded("PRIVATE_CALLER_LABEL")
+    ));
+    for diagnostic in [
+        format!("{request}"),
+        format!("{request:?}"),
+        format!("{request:#?}"),
+        format!("{validation}"),
+        format!("{validation:?}"),
+        format!("{validation:#?}"),
+    ] {
+        assert!(!diagnostic.contains("PRIVATE_CALLER_LABEL"));
+    }
+}

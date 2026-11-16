@@ -26,7 +26,7 @@ const MAX = 8 * 1024 * 1024;
 const limit = (error) =>
   error instanceof sdk.SdkError &&
   error.code === "resource" &&
-  /max_identity_bytes/.test(error.message);
+  error.message === "external schema registration exceeded a preparation limit";
 
 test("a resource URI past the identity allowance crosses only as its refusing prefix", () => {
   const value = sdk.parseJson("true").value;
@@ -71,7 +71,8 @@ test("an earlier registration error still precedes an oversized URI, and iterati
       (error) =>
         error instanceof sdk.SdkError &&
         error.code === "resource" &&
-        !/max_identity_bytes/.test(error.message),
+        error.message ===
+          "external schema identity must be an absolute URI without a nonempty fragment",
     );
     assert.equal(continued, false);
   } finally {

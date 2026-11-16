@@ -87,7 +87,10 @@ labels, including caller-constructed labels; inspect them through `kind()`.
 exact row, such as `/report/added/2`, including nested proposal and label checks.
 Conflicting report rows identify the later row. A missing coverage row or an
 addition with no corresponding report row has no pointer. `Display` omits
-locations. Failure mapping preserves both category and pointer.
+locations. `PullValidationError::source()` exposes the relationship cause, as it
+does edit and version errors. Failure mapping preserves both category and pointer.
+`RequestError::Shape` and `PullValidationError::LimitExceeded` also omit caller-built
+labels from formatting; match the variant to read its label.
 
 `PullResult::validate_for` also checks an already supplied result and returns the
 prospective conformant document. That establishes core conformance, not offered
@@ -139,7 +142,8 @@ no `uses` accessor; an additional member with that name is retained as unknown
 metadata. Existing binding `references` name what the data refers to in the
 input document; follow schema references for what those entries reach in turn.
 
-Qualification includes the 38 pinned pull-report cases, five published examples,
+Qualification includes the 41 pinned pull-report cases (30 valid, 11 invalid, three of them reusing operations
+through a recursive schema under the accounted-reference rule), five published examples,
 74 independently designed controls and two illustrative kind consumers. The old
 inspection/synthesis companions and consumers are removed; full SDK integration
 and final performance qualification remain separate work.

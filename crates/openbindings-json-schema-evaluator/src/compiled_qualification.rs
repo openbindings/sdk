@@ -118,7 +118,7 @@ fn compare(
     }
     let counts = compiled::entries::take();
     (
-        if counts[2] == 1 {
+        if counts[2] == 2 {
             "compiled"
         } else {
             "original"

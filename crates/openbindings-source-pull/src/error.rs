@@ -19,7 +19,7 @@ use std::fmt;
 /// ```
 #[non_exhaustive]
 pub enum RequestError {
-    /// Invalid fixed request field or closed-carrier rule.
+    /// Invalid request field or closed-carrier rule. Formatting omits the label; match to read it.
     Shape(&'static str),
     /// The original document did not obtain core conformance.
     Interface(DocumentValidation),
@@ -29,7 +29,7 @@ pub enum RequestError {
 impl fmt::Debug for RequestError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Shape(field) => f.debug_tuple("Shape").field(field).finish(),
+            Self::Shape(_) => f.write_str("Shape { .. }"),
             Self::Interface(_) => f.write_str("Interface { .. }"),
             Self::Version(_) => f.write_str("Version { .. }"),
         }
@@ -141,9 +141,9 @@ impl std::error::Error for RelationshipError {}
 pub enum PullValidationError {
     /// The selected source is absent from the original document.
     MissingSource,
-    /// A report/document relationship was contradicted.
+    /// A report/document relationship was contradicted. The cause is available through `Error::source()`.
     Relationship(RelationshipError),
-    /// A finite local handoff or relationship allowance was exhausted.
+    /// A finite local handoff or relationship allowance was exhausted. Formatting omits the label; match to read it.
     LimitExceeded(&'static str),
     /// The caller cancelled local work.
     Cancelled,
@@ -181,7 +181,7 @@ impl fmt::Debug for PullValidationError {
         match self {
             Self::MissingSource => f.write_str("MissingSource"),
             Self::Relationship(e) => f.debug_tuple("Relationship").field(e).finish(),
-            Self::LimitExceeded(e) => f.debug_tuple("LimitExceeded").field(e).finish(),
+            Self::LimitExceeded(_) => f.write_str("LimitExceeded { .. }"),
             Self::Cancelled => f.write_str("Cancelled"),
             Self::Edit(_) => f.write_str("Edit { .. }"),
             Self::Prospective(_) => f.write_str("Prospective { .. }"),
@@ -207,9 +207,13 @@ impl fmt::Display for PullValidationError {
 impl std::error::Error for PullValidationError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::Relationship(error) => Some(error),
             Self::Edit(error) => Some(error),
             Self::Version(error) => Some(error),
-            _ => None,
+            Self::MissingSource
+            | Self::LimitExceeded(_)
+            | Self::Cancelled
+            | Self::Prospective(_) => None,
         }
     }
 }

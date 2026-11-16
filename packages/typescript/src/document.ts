@@ -26,7 +26,7 @@ import {
   isExact,
   jsonRaw,
   limitsOption,
-  ownEntries,
+  optionEntries,
   scalar,
   wellFormed,
 } from "./json.js";
@@ -96,13 +96,12 @@ let defaultValidationLimits: Readonly<ValidationLimits> | undefined;
 function validationOptions(
   options: ValidationOptions,
 ): ValidationLimits | undefined {
-  if (!options || typeof options !== "object" || Array.isArray(options))
-    throw new SdkError(
-      "invalid-validation-options",
-      "Validation options must be an object.",
-    );
   let limits: unknown;
-  for (const [key, value] of ownEntries(options)) {
+  for (const [key, value] of optionEntries(
+    options,
+    "Validation options",
+    "invalid-validation-options",
+  )) {
     if (key !== "limits")
       throw new SdkError(
         "invalid-validation-options",

@@ -53,7 +53,10 @@ nested disclosures and support indices relative to the admitted carrier; opaque
 context failures locate `/context`. Both role crates keep labels inspectable
 through `kind()` while omitting them from `Display` and `Debug`.
 
-`PullValidationError::Relationship` carries a `RelationshipError` struct.
+`PullValidationError::Relationship` carries a `RelationshipError` struct and
+exposes it through `Error::source()`. Caller-built labels in `KindError::LimitExceeded`,
+`RequestError::Shape`, `PullValidationError::LimitExceeded`, and
+`ComparisonFailureKind::LimitExceeded` remain matchable but are omitted from formatting.
 `kind()` returns a Copy, non-exhaustive `RelationshipErrorKind`; `pointer()` borrows
 an optional exact provider-report row such as `/report/existing/2`. Conflicting
 rows identify the later row. Missing coverage and additions with no report row
@@ -303,6 +306,9 @@ module instance becomes unusable. All later SDK operations fail immediately with
 that code; `initialize()` rejects and cannot replace it. Disposal remains safe
 and idempotent, skips Wasm after a trap, and finalizers never throw. The original
 runtime error is not attached as a cause. Resume work in a fresh module instance.
+A rejection from the caller's initialization promise, even a
+`WebAssembly.RuntimeError`, is a retryable `wasm-initialization` error with its
+cause retained.
 
 ## Schemas and value results
 
@@ -569,7 +575,13 @@ whole-error equality includes provenance.
 present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `finding()` accessors. `ComparisonContext::new(root)` retains a reusable document;
 `with_base` and `with_resource` configure it, and `schema(exact_value)` selects a
-`SchemaInput`. `SchemaInput::new` remains a convenience for single comparisons;
+`SchemaInput`. Membership uses node identity, not JSON equality: an equal but
+separately parsed schema gives a detached input with its own root's assigned
+dialect and private call-local declarations. Pointer references still start at
+the configured document unless a local `$id` changes scope.
+As SDK policy, roots with both `openbindings` and `operations` members are
+recognized as OBI documents without validating those values.
+`SchemaInput::new` remains a convenience for single comparisons;
 `with_base` sets the initial base of a standalone schema root and is ignored for
 an OBI root. Its document resource cannot be named by a caller URI. Followed
 references must reach schema positions; pointers into instance or carrier data
@@ -592,7 +604,9 @@ their supplied URIs as bases, including for relative references between resource
 The callback selects realized, consumed, both, or excluded for that match. Every distinct
 provided match is retained, independent of alias order, with output then input
 results including failures. `operations()`, `issues()` and each issue's
-`correspondence()` expose keys, role and slot results. `role()` returns
+`correspondence()` expose keys, role and slot results.
+`OperationComparison::required()` returns `&str`, and `provided()` returns
+`Option<&str>`. `role()` returns
 `Some(Realized)` or `Some(Consumed)` for present matches, never `Both`; an included
 missing operation has one correspondence with `None` role. Consumption reverses
 input and output flow. Allowance exhaustion remains in slots after setup;
@@ -647,15 +661,20 @@ values use the same nonnegative integer range as other evaluator limits,
 
 A charge above the ceiling returns `NoVerdict` / `no-verdict`, reason
 `LimitExceeded` / `limit-exceeded`, code `pattern-search-work-limit`, before
-searching. The charge is `(UTF-8 input bytes + 1) * prepared program weight`,
-in the existing evaluation work units. It contains no document values.
+an oversized search. The charge bounds the actual matcher's state and transition
+work over the positions it can inspect. Finite anchored searches need not inspect
+the whole input. An unanchored search may prove a match in a bounded prefix; an
+inconclusive prefix returns the same limit code. Assertions still see the complete
+input. The charge contains no document values.
 `evaluation_sdk_work_units` / `evaluationSdkWorkUnits` remains the separate
 optional cumulative work cap. Internal fixed-width accounting cannot invent an
 uncapped work-limit refusal by overflowing on Wasm.
 
 Changing the search ceiling from its default selects Original, as other changed
 evaluator limits do. Explicitly supplying the default preserves lane selection.
-The compiled lane retains its separate admission bounds. Neither policy is a
+The compiled lane retains its separate admission bounds. Explanation preserves
+that lane's established verdict if Original diagnostics exhaust their allowance,
+returning an incomplete problem list for failure. Neither policy is a
 deadline; cancellation is observed around an engine call, never inside it.
 
 ## TypeScript preparation and registration limits

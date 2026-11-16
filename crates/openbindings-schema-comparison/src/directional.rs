@@ -666,12 +666,13 @@ fn all_lengths_empty(map: &Object, attempt: &mut Attempt<'_>) -> Result<bool, Fa
     }
     Ok(true)
 }
+// Kept definitions are identity context, never directional constraints.
+fn constraints(map: &Object) -> impl Iterator<Item = (&value::Name, &Value)> {
+    map.iter().filter(|(key, _)| !is(key, "$defs"))
+}
 fn length_only_top(map: &Object, depth: usize, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
-    for (key, value) in map {
+    for (key, value) in constraints(map) {
         attempt.work(512)?;
-        if is(key, "$defs") {
-            continue;
-        }
         if is(key, "minLength") || is(key, "minItems") {
             let Value::Number(n) = value else {
                 return Ok(false);
@@ -717,13 +718,33 @@ fn integer_endpoint(
             && value::numbers(f.value, r.value, attempt)? == Ordering::Equal))
 }
 fn only(map: &Object, keys: &[&str], attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
-    for key in map.keys() {
+    for (key, _) in constraints(map) {
         attempt.work(512)?;
-        if !is(key, "$defs") && !keys.iter().any(|k| is(key, k)) {
+        if !keys.iter().any(|k| is(key, k)) && applicable(map, key) {
             return Ok(false);
         }
     }
     Ok(true)
+}
+fn applicable(map: &Object, key: &[u16]) -> bool {
+    let types: &[&str] = if ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"]
+        .iter()
+        .any(|k| is(key, k))
+    {
+        &["number", "integer"]
+    } else if ["minLength", "maxLength"].iter().any(|k| is(key, k)) {
+        &["string"]
+    } else if ["items", "minItems", "maxItems"].iter().any(|k| is(key, k)) {
+        &["array"]
+    } else if ["properties", "required", "additionalProperties"]
+        .iter()
+        .any(|k| is(key, k))
+    {
+        &["object"]
+    } else {
+        return true;
+    };
+    types.iter().any(|ty| includes(map, ty))
 }
 fn typed_value(map: &Object, v: &Value, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
     let ty = match v.view() {
@@ -989,7 +1010,7 @@ fn union(map: &Object) -> Option<&[Value]> {
 }
 fn siblings(map: &Object, depth: usize, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
     let mut result = Object::new();
-    for (key, v) in map {
+    for (key, v) in constraints(map) {
         attempt.work(1)?;
         if is(key, "anyOf") {
             continue;
@@ -1183,7 +1204,7 @@ fn unions(
 }
 fn copy_map(map: &Object, depth: usize, attempt: &mut Attempt<'_>) -> Result<Object, Failure> {
     let mut result = Object::new();
-    for (key, v) in map {
+    for (key, v) in constraints(map) {
         attempt.work(key.len().saturating_add(1))?;
         attempt.allocate(key.len().saturating_mul(2))?;
         value::insert(

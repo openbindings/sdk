@@ -19,9 +19,13 @@ separate runs. The performance workflow's timing remains advisory.
 
 ## Uncancellable pattern searches (November 2026)
 
-Original charges a pattern search as `(UTF-8 input bytes + 1) * prepared program
-weight`, then calls the unmodified matcher. Cancellation is observed before and
-after that call, never during it. The default `pattern_search_work_units`
+Original charges a conservative bound on the work of its unmodified matcher.
+Finite anchored searches charge only the positions they can inspect. Unanchored
+searches may prove a match in a bounded prefix; an inconclusive prefix returns
+the search-limit code. Assertions retain the complete input. The
+[bound derivation](../crates/openbindings-json-schema-evaluator/PATTERN-WORK.md)
+describes the pinned engine and the public ordinary and hostile corpora.
+Cancellation is observed before and after the matcher call, never during it. The default `pattern_search_work_units`
 (`patternSearchWorkUnits` in TypeScript) is 250,000,000. A larger charge returns
 `no-verdict`, reason `limit-exceeded`, code `pattern-search-work-limit`, before
 searching. The separate code identifies this safety ceiling even when the caller
@@ -50,7 +54,8 @@ receives the entire charge, split into pointer-sized chunks on wasm32. Remaining
 allowances clamp before conversion. Public cumulative cap types stay unchanged;
 TypeScript numeric limits remain nonnegative 32-bit integers.
 
-Calibration on 2026-11-14 used macOS 26.6.2 arm64, Rust 1.99.0 release,
+The following historical calibration predates the refined state weights and
+finite inspection bounds. Calibration on 2026-11-14 used macOS 26.6.2 arm64, Rust 1.99.0 release,
 wasm-bindgen 0.2.129 and Node 22.19.0. For each pattern, the public ceiling
 located its exact program weight with an empty input; the measured late-mismatch
 input then spent almost 250,000,000 units. The Wasm run used a 50,331,647-byte
@@ -281,8 +286,9 @@ The common single-query counter is inline, so a single query allocates nothing
 new and adds no work debit. Other nodes use accounted entries keyed by schema
 position. No index, enum state or enum charge is added during preparation.
 
-Indexes and sorting use the evaluation's own cumulative reservation ledger and
-existing `semantic-analysis-memory-limit` refusal. A sorted index of 20,000
+Indexes and sorting use the evaluation's own reservation ledger and existing
+`semantic-analysis-memory-limit` refusal. Exact comparison scratch is released
+after each comparison; retained index storage stays charged. A sorted index of 20,000
 choices costs 80,000 bytes, plus any counter-entry storage and comparison scratch.
 Every evaluation starts fresh: retaining a prepared schema never warms an enum
 index or changes a later call's work limit boundary. No fingerprint or secret
@@ -346,12 +352,13 @@ peak proof does not cover division, equality traversal, uniqueness storage or
 recursive admission. This is a scratch selection rule, not a time bound, RSS
 measurement or total allocation traffic limit.
 
-Both lanes must agree whenever both decide. Original still charges decimal
-scratch cumulatively and can return `semantic-analysis-memory-limit` while the
-compiled lane completes within its peak allowance. A refusal from either lane
+Both lanes must agree whenever both decide. Original reserves its own proof,
+memo and scratch storage, releasing completed exact-comparison scratch. It can
+return `semantic-analysis-memory-limit` while the compiled lane completes within
+its peak allowance. A refusal from either lane
 is not a disagreement. Tests check newly admitted hostile decisions against
 independently prepared Original evaluation with a larger diagnostic allowance;
-production defaults and Original accounting are unchanged.
+production defaults are unchanged.
 
 Native release measurements on aarch64-apple-darwin with Rust 1.99.0 compare
 `53ab0d4` selection with the peak rule, retaining prepared owners and parsed
@@ -554,7 +561,7 @@ on each host and build.
 Original evaluates with heap frames. It samples stack addresses against
 `SAMPLED_STACK_BYTES` (256 KiB) and can return `evaluation-stack-limit`.
 Samples are an additional observation, not a bound on helper peaks or on an
-engine's native call stack. Explain always uses Original. The internal JSON
+engine's native call stack. Explanation uses Original diagnostics after the selected lane establishes failure. The internal JSON
 `work::guard` currently has no production caller, so the compiled
 `Stop::Stack` to `evaluation-depth-limit` mapping is unreachable through the
 SDK's current production paths. There is no public stack-byte setting.
@@ -786,7 +793,8 @@ survival qualification at those thread sizes, not a measurement of unused bytes.
 | Additional | 340 | 340 |
 | Union | 203 | 102 |
 
-Explain always runs on Original, so it has no compiled admission boundary.
+Explain uses the same compiled admission for its verdict and Original for
+failure diagnostics. Diagnostic exhaustion does not undo an established verdict.
 The native tests compute these bounds with `qualified_depth()`; the Wasm
 walk uses only public TypeScript APIs at default limits. Its shared module is
 [`compiled-depth.mjs`](../packages/typescript/test/compiled-depth.mjs), used by
@@ -830,12 +838,12 @@ limits native call depth, which the Original sampler cannot observe. A Wasm
 trap does not unwind Rust frames or restore their stack-pointer updates;
 continuing with that instance is not a recovery strategy.
 An allocation failure during preparation was reproduced on 2026-11-14 with
-a 64 MiB Node Wasm cap: the caller received `RuntimeError: unreachable`, not
-an `SdkError`, with no SDK code. A later integer-schema preparation also
-trapped, although small-document validation still worked. Treat this as fatal
-for the isolate. `initialize()` caches its successful instance and cannot
-replace it. Whether to translate this trap to an SDK error remains open;
-see [Workers recovery](workers.md#memory-exhaustion).
+a 64 MiB Node Wasm cap: the caller then received a bare `RuntimeError:
+unreachable`, and a later integer-schema preparation also trapped. The package
+now turns a trap into an `SdkError` with code `wasm-trap` and refuses every later
+call on that instance with the same code. Treat it as fatal for the isolate:
+`initialize()` caches its instance and cannot replace it. See
+[Workers recovery](workers.md#memory-exhaustion).
 
 Local workerd 2026-11-04 (compatibility date 2026-09-28) ran the same module
 from a plain Worker on 2026-11-07 and passed at its default stack and with

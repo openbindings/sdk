@@ -56,8 +56,9 @@ Duplicate instance member names produce `NoVerdict` after parsing.
 
 Every prepared validator retains an Original semantic plan. At default evaluator
 and `PreparationLimits` settings, an eligible subset also gets a projected schema
-compiled by jsonschema. `evaluate` tries that compiled lane; `explain` always uses
-Original, including for satisfying values. Changing any limit from its default
+compiled by jsonschema. `evaluate` and `explain` first try that compiled lane;
+diagnostics use Original after failure. Exhausted diagnostic work leaves the established failure
+intact with incomplete problems. Changing any limit from its default
 selects Original, even when the new limit is larger. Route selection is private.
 
 Compiled admission requires established static references, standard 2020-12
@@ -81,9 +82,10 @@ plan or survives a value call, so cold and warm calls spend the same work.
 
 The evaluation ledger reserves four bytes per indexed choice, plus accounted
 entries for additional enum nodes. An index of 20,000 choices uses 80,000 bytes.
-Sort comparisons and their scratch retain the evaluation's cumulative reservation
-policy and `semantic-analysis-memory-limit` refusal. Equality remains exact for
-mathematical numbers, decoded strings and objects in any member order. Work is
+Exact comparisons release their decimal and traversal scratch reservations when
+they finish. The retained index stays charged, and a comparison whose scratch
+exceeds the available allowance still returns `semantic-analysis-memory-limit`.
+Equality remains exact for mathematical numbers, decoded strings and objects in any member order. Work is
 deterministic on wasm32 and 64-bit hosts. The compiled library lane and admission
 policy are unchanged.
 
@@ -98,9 +100,10 @@ charge the evaluation ledger. Values without collisions retain their previous
 work debits. Exact numbers, decoded UTF-16 strings, arrays and unordered member
 maps have the same equality relation as `literal_equal`.
 
-Original uses heap frames, cooperative work checks and cumulative SDK storage
-reservations. Compiled evaluation recurses in the library, with static admission
-and a conservative peak scratch estimate within the default 48 MiB allowance.
+Original uses heap frames, cooperative work checks and SDK storage reservations,
+releasing completed exact-comparison scratch. Compiled evaluation recurses in the
+library, with static admission and a conservative peak scratch estimate within
+the default 48 MiB allowance.
 Evaluation work accounting uses fixed-width arithmetic on native and Wasm.
 Without a requested work cap it cannot report a work limit from counter overflow;
 caps representable on both targets stop at the same debit. Existing cumulative cap
@@ -188,7 +191,7 @@ fn prepare_bounded(schema: &Schema, resources: &ExternalSchemas)
 | `pattern_depth` | 32 | Pattern group nesting |
 | `total_pattern_bytes` | 4 MiB | Unique normalized pattern forms across values and property names |
 | `total_pattern_memory` | 64 MiB | Immutable pattern-program representation |
-| `evaluation_sdk_reservation_bytes` | 48 MiB | Original cumulative SDK storage reservations; compiled peak scratch admission at defaults |
+| `evaluation_sdk_reservation_bytes` | 48 MiB | Original SDK storage reservations, with completed comparison scratch released; compiled peak scratch admission at defaults |
 
 Each Original value invocation starts a fresh evaluation allowance. Verdict and diagnostic
 passes share what remains; diagnostic exhaustion preserves an established failure
@@ -213,14 +216,18 @@ unknown matches reserve their exact text-key allowance before constructing it.
 
 Original pattern search checks cancellation before and after the matcher, never
 inside it. `pattern_search_work_units` refuses a search before entry when its
-charge, `(UTF-8 input bytes + 1) * prepared program weight`, exceeds the ceiling.
+conservative charge exceeds the ceiling. Finite anchored searches charge only
+the bytes the matcher can inspect. Unanchored searches may prove a match in a
+bounded prefix, keeping the complete haystack for assertions; an inconclusive
+prefix returns the same limit code. See the [engine bound](PATTERN-WORK.md).
 The result is `NoVerdict` with reason `LimitExceeded` and code
 `pattern-search-work-limit`, distinct from the caller's cumulative
 `evaluation-work-limit`. Diagnostics contain no pattern or instance text.
 Raise the field or use `None` to remove the ceiling; either selects Original.
 Explicitly supplying the default keeps existing lane selection. Compiled work
-retains its own admission policy. This default treats uncancellable work like
-storage: the caller cannot stop it during the call. It is a work bound, not an
+retains its own admission policy. Explanation preserves its established verdict
+when Original diagnostic work is exhausted. This default treats uncancellable
+work like storage: the caller cannot stop it during the call. It is a work bound, not an
 elapsed-time ceiling; see the [measurements](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#uncancellable-pattern-searches-november-2026).
 
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning.

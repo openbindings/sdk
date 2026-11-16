@@ -67,7 +67,8 @@ failure remains `CheckFailure::Operational`; a kind's rejection carries its own
 code, readable message and optional exact data. `ContextRequired` carries the
 shared context challenge. The SDK never acquires context or retries a check.
 Native errors are not serialized or measured as JSON carriers. `Display` prints
-each SDK error's own layer and `Debug` keeps payloads hidden. Read a rejection's
+each SDK error's own layer and `Debug` keeps payloads hidden, including caller-built
+`KindError::LimitExceeded` labels. Match the variant to read its label. Read a rejection's
 `code()` and `message()` explicitly. For native errors implementing
 `std::error::Error + 'static`, `KindError::source()` and `CheckFailure::source()`
 retain the underlying cause. Apply the application's disclosure policy before

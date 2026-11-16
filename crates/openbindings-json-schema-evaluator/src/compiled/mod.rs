@@ -225,6 +225,8 @@ impl Lane {
     }
 
     /// None means value-level selection chose Plan before calling is_valid.
+    // Keep the outcome-only path inlined now that explanation also calls it.
+    #[inline(always)]
     pub(super) fn outcome(
         &self,
         value: &JsonValue,

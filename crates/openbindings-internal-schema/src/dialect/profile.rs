@@ -204,10 +204,9 @@ impl Profile {
         }
     }
 
+    /// Inventory schema positions even beside a draft-07 reference. Evaluation
+    /// still uses `get`, which suppresses that reference object's siblings.
     pub fn each_child<'a>(self, schema: JsonRef<'a>, mut visit: impl FnMut(JsonRef<'a>)) {
-        if self.edition.reference_object(schema) {
-            return;
-        }
         if let Some(fields) = schema.members() {
             for field in fields {
                 if let Some(selector) = field

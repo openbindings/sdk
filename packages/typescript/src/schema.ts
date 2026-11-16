@@ -21,7 +21,8 @@ import {
   ordinaryLimitCode,
   isExact,
   jsonRaw,
-  ownEntries,
+  optionEntries,
+  optionsObject,
   scalar,
 } from "./json.js";
 import type { ExactInput, JsonInput } from "./json.js";
@@ -441,11 +442,13 @@ function preparationSettings(limits?: Partial<PreparationLimits>): {
       "invalid-preparation-limits",
       "Preparation limits must be known nonnegative 32-bit budgets; only maxSdkWorkUnits accepts null.",
     );
-  if (!limits || typeof limits !== "object" || Array.isArray(limits))
-    throw invalid();
   const defaults = preparationLimits();
   const encoded: Record<string, number | null> = {};
-  for (const [key, value] of ownEntries(limits)) {
+  for (const [key, value] of optionEntries(
+    limits,
+    "Preparation limits",
+    "invalid-preparation-limits",
+  )) {
     const budget =
       typeof value === "number" &&
       Number.isSafeInteger(value) &&
@@ -471,11 +474,7 @@ function registrationOptions(
   options?: ResourceRegistrationOptions,
 ): ReturnType<typeof preparationSettings> & { signal?: AbortSignal } {
   if (options === undefined) return {};
-  if (!options || typeof options !== "object" || Array.isArray(options))
-    throw new SdkError(
-      "invalid-work-options",
-      "Registration options must be an object.",
-    );
+  optionsObject(options, "invalid-work-options", "Registration options");
   const { limits, ...work } = options;
   const settings = preparationSettings(limits);
   return { ...settings, signal: workSignal(work) };
@@ -508,7 +507,11 @@ export function evaluatorLimits(): Readonly<EvaluatorLimits> {
 function encodedLimits(limits: Partial<EvaluatorLimits> = {}): string {
   const defaults = evaluatorLimits();
   const encoded: Record<string, number | null> = {};
-  for (const [key, value] of ownEntries(limits)) {
+  for (const [key, value] of optionEntries(
+    limits,
+    "Evaluator limits",
+    "invalid-evaluator-limits",
+  )) {
     // The per-search ceiling also accepts null to remove its finite default.
     const budget =
       typeof value === "number" &&
@@ -675,11 +678,7 @@ export class ExternalSchemas extends Managed {
   ): SchemaPreparation {
     requireReady();
     resourceRaw(this);
-    if (!options || typeof options !== "object" || Array.isArray(options))
-      throw new SdkError(
-        "invalid-work-options",
-        "Preparation options must be an object.",
-      );
+    optionsObject(options, "invalid-work-options", "Preparation options");
     const { limits, preparationLimits, ...work } = options;
     const signal = workSignal(work);
     const encoded = limits === undefined ? undefined : encodedLimits(limits);
@@ -768,11 +767,7 @@ function prepareOptions(options: PrepareOptions): {
   preparationLimits?: Partial<PreparationLimits>;
   signal?: AbortSignal;
 } {
-  if (!options || typeof options !== "object" || Array.isArray(options))
-    throw new SdkError(
-      "invalid-work-options",
-      "Preparation options must be an object.",
-    );
+  optionsObject(options, "invalid-work-options", "Preparation options");
   const { resources, limits, preparationLimits, ...work } = options;
   return { resources, limits, preparationLimits, signal: workSignal(work) };
 }
@@ -783,11 +778,7 @@ export function referenceOptions(options: ReferenceOptions): {
   maxReportBytes: number;
   aborted: boolean;
 } {
-  if (!options || typeof options !== "object" || Array.isArray(options))
-    throw new SdkError(
-      "invalid-work-options",
-      "Reference options must be an object.",
-    );
+  optionsObject(options, "invalid-work-options", "Reference options");
   const { resources, limits, ...work } = options;
   const { maxReportBytes } = reportLimits(
     referenceLimits(),
@@ -804,13 +795,12 @@ export function referenceOptions(options: ReferenceOptions): {
 }
 
 function workSignal(options: WorkOptions): AbortSignal | undefined {
-  if (!options || typeof options !== "object" || Array.isArray(options))
-    throw new SdkError(
-      "invalid-work-options",
-      "Work options must be an object containing an optional AbortSignal.",
-    );
   let signal: AbortSignal | undefined;
-  for (const [key, value] of ownEntries(options)) {
+  for (const [key, value] of optionEntries(
+    options,
+    "Work options",
+    "invalid-work-options",
+  )) {
     if (key !== "signal")
       throw new SdkError("invalid-work-options", "Unknown work option.");
     signal = value as AbortSignal | undefined;

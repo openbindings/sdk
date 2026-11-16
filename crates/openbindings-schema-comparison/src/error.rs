@@ -2,7 +2,7 @@ use openbindings::SchemaOrigin;
 use std::{fmt, sync::Arc};
 
 /// Category of a failed comparison. No comparison verdict is implied.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ComparisonFailureKind {
     /// A schema or a supported keyword has an inadmissible shape.
@@ -23,12 +23,29 @@ pub enum ComparisonFailureKind {
     /// A specified type/enum intersection is empty, or merged const values conflict.
     /// This is not a general schema satisfiability classification.
     UnsatisfiableMerge,
-    /// An explicit per-attempt resource allowance was exhausted.
+    /// An explicit per-attempt resource allowance was exhausted. Formatting omits the label; match to read it.
     LimitExceeded(&'static str),
     /// A context root is not the exact root of its paired conformance proof.
     ContextMismatch,
     /// The caller cancelled the comparison.
     Cancelled,
+}
+impl fmt::Debug for ComparisonFailureKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::InvalidSchema => "InvalidSchema",
+            Self::DuplicateMember => "DuplicateMember",
+            Self::InvalidReference => "InvalidReference",
+            Self::MissingReference => "MissingReference",
+            Self::UnsupportedReference => "UnsupportedReference",
+            Self::UnsupportedNormalization => "UnsupportedNormalization",
+            Self::ReferenceCycle => "ReferenceCycle",
+            Self::UnsatisfiableMerge => "UnsatisfiableMerge",
+            Self::LimitExceeded(_) => "LimitExceeded { .. }",
+            Self::ContextMismatch => "ContextMismatch",
+            Self::Cancelled => "Cancelled",
+        })
+    }
 }
 /// The original operand responsible for a comparison failure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

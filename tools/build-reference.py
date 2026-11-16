@@ -79,6 +79,7 @@ def resolve_source_links(output, commit):
         "../../docs/schema-evaluators.md": "docs/schema-evaluators.md",
         "examples/first_use.rs": "crates/openbindings-json-schema-evaluator/examples/first_use.rs",
         "examples/replacement.rs": "crates/openbindings-json-schema-evaluator/examples/replacement.rs",
+        "PATTERN-WORK.md": "crates/openbindings-json-schema-evaluator/PATTERN-WORK.md",
     }
     original = current = page.read_text()
     resolutions = []

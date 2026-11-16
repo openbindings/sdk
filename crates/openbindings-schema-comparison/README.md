@@ -26,6 +26,12 @@ assert!(!identical(None, Some(&existing), &ComparisonLimits::default())?);
 need not be an OBI: a source puller can compare an offered schema before authoring
 it. `SchemaInput::from(&schema)` retains a canonical core schema's original context.
 Dropping the original document or view does not invalidate the input.
+Membership uses node identity, not JSON equality. Passing an equal but separately
+parsed schema to `SchemaInput::new` or `ComparisonContext::schema` creates a
+detached input. For a standalone schema that is its own document, clone the same
+`JsonValue` for both arguments. Detached inputs keep their own root's assigned
+dialect and private call-local declarations, as described below; pointer
+references still use the configured document unless a local `$id` changes scope.
 `ComparisonContext::retained_bytes()` estimates allocations kept alive by one
 context: complete exact source arenas, configuration and completed indexes.
 It computes the figure only when asked, without initializing indexes. Clones
@@ -38,6 +44,8 @@ handle. Tree node sizes are estimates, not a hard admission bound.
 For many comparisons, construct one `ComparisonContext::new(root)` per document
 and select inputs with `context.schema(exact_schema)`. Its `with_base` and
 `with_resource` configure resolution, just as the convenience input methods do.
+As SDK policy, a root is recognized as an OBI document when both `openbindings`
+and `operations` members are present; recognition does not validate their values.
 For offered `#/schemas/...` references, the compiled
 [schema-report example](https://github.com/openbindings/sdk/blob/main/examples/source-pull-consumer/tests/schema_report.rs)
 supplies an OBI-shaped exact root directly, without a temporary validated document.
@@ -88,14 +96,15 @@ merge involving multiple sources. Unknown ancestry leaves the origin absent;
 global allowance exhaustion and cancellation also have no operand side. Location
 storage is bounded by the attempt's allocation allowance, retained across slots,
 and limited to an 8 MiB exact pointer. A pointer exceeding that cap is omitted;
-an exhausted attempt allowance returns `LimitExceeded`. Debug and Display never
+an exhausted attempt allowance returns `LimitExceeded`. Its label remains available
+by matching, including caller-built labels, but is omitted from formatting. Debug and Display never
 include supplied values; inspect `origin()` explicitly for editor diagnostics.
 
 References resolve within their containing schema resource, including nested `$id`
 resources and plain-name anchors. Without `$id`, fragments use the supplied document
 root. Relative references need a resource base; external content must be supplied
-with `with_resource`. Nothing is fetched. A `$ref` target is conjoined with its
-siblings using the profile's `allOf` rules. Missing content, cycles and malformed
+with `with_resource`. Nothing is fetched. At 2020-12 positions, a `$ref` target is
+conjoined with its siblings using the profile's `allOf` rules. Missing content, cycles and malformed
 references fail normalization. Duplicate supplied URI identities are refused.
 Resource IDs, supplied names, initial bases and references share the evaluator's
 URI canonicalization, including scheme/host case, unreserved percent encodings,
@@ -211,9 +220,11 @@ Identity runs first. Non-identical oneOf, retained allOf and externally assigned
 foreign dialect positions stop on either side; outside-profile flowing content
 also stops. Receiving-only unknown content retains an unresolved obligation while
 its known rules run, excluding additionalProperties beside patternProperties and
-items beside prefixItems. Externally reached schemas retain their assigned dialect,
-including inherited declarations and embedded resources. Foreign identity includes
-the schema, assigned dialect and entire supplied context, without 2020-12 rewrites.
+items beside prefixItems. Non-OBI roots and detached inputs retain their assigned
+dialect regardless of selection route or initial base, as do externally reached
+schemas, including inherited declarations and embedded resources. Foreign identity
+includes the schema, assigned dialect and entire supplied context, without
+2020-12 rewrites.
 
 Type-specific rules run only for flowing types. Effective object members compare
 in both directions over the union of declared names, then remaining names. Finite
@@ -250,7 +261,8 @@ identifying the same operation produce one match.
 
 `operations()` retains correspondences in sorted required-key and provided-key
 order, with realization before consumption for `Both`. Each retains `role()`,
-`required()`, `provided()`, output then input results, including failures. A missing
+`required()`, `provided()`, output then input results, including failures.
+`required()` returns `&str`; `provided()` returns `Option<&str>`. A missing
 operation remains exactly one correspondence regardless of the included role;
 its `role()` is `None`. Present matches return `Some(Realized)` or `Some(Consumed)`,
 never `Both`. A slot with either schema absent is skipped.

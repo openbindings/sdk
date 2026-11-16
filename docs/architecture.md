@@ -50,8 +50,9 @@ implementation. Third-party evaluators use the public `SchemaEvaluator` contract
 The optional `openbindings-json-schema-evaluator` retains an Original semantic
 plan over original locations and may additionally compile a projected subset
 through unmodified jsonschema. Outcome checks use compiled evaluation when both
-schema and value admission permit it; Explain always uses Original. Non-default
-evaluator or preparation limits select Original. Both paths preserve exact
+schema and value admission permit it. Explain uses the same verdict selection
+and collects Original diagnostics after failure; diagnostic exhaustion preserves
+the established verdict. Non-default evaluator or preparation limits select Original. Both paths preserve exact
 primitive semantics and original reference meaning. See the
 [evaluator execution policy](../crates/openbindings-json-schema-evaluator/README.md#execution-paths)
 for selection and cancellation boundaries.

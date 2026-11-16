@@ -102,6 +102,8 @@ function impostorModule() {
 // package's own module initializes it and the SDK works.
 const failures = {
   "rejected input promise": `Promise.reject(new Error("simulated fetch failure"))`,
+  "caller RuntimeError rejection": `Promise.reject(new WebAssembly.RuntimeError("simulated fetch failure"))`,
+  "fetch RuntimeError rejection": `(globalThis.fetch = async () => { throw new WebAssembly.RuntimeError("fetch failed"); }, "https://wasm.invalid/sdk.wasm")`,
   "failed fetch of a URL": `(globalThis.fetch = async () => { throw new TypeError("fetch failed"); }, "https://wasm.invalid/sdk.wasm")`,
   "unsuccessful response": `new Response("missing", { status: 404 })`,
   "invalid bytes": `new Uint8Array([9, 9, 9, 9])`,
@@ -134,7 +136,7 @@ await assert.rejects(sdk.initialize(${input}), (error) => {
   assert.ok(error instanceof sdk.SdkError);
   assert.equal(error.code, "wasm-initialization");
   assert.doesNotMatch(error.message, /simulated fetch failure|wasm\\.invalid|fetch failed/);
-  if (${JSON.stringify(kind)} === "rejected input promise")
+  if (${JSON.stringify(kind)} === "rejected input promise" || ${JSON.stringify(kind)} === "caller RuntimeError rejection")
     assert.equal(error.cause.message, "simulated fetch failure");
   if (${wrongModule.has(kind)})
     assert.match(error.message, /the supplied module is not this package's/);

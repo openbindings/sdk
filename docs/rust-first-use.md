@@ -305,7 +305,9 @@ Value problems name the failing instance and original schema coordinate.
 line and byte positions on demand. The default evaluator's `explain` reports
 established failing assertions at these locations, with at most 100 problems. `problems_complete` is true only when
 all reportable failures were collected; a limit, missing witness or interrupted
-diagnostic work leaves it false without changing the failure verdict. `allOf`
+diagnostic work leaves it false without changing the failure verdict. This also
+holds when the compiled evaluator establishes failure but Original pattern
+diagnostics reach their search-work ceiling. `allOf`
 collects failures from its failing branches. Failed `anyOf`, `oneOf` and `not`
 report the applicator itself, without treating their branch failures as independent
 problems. `details` includes missing required member names, expected types,

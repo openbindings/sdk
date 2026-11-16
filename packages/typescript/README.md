@@ -132,8 +132,10 @@ platform types that `DOM` declares, such as `Response`, `URL`, `AbortSignal` and
 `Document.parse` retains an inspectable, immutable document. `validate()` returns a
 `DocumentValidation`, as Rust's `validate()` does: a `conformant` branch carrying a
 `ConformantDocument`, or a version refusal or conformance report.
-`validateDocument(bytes)` returns only the plain `DocumentReport`, with no proof
-and nothing to dispose. `operations()` returns detached, runtime-frozen `Operation`
+`validateDocument(bytes)` returns a plain `DocumentReport` union, with no proof
+and nothing to dispose: `{ status: "report", report }` or
+`{ status: "version-refused", refusal }`; narrow on `status` before reading the
+report. `operations()` returns detached, runtime-frozen `Operation`
 records in lexical key order. Fields such as `key`, `aliases` and `tags` are direct reads;
 optional fields preserve absence as `undefined`. `operation(key)` selects an exact
 primary key; `resolveOperation(name)` also accepts aliases. Both return `undefined`
@@ -206,9 +208,10 @@ request context. [The workerd example](examples/workerd-service.mjs) shows this.
 Initialization is shared across concurrent calls. Loading and entropy failures
 reject with `SdkError`, as does a WebAssembly module that is not this package's,
 which is refused before it is instantiated; retry after correcting the host
-condition.
+condition. A rejected caller input promise, including a `WebAssembly.RuntimeError`,
+is a retryable `wasm-initialization` failure with its cause retained.
 
-A `WebAssembly.RuntimeError`, including an allocation trap, becomes `SdkError`
+A `WebAssembly.RuntimeError` from SDK Wasm execution, including an allocation trap, becomes `SdkError`
 with code `wasm-trap` and fixed text: `The OpenBindings WebAssembly instance
 trapped and can no longer be used.` Every later SDK operation immediately fails
 with that code. `initialize()` cannot replace the trapped instance. Disposal is
@@ -225,7 +228,10 @@ does not enforce the platform's memory or CPU limits.
 
 Use JSON text or UTF-8 bytes for exact numbers such as `9007199254740993`.
 `parseJson` retains tokens; `ExactJson.from` checks ordinary JavaScript input and
-cannot restore precision already lost to a JavaScript number. Nonfinite numbers,
+cannot restore precision already lost to a JavaScript number. An `ExactJson`'s
+`text` getter returns its exact JSON text (a property, where Rust has `text()`),
+and `schema.json()` returns a schema's exact value as an `ExactJson` owner to
+dispose. Nonfinite numbers,
 undefined opaque values, bigint, cycles, sparse arrays and accessors are refused.
 Those failures throw standard `TypeError` with a stable `.code` such as
 `non-finite-number`, `unsupported-value`, `cyclic-value` or `accessor-property`.
@@ -304,6 +310,10 @@ Past the depth cap, `validateDocument` is undetermined with `depth-limit`;
 raise `maxDepth` to validate deeper documents. Validation memory
 grows with the document, so raise them only where the process has the memory.
 Malformed limits or options throw `SdkError` with code `invalid-json-limits`.
+Other validated core options and budgets likewise use their own `invalid-*-options`
+or `invalid-*-limits` category for malformed objects, including inherited options.
+Use plain objects or objects with a null prototype. Registration limit refusals
+use fixed TypeScript-facing text and retain code `resource`.
 A document keeps the limits it was parsed with (`limits`): its edits
 apply them to the edited document, as Rust's do, whatever route writes
 the value. `discover` raises only the byte limit, to `maxDocumentBytes`; a body
@@ -346,9 +356,11 @@ for supported semantics and remaining limitations.
 | `totalPatternMemory` | 64 MiB | Immutable pattern-program representation |
 | `evaluationSdkReservationBytes` | 48 MiB | Original cumulative SDK storage reservations; compiled peak scratch admission at defaults |
 
-At default limits, Outcome checks may use a compiled jsonschema lane. Changing
-any evaluator limit selects Original; `explain` always uses Original. Compiled
-checks observe cancellation before and after the synchronous backend call.
+At default limits, evaluation and explanation may establish a verdict through
+the compiled jsonschema lane. Explanation uses Original diagnostics after
+failure and preserves that verdict if diagnostics exhaust their allowance.
+Changing any evaluator limit selects Original. Compiled checks observe
+cancellation before and after the synchronous backend call.
 See the [execution policy](https://github.com/openbindings/sdk/blob/main/crates/openbindings-json-schema-evaluator/README.md#execution-paths).
 
 Each Original value invocation starts a fresh evaluation allowance. Verdict and diagnostic
@@ -374,7 +386,11 @@ Pass partial overrides to `Schema.prepare` or `ExternalSchemas.prepare` under
 work accepts `null`. Registration takes the same budgets through
 `new ExternalSchemas(entries, { limits, signal })` or
 `resources.with(uri, value, { limits, signal })`. Each call chooses its own
-policy. Preparation returns a refusal; registration throws `SdkError` with code
+policy. Registration counts each distinct retained source once, follows index
+capacity and releases traversal and normalization scratch. Its allowance includes
+the supplied JSON arena; preparation can reuse that already registered arena.
+The [Workers guide](../../docs/workers.md) measures the entire recipe with these
+registration options. Preparation returns a refusal; registration throws `SdkError` with code
 `resource`. Supplied owners remain usable after either refusal. See the dated Rust [host-specific 250 ms suggestion](https://github.com/openbindings/sdk/blob/main/docs/performance-boundaries.md#limits-principle-november-2026).
 Original evaluation work covers traversal, predicate work and nontrivial logical reasoning;
 simple Boolean identities add no proof-work unit. Growing loops retain cooperative
@@ -384,8 +400,10 @@ can express. With `evaluationSdkWorkUnits: null`, counter overflow cannot report
 a work limit. Numeric limit options retain their existing 32-bit range.
 `patternSearchWorkUnits` defaults to 250,000,000 SDK work units per Original
 pattern search. A larger charge returns `no-verdict` with
-`pattern-search-work-limit` before the uncancellable matcher runs. Raise it or
-set it to `null` to remove the ceiling. Changing it from the Wasm-provided
+`pattern-search-work-limit`. Finite anchored searches charge only the positions
+they can inspect. Unanchored searches may establish a match in a bounded prefix;
+an inconclusive prefix returns the same limit code. Assertions still see the
+complete input. Raise the ceiling or set it to `null` to remove it. Changing it from the Wasm-provided
 default selects Original; explicitly supplying the default preserves routing.
 The cumulative `evaluationSdkWorkUnits` cap remains `null` by default.
 Budgets are not deadlines or process-memory measurements. Original uses

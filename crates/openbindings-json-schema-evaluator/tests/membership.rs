@@ -2,6 +2,47 @@ use openbindings::*;
 use openbindings_json_schema_evaluator::{DefaultEvaluator, Limits};
 
 #[test]
+fn numeric_enum_reservations_allow_both_value_orders_and_spellings() {
+    for count in [1_440, 4_096] {
+        for decimal in [false, true] {
+            let choices = (0..count)
+                .map(|i| {
+                    if decimal {
+                        format!("{i}.0")
+                    } else {
+                        i.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            let resources = ExternalSchemas::new([ExternalSchema {
+                uri: "https://membership.test/root".into(),
+                document: JsonValue::parse(format!(r#"{{"items":{{"enum":[{choices}]}}}}"#))
+                    .unwrap(),
+            }])
+            .unwrap();
+            let prepared = resources
+                .prepare("https://membership.test/root", &DefaultEvaluator::new())
+                .unwrap();
+            for descending in [false, true] {
+                let values = (0..count)
+                    .map(|i| if descending { count - 1 - i } else { i }.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let value = JsonValue::parse(format!("[{values}]")).unwrap();
+                for outcome in [prepared.evaluate(&value), prepared.explain(&value)] {
+                    assert_eq!(
+                        outcome,
+                        ValueOutcome::Satisfies,
+                        "count={count}, decimal={decimal}, descending={descending}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn enum_membership_keeps_exact_verdicts_and_original_keyword() {
     let mixed = [
         "null",

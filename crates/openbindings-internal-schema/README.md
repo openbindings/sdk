@@ -3,11 +3,19 @@
 Implements shared fixed document/schema admission and the original-schema resource
 graph. It separates the normative contained OBI walk from external interpretation
 profiles, while retaining original identities, references and source locations.
+External draft-07 reference objects keep sibling schema positions addressable
+by JSON Pointer while ignoring those siblings during evaluation and identifier
+discovery. Pointer targets
+still need to be schema values. The contained OBI inventory remains fixed at 2020-12.
 Evaluation and comparison share this crate's `canonical_resolved_uri` normalizer
 and `normalized_hierarchical_uri_text` shortcut for JSON Schema resource equivalence.
 The `uri`
 module keeps spelling-preserving resolution for document conformance and
-retrieval registration, whose identity rules are separate.
+retrieval registration, whose identity rules are separate. Supplied registration
+reserves vector capacity before growth and releases temporary index and URI
+normalization storage with its construction scope. The core registration test
+qualifies this ledger against the shared counting allocator, including source
+arenas, shared owners and detached subtrees.
 Applications use `openbindings` for document validation and an explicit schema
 evaluator for operation values.
 

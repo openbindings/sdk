@@ -187,7 +187,9 @@ and explicit preparation/validation settings. Generic calls through the
 Preflight has its own associated future and returns `None` for no prediction or
 `Some(ContextChallenge)` carrying the shared `{message, schema}` challenge. It selects as invocation does,
 but never validates values or dispatches the operation. Ordinary errors carry no
-prediction; `ERR_REFUSED` predicts refusal of the same input. A later invocation
+prediction; `ERR_REFUSED` predicts refusal of the same input. Its optional reason
+data has the shape defined by the source's kind. Checked invocation and preflight
+preserve exact reason data and distinguish explicit null from absence. A later invocation
 selects independently and may discover additional requirements. Context acquisition, approvals and retry policy belong to the host.
 
 `InvocationLimits` bounds queue capacity and error encoding. Its optional

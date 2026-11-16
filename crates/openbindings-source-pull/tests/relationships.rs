@@ -17,6 +17,18 @@ fn checked(text: &str) -> ConformantDocument {
 
 #[test]
 fn wrapper_errors_expose_causes_without_repeating_them() {
+    let relationship = PullValidationError::from(RelationshipErrorKind::BindingSource);
+    let cause = relationship
+        .source()
+        .unwrap()
+        .downcast_ref::<RelationshipError>()
+        .unwrap();
+    assert_eq!(cause.kind(), RelationshipErrorKind::BindingSource);
+    assert!(cause.source().is_none());
+    assert_eq!(
+        relationship.to_string(),
+        "source-pull result contradicts a document relationship"
+    );
     let request_error = PullRequest::from_json(&json(
         r#"{"interface":{"openbindings":"8.0.0"},"source":"private-source"}"#,
     ))
@@ -73,7 +85,7 @@ fn wrapper_errors_expose_causes_without_repeating_them() {
     assert_eq!(edit.code(), "node-limit");
     assert!(edit.source().unwrap().is::<openbindings::InputError>());
     // Display is the fixed layer text; the SDK constant naming the field stays
-    // in the variant (and its Debug) for explicit inspection.
+    // in the variant for explicit inspection.
     assert_eq!(
         RequestError::Shape("source").to_string(),
         "source-pull request has an invalid shape"

@@ -77,11 +77,11 @@ fn externally_assigned_dialects_keep_root_fragment_and_embedded_inheritance() {
     );
     assert!(!identical(Some(&target), Some(&other), &ComparisonLimits::default()).unwrap());
     // Contained schemas follow section 5.5, including an invalid declaration.
+    let root = JsonValue::parse(json!({"openbindings":"0.2.0","operations":{"op":{"input":{"$schema":"http://json-schema.org/draft-07/schema#","type":"string"}}}}).to_string()).unwrap();
+    let root = SchemaInput::new(root.at("/operations/op/input").unwrap().to_owned(), root);
     assert!(
         identical(
-            Some(&input(
-                &json!({"$schema":"http://json-schema.org/draft-07/schema#","type":"string"})
-            )),
+            Some(&root),
             Some(&input(&json!({"type":"string"}))),
             &ComparisonLimits::default()
         )

@@ -62,6 +62,17 @@ pub(crate) fn identities(bytes: usize, control: &dyn Control) -> Result<(), Fail
     control.charge_work(work)
 }
 
+// Reserve only a vector's next backing capacity, before growing it. The pinned
+// allocator's Vec reallocation replaces the previous request, as in the meter.
+pub(crate) fn reserve<T>(values: &mut Vec<T>, control: &dyn Control) -> Result<(), Failure> {
+    if values.len() == values.capacity() {
+        let next = (values.capacity() * 2).max(4);
+        control.charge_allocation((next - values.capacity()).saturating_mul(size_of::<T>()))?;
+        values.reserve_exact(next - values.len());
+    }
+    Ok(())
+}
+
 impl<'a> Attempt<'a> {
     /// Nesting cannot grant more cooperative SDK work than the enclosing attempt has
     /// left. A nested attempt must receive the outer attempt as its control to

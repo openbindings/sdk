@@ -1085,7 +1085,7 @@ impl WasmResources {
             &control(cancelled),
         )
         .map(|resources| Self { resources })
-        .map_err(|e| error("resource", e))
+        .map_err(|e| resource_error(&e))
     }
     #[must_use]
     pub fn retain(&self) -> WasmResources {
@@ -1123,6 +1123,17 @@ impl Default for WasmResources {
         Self::new()
     }
 }
+// Registration failures keep the facade's vocabulary independent of Rust types.
+fn resource_error(failure: &ExternalSchemaError) -> JsValue {
+    if matches!(failure.kind, ExternalSchemaErrorKind::Limit { .. }) {
+        error(
+            "resource",
+            "external schema registration exceeded a preparation limit",
+        )
+    } else {
+        error("resource", failure)
+    }
+}
 /// Entries collected for one `ExternalSchemas::new`, so a set is admitted once
 /// rather than rebuilt for each added resource.
 #[wasm_bindgen]
@@ -1150,7 +1161,7 @@ impl WasmResourceEntries {
     }
     pub fn push(&mut self, uri: &str, value: &WasmJson) -> Result<(), JsValue> {
         if let Some(refusal) = &self.refusal {
-            return Err(error("resource", refusal));
+            return Err(resource_error(refusal));
         }
         let limits = self.limits;
         let bytes = self.identity_bytes.checked_add(uri.len());
@@ -1171,7 +1182,7 @@ impl WasmResourceEntries {
                 &control(false),
             )
             .expect_err("staged resources exceed registration limits");
-            let result = Err(error("resource", &refusal));
+            let result = Err(resource_error(&refusal));
             self.refusal = Some(refusal);
             return result;
         }
@@ -1190,7 +1201,7 @@ impl WasmResourceEntries {
             &control(cancelled),
         )
         .map(|resources| WasmResources { resources })
-        .map_err(|e| error("resource", e))
+        .map_err(|e| resource_error(&e))
     }
 }
 /// One original contextual schema, retaining its proved document revision.

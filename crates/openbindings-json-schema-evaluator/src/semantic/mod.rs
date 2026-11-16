@@ -278,6 +278,21 @@ impl Plan {
             work: self.limits.evaluation_sdk_work_units,
         }
     }
+    /// The compiled lane has already established failure. Diagnostic limits or
+    /// cancellation can make the explanation incomplete, never undo that fact.
+    pub(super) fn explain_failure(
+        &self,
+        value: &JsonValue,
+        control: &dyn WorkControl,
+        failure: ValueOutcome,
+    ) -> ValueOutcome {
+        let explained = self.evaluate_pass(value, control, None, &mut None, self.allowance(), true);
+        if matches!(explained.outcome, ValueOutcome::Fails { .. }) {
+            explained.outcome
+        } else {
+            failure
+        }
+    }
     fn evaluate_tracking_unavailable(
         &self,
         value: &JsonValue,

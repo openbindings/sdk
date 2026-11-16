@@ -102,3 +102,27 @@ improved 61-65%, lookup plus a key 75-79%, and schema acquisition 30-43%. A look
 that reads no field became 60-190 ns slower (0.708-0.806 microseconds warm, 0.770-0.879
 with a fresh wrapper), a cost accepted when the records were adopted. A
 field-reading benchmark is not a substitute for the lookup-only row.
+
+## Registration and the complete guide recipe
+
+Supplied resources in every preparation row now receive that row's
+`preparationLimits` during registration. A registration refusal is recorded as
+`register`, separately from a preparation refusal. The complete-recipe table
+uses the option objects in `guide.mjs`, checked against the guide's code block
+by the built-package `registration-storage.test.mjs` test. It runs every listed
+shape through bounded document parsing, validation with 100 findings, bounded
+resource parsing, registration, preparation, bounded value parsing and exact
+value evaluation. Both the constructor and `with()` are exercised. A refusal
+stops that row and identifies its stage. Contained workloads register a Boolean resource; document-only annotation
+shapes also select that Boolean schema for the later stages. Other contained
+workloads select their documented schema, and every original document remains
+alive. All owners stay alive until that synchronous recipe finishes.
+
+The starting recipe reserves 16 MiB for registration and preparation, and 4 MiB
+for evaluation. The large-chain variant uses 64 MiB for preparation and 8 MiB
+for evaluation. The table also records the 49,000-link chain's evaluation refusal
+at 4 MiB, even when its preparation has 64 MiB.
+
+Registration's charge is qualified natively: the public API regression
+`crates/openbindings/tests/registration_accounting.rs` covers shared owners, URI-heavy schemas, chains and detached subtrees against
+`tools/allocation-test-counter`, requiring a factor from 1.0 through 1.7.

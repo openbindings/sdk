@@ -1,5 +1,70 @@
 # Changelog
 
+## 2026-11-15 review repairs (unreleased)
+
+### Fixed
+
+- A supplied draft-07 schema whose root `$ref` points into its own `definitions`, the common shape of generated
+  draft-07 files, evaluated to undefined for every value. Draft-07 ignores the siblings of `$ref` when evaluating, but
+  they stay reachable by a pointer; the evaluator now finds them and gives the draft-07 answers, as the bundled
+  `jsonschema` does, while still ignoring sibling assertions and identifiers. 2020-12 and OBI documents are unchanged.
+- A decimal-spelled numeric `enum` could exhaust the default evaluation reservation depending on the order of the
+  values it was checked against (1,440 choices passed ascending and failed descending), because exact comparisons kept
+  their scratch charged after releasing it. Comparison scratch is now returned when each comparison ends.
+- Registering external schemas charges the preparation allowance for the storage registration holds, as preparation
+  has since the previous change, where it charged estimates. The smallest allowance that registers 3,000 supplied
+  records falls from 19.7 MiB to 9.6 MiB in Wasm, and from 21.7 MiB to 11.6 MiB natively, where the charge now equals
+  what a counting allocator sees; registration is 17 to 22 percent faster. Defaults and the limit's meaning are
+  unchanged.
+- The Workers guide's recommended settings now admit the workloads it says they admit: its supplied-records recipe
+  had been refused at its own 8 MiB, because the measurement runner registered with default limits. The runner now
+  registers with each row's limits and measures the guide's whole recipe (parse, validate, register, prepare,
+  evaluate) with the guide's own option objects, which a test keeps equal to the guide's code block. The guide starts
+  at 16 MiB for 3,000 supplied records or 16,000 links, and gives the 49,000-link chain 8 MiB of evaluation storage.
+- Schema comparison could answer Compatible for a standalone draft-07 or draft-04 root, for a value that flows and
+  is refused: as the context's own document without a base, or as a separately parsed copy, the root was read as
+  2020-12. A schema outside an OBI document now keeps the dialect JSON Schema assigns it on every route, with or
+  without a base; schemas inside an OBI document are still read as 2020-12.
+- Kept `$defs` no longer hides an incompatible beside a union: kept definitions are disregarded by every directional
+  rule, as the profile says.
+- A keyword that applies only to a type the flowing schema does not allow (`maximum` beside `"type":"boolean"`, say)
+  no longer withholds an incompatible verdict from the `const`, `enum` and finite-restriction rules.
+- The comparison docs say that a schema equal to but not the same node as its document is a detached input, label
+  the recognition of an OBI document by its `openbindings` and `operations` members as SDK policy, and give the types
+  `OperationComparison::required()` and `provided()` return.
+- The default ceiling on one uncancellable pattern search no longer refuses ordinary patterns on ordinary input.
+  The charge was the cost of every automaton state at every position; it now bounds what the engine actually does: a
+  start-anchored pattern with a finite longest match is charged for at most that many bytes, an unanchored pattern
+  searches a bounded prefix and answers a match found there, and sparse transitions and the start and end assertions
+  are charged at their real cost. A 64-character hex, a bounded email, a bounded Unicode name and a bounded `.`
+  pattern now decide inputs up to the JSON limit at defaults, base64 up to 2.6 MB (was 725 KB). The hostile patterns
+  are refused as before, and the longest search the default ceiling admits still takes about 120 ms natively. The
+  limit's name, default and code are unchanged. `PATTERN-WORK.md` in the evaluator crate derives the bound.
+- `explain` returns the verdict `evaluate` returns at every limit setting. At defaults the faster lane could
+  establish a failure that the explaining lane then could not, because only the explaining lane has the pattern
+  ceiling; an explanation now keeps the established failure and reports its problems as incomplete when it cannot
+  finish them.
+- TypeScript `initialize()` stays retryable when the caller's input or the host's loading rejects with a
+  `WebAssembly.RuntimeError`. Only a trap raised while SDK Wasm runs marks the instance unusable.
+- `KindError::LimitExceeded` no longer prints its label in `Display` or `Debug`, and `RequestError::Shape`,
+  `PullValidationError::LimitExceeded` and `ComparisonFailureKind::LimitExceeded` no longer print theirs in `Debug`.
+  Each label stays reachable by matching.
+- `PullValidationError::source()` returns the `RelationshipError` for a relationship refusal.
+- The evaluator test-support runner compares explanations exactly, so two pointers that differ only in unpaired UTF-16
+  units are no longer judged equal.
+- TypeScript reports a malformed or inherited options object with the option's own `SdkError` code (for example
+  `invalid-preparation-limits`) where some routes threw `TypeError` `invalid-json-object`. What is accepted is
+  unchanged.
+- A TypeScript registration refusal for a limit reads `external schema registration exceeded a preparation limit`,
+  without naming a Rust type. The code stays `resource`.
+
+### Added
+
+- The API-reference check denies every rustdoc warning, not only broken links; a malformed tag had been rendering a
+  source-pull page wrongly on docs.rs.
+- A regression that a provider's `ERR_REFUSED` reason, an explicit `null` reason and no reason each reach the caller
+  unchanged through checked binding and operation invocation and preflight.
+
 ## 2026-11-14 owner rulings (unreleased)
 
 ### Changed
@@ -91,7 +156,8 @@
   memory ceiling, such as a Worker, turns a schema too large for it into a refusal with a code: at the default
   allowance of 512 MiB a module that runs out of memory traps instead.
 - Ordinary JavaScript encoding failures keep their `TypeError` or `RangeError` class and message and gain a stable
-  `code`. Ordinary admission limits report `input-limit`; exact-text admission keeps `byte-limit`, `node-limit`
+  `code`. Ordinary admission limits reported `input-limit` here (the owner rulings above replace it with the
+  exact-text codes); exact-text admission keeps `byte-limit`, `node-limit`
   and `depth-limit`.
 - `Pointer::to_exact_json()` exports a complete JSON string token that keeps every UTF-16 unit, so a pointer into
   a draft whose member name holds an unpaired unit selects the same member after transport. Ordinary Serde output
