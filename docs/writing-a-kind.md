@@ -231,7 +231,11 @@ it supports for each kind, and the schemas for source and binding data.
 invocation, pull and source check are
 `openbindings.binding-invoker.invokeBinding`,
 `openbindings.source-puller.pullSource` and
-`openbindings.kind-descriptor.checkSource`. A descriptor with no source checker
+`openbindings.kind-descriptor.checkSource`. In Rust, use
+`openbindings_invocation::INVOKE_BINDING`, `openbindings_source_pull::PULL_SOURCE`
+and `openbindings_kind_description::CHECK_SOURCE` for those keys. The descriptor
+also exports `LIST_KINDS` and `DESCRIBE_KIND`; invocation exports
+`PREFLIGHT_BINDING`. A descriptor with no source checker
 makes no check claim and omits `check`.
 
 For a provider that both routes and describes, under one configuration,
@@ -258,10 +262,10 @@ use openbindings_kind_description::{
     DescribeKindRequest, KindDescription, KindDescriptor, KindSummary,
 };
 
-const SUPPORTS: &str = r#"[
-    "openbindings.binding-invoker.invokeBinding",
-    "openbindings.source-puller.pullSource"
-]"#;
+const SUPPORTS: [&str; 2] = [
+    openbindings_invocation::INVOKE_BINDING,
+    openbindings_source_pull::PULL_SOURCE,
+];
 
 impl KindDescriptor for Memory {
     type Error = AdapterError;
@@ -272,7 +276,7 @@ impl KindDescriptor for Memory {
         ready(Ok(vec![
             KindSummary::from_json(object([
                 ("kind", string(KIND)),
-                ("supports", json(SUPPORTS)),
+                ("supports", JsonValue::from_serializable(&SUPPORTS).unwrap()),
             ]))
             .unwrap(),
         ]))
@@ -287,7 +291,7 @@ impl KindDescriptor for Memory {
         }
         ready(Ok(KindDescription::from_json(object([
             ("kind", string(KIND)),
-            ("supports", json(SUPPORTS)),
+            ("supports", JsonValue::from_serializable(&SUPPORTS).unwrap()),
             ("description", string("Echo exact JSON through a local channel.")),
             ("invoke", json(r#"{"description":"Echoes each input until input closes.","executes":false}"#)),
             ("pull", json(r#"{"description":"Reads a fixed local inventory.","executes":false}"#)),
@@ -311,7 +315,7 @@ async fn routing_agrees_with_published_invocation_support() {
     use openbindings_invocation::{CancellationToken, InvocationSupport};
     use openbindings_kind_description::{DescribeKindRequest, KindDescriptorExt};
 
-    const INVOKE: &str = "openbindings.binding-invoker.invokeBinding";
+    use openbindings_invocation::INVOKE_BINDING as INVOKE;
     let adapter = Memory; // One configuration for all three queries.
     let kinds = adapter.list_kinds(CancellationToken::new()).await.unwrap();
     // Include the adapter's known routing kind even if a broken listing omits it,

@@ -61,6 +61,10 @@ pub(super) fn advance<'v>(
                 if operator == 0 {
                     run.inherit_failure(&mut combined, &result, TRUE)?;
                 }
+                if operator == 0 && combined.valid == FALSE && !run.record_witnesses {
+                    frame.state.valid = FALSE;
+                    return Ok(Action::Complete);
+                }
                 if operator == 2 {
                     let chosen = run.graph.and(zero, result.valid)?;
                     let no = run.graph.not(result.valid)?;

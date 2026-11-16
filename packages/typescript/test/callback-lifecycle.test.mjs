@@ -90,6 +90,11 @@ test("callback disposal is checked after options and ordinary conversion", () =>
         reenter(() => f.prepared.dispose()),
       ),
     (f) =>
+      f.prepared.explainJson(
+        "7",
+        reenter(() => f.prepared.dispose()),
+      ),
+    (f) =>
       f.prepared.evaluate(
         f.exact,
         reenter(() => f.exact.dispose()),

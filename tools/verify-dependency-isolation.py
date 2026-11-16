@@ -101,7 +101,7 @@ assert invocation['dependencies']['openbindings-context'] == {
 }
 invocation_source = ''.join(path.read_text(encoding='utf-8') for path in
                            (root / 'crates/openbindings-invocation/src').rglob('*.rs'))
-assert 'pub use openbindings_context::{Context, ContextChallenge};' in invocation_source
+assert 'pub use openbindings_context::{ChallengeShapeError, Context, ContextChallenge, ContextShapeError};' in invocation_source
 for retired in ['BindingValue', 'BindingInvocationInput', 'BindingLifecycle']:
     assert not re.search(r'pub (struct|enum|type) ' + retired + r'\b', invocation_source), retired
 comparison = manifests['openbindings-schema-comparison']['dependencies']

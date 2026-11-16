@@ -2,7 +2,12 @@
 // Initialize inside fetch: workerd permits host entropy during a request.
 import module from "@openbindings/sdk/openbindings.wasm";
 import { initialize } from "@openbindings/sdk";
-import { prepareService, ValidationService } from "./service.mjs";
+import {
+  prepareService,
+  ValidationService,
+  readBody,
+  responseStatus,
+} from "./service.mjs";
 let service;
 export default {
   async fetch(request) {
@@ -20,10 +25,18 @@ export default {
       service = undefined;
       return new Response(null, { status: 204 });
     }
-    return Response.json(
-      await service.checkBytes(
-        request.arrayBuffer().then((bytes) => new Uint8Array(bytes)),
-      ),
-    );
+    let bytes;
+    try {
+      bytes = await readBody(request.body);
+    } catch (error) {
+      if (error instanceof RangeError)
+        return Response.json({ code: "byte-limit" }, { status: 413 });
+      throw error;
+    }
+    // DELETE can close the shared service while this request reads its body.
+    if (!service)
+      return Response.json({ code: "service-closed" }, { status: 503 });
+    const result = await service.checkBytes(bytes);
+    return Response.json(result, { status: responseStatus(result) });
   },
 };

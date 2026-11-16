@@ -1,5 +1,8 @@
 # OpenBindings schema comparison
 
+`InterfaceIssueKind` is non-exhaustive. Downstream matches must preserve an
+unknown issue as a refusal or propagate it rather than infer compatibility.
+
 Compare schemas by normalized identity or directional compatibility under profile
 `OB-2020-12` version `0.1`, pinned at interfaces revision
 `eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. This unpublished companion is independent
@@ -66,7 +69,11 @@ A schema selected outside the root's schema positions, including an opaque
 carrier member, gets the same call-local view of its subtree's declarations as
 a detached schema. These declarations are private to that view: sibling
 selections and the other side of a comparison cannot see them, and the view is
-released with the call. Pointer references still start at the configured
+released with the call. They do not override the configured document or supplied
+resources: a reached URI or anchor declared by distinct occurrences is ambiguous
+and fails with `InvalidReference`, even when the JSON content is identical.
+Reuse the same node to select a configured schema; separately parsing a copy can
+introduce such a collision. Pointer references still start at the configured
 document unless the selected subtree declares its own resource with `$id`.
 They must land at a schema position there; selecting carrier data never makes
 that data a reference target.
@@ -225,6 +232,12 @@ dialect regardless of selection route or initial base, as do externally reached
 schemas, including inherited declarations and embedded resources. Foreign identity
 includes the schema, assigned dialect and entire supplied context, without
 2020-12 rewrites.
+
+For a selected position in a non-OBI document, dialect inheritance follows JSON
+ancestry even through members that are not schema keywords. The enclosing
+resource's `$schema` applies, including a declaration on an embedded `$id`
+resource; the default is 2020-12. Every position in an OBI document uses 2020-12.
+This dialect decision does not add declarations to the resource index.
 
 Type-specific rules run only for flowing types. Effective object members compare
 in both directions over the union of declared names, then remaining names. Finite

@@ -199,6 +199,16 @@ impl<'v> Frame<'v> {
                 }
                 Phase::Done => Action::Complete,
             };
+            // Every remaining phase is conjoined with this position. A false
+            // position contributes no annotations to its parent, so neither
+            // child work nor its reservations can change the verdict.
+            if self.state.valid == FALSE
+                && (!run.record_witnesses
+                    || matches!(action, Action::Child(_))
+                        && run.explanation_full(&mut self.state)?)
+            {
+                return Ok(Action::Complete);
+            }
             if !matches!(action, Action::Continue) {
                 return Ok(action);
             }
@@ -246,7 +256,17 @@ impl Run<'_> {
                 return Ok(Attempt::Complete(returned.expect("root result")));
             };
             match frame.advance(self, returned.take())? {
-                Action::Child(next) => request = Some(next),
+                Action::Child(next) => {
+                    if self.record_witnesses
+                        && frames.len() == 1
+                        && frames[0].state.valid == FALSE
+                        && self.partial_failure.is_none()
+                    {
+                        let root = &frames[0];
+                        self.preserve_failure(&root.state, root.value);
+                    }
+                    request = Some(next);
+                }
                 Action::Complete => {
                     let frame = frames.pop().expect("completed frame");
                     returned = Some(self.complete_application(frame)?);

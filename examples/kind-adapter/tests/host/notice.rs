@@ -20,19 +20,27 @@ fn json(text: &str) -> JsonValue {
     JsonValue::parse(text).unwrap()
 }
 
+fn object<const N: usize>(fields: [(&str, JsonValue); N]) -> JsonValue {
+    JsonValue::from_serializable(&std::collections::BTreeMap::from(fields)).unwrap()
+}
+fn supports() -> JsonValue {
+    JsonValue::from_serializable(&[
+        openbindings_invocation::INVOKE_BINDING,
+        openbindings_kind_description::CHECK_SOURCE,
+    ])
+    .unwrap()
+}
+
 impl KindDescriptor for Notice {
     type Error = AdapterError;
     type List<'a> = Ready<Result<Vec<KindSummary>, Self::Error>>;
     type Describe<'a> = Ready<Result<KindDescription, Self::Error>>;
     fn handle_list_kinds(&self, _: CancellationToken) -> Self::List<'_> {
         ready(Ok(vec![
-            KindSummary::from_json(json(
-                r#"{
-            "kind":"example.notice@1", "supports":[
-                "openbindings.binding-invoker.invokeBinding",
-                "openbindings.kind-descriptor.checkSource"]
-        }"#,
-            ))
+            KindSummary::from_json(object([
+                ("kind", JsonValue::string(KIND).unwrap()),
+                ("supports", supports()),
+            ]))
             .unwrap(),
         ]))
     }
@@ -44,16 +52,22 @@ impl KindDescriptor for Notice {
         if request.kind().as_str() != Some(KIND) {
             return ready(Err(AdapterError("unsupported kind")));
         }
-        ready(Ok(KindDescription::from_json(json(
-            r#"{
-            "kind":"example.notice@1", "supports":[
-                "openbindings.binding-invoker.invokeBinding",
-                "openbindings.kind-descriptor.checkSource"],
-            "description":"One local notice.",
-            "invoke":{"description":"Returns one fixed notice.","executes":false},
-            "check":{"description":"Checks a fixed local source.","executes":false}
-        }"#,
-        ))
+        ready(Ok(KindDescription::from_json(object([
+            ("kind", JsonValue::string(KIND).unwrap()),
+            ("supports", supports()),
+            (
+                "description",
+                JsonValue::string("One local notice.").unwrap(),
+            ),
+            (
+                "invoke",
+                json(r#"{"description":"Returns one fixed notice.","executes":false}"#),
+            ),
+            (
+                "check",
+                json(r#"{"description":"Checks a fixed local source.","executes":false}"#),
+            ),
+        ]))
         .unwrap()))
     }
 }

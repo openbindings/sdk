@@ -10,7 +10,7 @@ pub use model::{
     CarrierError, CarrierErrorKind, CheckDescription, CheckSourceRequest, CheckedSource,
     DescribeKindRequest, InvokeDescription, KindDescription, KindSummary, PullDescription,
 };
-pub use openbindings_context::{Context, ContextChallenge};
+pub use openbindings_context::{ChallengeShapeError, Context, ContextChallenge, ContextShapeError};
 pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};
 pub use queries::{
     DescriptionLimits, KindDescriptor, KindDescriptorExt, SourceChecker, SourceCheckerExt,
@@ -20,3 +20,10 @@ pub use queries::{
 pub const INTERFACE_VERSION: &str = "0.1.0";
 /// Exact interface publication used by this companion.
 pub const APPLIED_INTERFACE_REVISION: &str = "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1";
+
+/// Operation key for `listKinds` in the pinned kind-descriptor interface.
+pub const LIST_KINDS: &str = "openbindings.kind-descriptor.listKinds";
+/// Operation key for `describeKind` in the pinned kind-descriptor interface.
+pub const DESCRIBE_KIND: &str = "openbindings.kind-descriptor.describeKind";
+/// Operation key for `checkSource` in the pinned kind-descriptor interface.
+pub const CHECK_SOURCE: &str = "openbindings.kind-descriptor.checkSource";

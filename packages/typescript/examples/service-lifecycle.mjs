@@ -4,7 +4,7 @@ import { liveStorageOwners } from "@openbindings/sdk/testing";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { initialize, parseJson } from "@openbindings/sdk";
-import { prepareService, ValidationService } from "./service.mjs";
+import { prepareService, ValidationService, jsonLimits } from "./service.mjs";
 
 await initialize(
   await readFile(
@@ -17,7 +17,7 @@ const document = JSON.stringify({
   operations: { lookup: { input: { $ref: uri } } },
 });
 function prepare(schemaText, documentBytes = document) {
-  const schema = parseJson(schemaText);
+  const schema = parseJson(schemaText, { limits: jsonLimits });
   if (schema.status !== "parsed") return schema;
   try {
     return prepareService(documentBytes, [[uri, schema.value]]);
@@ -55,7 +55,7 @@ const service = new ValidationService(setup.schema);
 let releaseBody, oldRequest;
 const outcomes = {};
 try {
-  // The service retains the old schema before awaiting the request body.
+  // The request reads its body before selecting the active schema.
   oldRequest = service.checkBytes(
     new Promise((resolve) => {
       releaseBody = resolve;
@@ -64,9 +64,9 @@ try {
   outcomes.replacement = replace(service, '{"type":"string"}');
   outcomes.current = service.check("new prepared schema");
   releaseBody("9007199254740993");
-  outcomes.inFlight = await oldRequest; // still uses the old exact const
+  outcomes.inFlight = await oldRequest; // uses the replacement installed during body I/O
   assert.equal(outcomes.current.status, "satisfies");
-  assert.equal(outcomes.inFlight.status, "satisfies");
+  assert.equal(outcomes.inFlight.status, "fails");
 
   outcomes.invalidReplacement = replace(
     service,
@@ -102,7 +102,7 @@ try {
   assert.equal(outcomes.ordinary.status, "satisfies");
   assert.equal(outcomes.exact.status, "satisfies");
 } finally {
-  // Settle an acquired request owner even if a later demonstration step throws.
+  // Settle the body promise even if a later demonstration step throws.
   releaseBody?.("9007199254740993");
   try {
     await oldRequest;

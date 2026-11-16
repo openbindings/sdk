@@ -577,7 +577,7 @@ const resourceToken = Symbol("retained resource set");
 
 /** Immutable explicit resource set. URIs must be absolute without a nonempty fragment; normalized duplicate identities are refused even for equal bytes. Resources are retained, never fetched. Batch failure releases partial state and leaves supplied owners usable. Distinct contexts may associate the same URI with different snapshots. */
 export class ExternalSchemas extends Managed {
-  /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Iteration stops at the first entry exceeding the selected resource count or cumulative URI byte bound. options.limits overrides preparationLimits() defaults for this registration; options.signal permits cooperative cancellation. Construction refuses invalid/duplicate URI or duplicate-member documents with SdkError; partial construction is released. */
+  /** Create an empty set or retain explicit [URI, exact document] pairs. Does not consume supplied owners. Iteration stops at the first entry exceeding the selected resource count or cumulative URI byte bound. options.limits overrides preparationLimits() defaults for this registration; options.signal permits cooperative cancellation. Construction refuses invalid/duplicate URI or duplicate-member documents with SdkError; partial construction is released. A limit refusal has code resource and details.resource matching preparation failures. */
   constructor(
     entries?: Iterable<readonly [uri: string, document: ExactJson]>,
     options?: ResourceRegistrationOptions,
@@ -634,7 +634,7 @@ export class ExternalSchemas extends Managed {
   private static fromRaw(raw: wasm.WasmResources): ExternalSchemas {
     return new ExternalSchemas(raw, resourceToken);
   }
-  /** Return a NEW independently disposable resource-set owner with one added resource; the original and supplied document stay usable. Invalid/duplicate identity throws; no acquisition. options selects limits and cancellation for this registration only; future preparations keep their own policies. */
+  /** Return a NEW independently disposable resource-set owner with one added resource; the original and supplied document stay usable. Invalid/duplicate identity throws; no acquisition. A limit refusal throws SdkError with code resource and details.resource. options selects limits and cancellation for this registration only; future preparations keep their own policies. */
   with(
     uri: string,
     document: ExactJson,
@@ -877,6 +877,24 @@ export class PreparedSchema extends Managed {
         typeof data === "string"
           ? prepared.evaluateJsonText(data, isAborted(signal))
           : prepared.evaluateJson(data, isAborted(signal)),
+      );
+    } catch (error) {
+      return { status: "input-error", error: failure(error).error };
+    }
+  }
+  /** Admit exact JSON text or UTF-8 bytes and return explain's diagnostics, with no input owner to dispose. Uses evaluateJson's default admission limits (32 MiB, 10,000 container levels and 1,000,000 nodes), errors and cancellation order. Numbers remain exact; duplicate members yield no-verdict. Expected admission failures return input-error; wrong input types and literal unpaired UTF-16 text throw. For custom admission limits or repeated checks, parseJson first, then explain and dispose the exact owner. Cancellation cannot preempt synchronous Wasm. */
+  explainJson(input: ExactInput, options: WorkOptions = {}): JsonCheck {
+    requireReady();
+    handle<wasm.WasmPrepared>(this);
+    const signal = workSignal(options);
+    const data = exact(input);
+    // Options can run caller code, so the handle is taken after them.
+    const prepared = handle<wasm.WasmPrepared>(this);
+    try {
+      return decode(
+        typeof data === "string"
+          ? prepared.explainJsonText(data, isAborted(signal))
+          : prepared.explainJson(data, isAborted(signal)),
       );
     } catch (error) {
       return { status: "input-error", error: failure(error).error };

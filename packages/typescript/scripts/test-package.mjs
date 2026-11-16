@@ -322,7 +322,7 @@ console.log(JSON.stringify(inspectEditExampleCases(sdk, inspectionEditing)));
       encoding: "utf8",
     }),
   );
-  assert.equal(lifecycle.outcomes.inFlight.status, "satisfies");
+  assert.equal(lifecycle.outcomes.inFlight.status, "fails");
   assert.equal(lifecycle.outcomes.current.status, "satisfies");
   assert.equal(lifecycle.outcomes.cancelled.detail.reason, "cancelled");
   assert.equal(lifecycle.outcomes.sameOwnerRecovery.status, "satisfies");

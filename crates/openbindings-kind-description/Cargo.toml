@@ -19,4 +19,7 @@ openbindings-internal-cancellation = { version = "=0.2.0-alpha.1", path = "../op
 
 [dev-dependencies]
 serde_json.workspace = true
+# Only to check the disclosure keys below against the roles that own them.
+openbindings-invocation = { version = "=0.2.0-alpha.1", path = "../openbindings-invocation" }
+openbindings-source-pull = { version = "=0.2.0-alpha.1", path = "../openbindings-source-pull" }
 

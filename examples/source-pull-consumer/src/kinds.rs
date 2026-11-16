@@ -13,8 +13,8 @@ use std::{
 
 const KINDS: [&str; 2] = ["example.fixed@1", "example.embedded@1"];
 const SUPPORTS: [&str; 2] = [
-    "openbindings.kind-descriptor.checkSource",
-    "openbindings.source-puller.pullSource",
+    openbindings_kind_description::CHECK_SOURCE,
+    openbindings_source_pull::PULL_SOURCE,
 ];
 // JSON Schema uses Unicode-mode matching. These ranges accept scalar strings,
 // including astral characters, but exclude unpaired UTF-16 surrogate units.

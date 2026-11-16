@@ -1,5 +1,10 @@
 # OpenBindings kind description
 
+`LIST_KINDS`, `DESCRIBE_KIND` and `CHECK_SOURCE` are the full pinned operation
+keys for aliases and support claims. Disclosure checks use the invocation and
+source-pull crates' operation constants. `ContextShapeError` and
+`ChallengeShapeError` are re-exported with `Context` and `ContextChallenge`.
+
 For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 

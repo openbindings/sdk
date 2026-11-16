@@ -371,10 +371,10 @@
       "schema": "{\"allOf\":[false,{\"pattern\":\"a{65535}\"}]}",
       "value": "\"x\"",
       "external": true,
-      "required": "N:LimitExceeded",
+      "required": "F",
       "evaluation_sdk_reservation_bytes": 131072,
       "semantic_required": "F",
-      "gate": "Same actual eager reach with a confirmed prepared local Limited operand; terminal inability must remain observable.",
+      "gate": "An established false allOf branch decides failure before a later limited predicate.",
       "required_pattern_state": "limited"
     },
     {

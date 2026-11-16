@@ -52,6 +52,17 @@ stream, before buffering it all; an SDK byte limit cannot bound the host's copy.
 | `limits.evaluationSdkReservationBytes` | 4 MiB | Completes the 3,000-record value and 16,000-link chain; 1 MiB refuses the records. The 49,000-link chain needs 8 MiB in the complete recipe; at 4 MiB it returns `semantic-analysis-memory-limit`. This is SDK accounting, not all allocation. |
 | Validation `maxFindings` | 100 | Smallest nonzero retention tested. On 100,000 invalid operations it saved 2.813 MiB versus 4,096 findings; it is secondary to admission limits. Truncation does not change rule conclusions. |
 
+These nondefault evaluation limits select the SDK's own Original lane instead
+of the compiled dependency lane. The work and reservation accounting belongs to
+that SDK lane; it is not a deadline or a cap on all isolate allocation.
+
+At a request boundary, distinguish `no-verdict` from `fails`. A Worker must not
+accept an undecided value or label it schema-invalid. For example, return 503
+with the fixed `detail.code` for `no-verdict`, 422 for `fails`, and 200 for
+`satisfies`; choose a separate error response for `undefined`. Apply the same
+policy to `evaluate` and `explain`, and bound retries rather than automatically
+raising limits. The service example implements this mapping.
+
 Apply JSON limits to documents, supplied resources **and values**. Ordinary
 `evaluate(value)` uses default JSON admission; to enforce these smaller limits,
 use `parseJson(text, { limits: jsonLimits })`, check for `parsed`, evaluate its

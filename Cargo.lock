@@ -1007,6 +1007,8 @@ dependencies = [
  "openbindings",
  "openbindings-context",
  "openbindings-internal-cancellation",
+ "openbindings-invocation",
+ "openbindings-source-pull",
  "serde_json",
 ]
 

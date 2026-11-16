@@ -369,10 +369,12 @@ impl Plan {
                 remaining: graph.remaining(),
             };
         }
+        let mut partial_failure = None;
         let mut run = Run {
             plan: self,
             root_instance: backend::ref_id(value.view()),
             record_witnesses,
+            partial_failure: &mut partial_failure,
             graph,
             atoms: Vec::new(),
             values: values::Values::default(),
@@ -402,6 +404,15 @@ impl Plan {
             && let Some(witnesses) = witness
         {
             (*problems, *problems_complete) = run.materialize_all(&witnesses, value);
+        }
+        if let Some(problems) = run.partial_failure.take()
+            && !matches!(&outcome, ValueOutcome::Fails { problems, .. } if !problems.is_empty())
+        {
+            outcome = ValueOutcome::Fails {
+                message: FAILURE_MESSAGE.into(),
+                problems,
+                problems_complete: false,
+            };
         }
         Completed {
             outcome,
@@ -638,6 +649,8 @@ struct Run<'a> {
     // member-name tokens retain distinct IDs; no value or proof enters Plan.
     root_instance: usize,
     record_witnesses: bool,
+    // Materialized before further child work can exhaust diagnostic allowance.
+    partial_failure: &'a mut Option<Vec<ValueProblem>>,
     graph: Graph<'a>,
     atoms: Vec<Atom>,
     values: values::Values,

@@ -52,6 +52,33 @@ fn witnesses<'a>(
 }
 
 impl Run<'_> {
+    pub(super) fn explanation_full(&mut self, state: &mut State) -> Result<bool, NoVerdict> {
+        if !state
+            .witness
+            .as_ref()
+            .is_some_and(|witness| witness.seeds.len() == MAX_EXPLANATION_PROBLEMS)
+        {
+            return Ok(false);
+        }
+        self.truncate_explanation(state)
+    }
+
+    #[cold]
+    fn truncate_explanation(&mut self, state: &mut State) -> Result<bool, NoVerdict> {
+        witnesses(state, &mut self.graph)?.complete = false;
+        Ok(true)
+    }
+
+    #[cold]
+    pub(super) fn preserve_failure(&mut self, state: &State, value: JsonRef<'_>) {
+        debug_assert!(state.valid == FALSE && self.partial_failure.is_none());
+        // Only the root application's evidence is unconditional. A failing
+        // child inside anyOf or not cannot establish the root's failure.
+        *self.partial_failure = Some(state.witness.as_ref().map_or_else(Vec::new, |witness| {
+            self.materialize_all(witness, &value.to_owned()).0
+        }));
+    }
+
     pub(super) fn uncertain_failure(
         &mut self,
         state: &mut State,

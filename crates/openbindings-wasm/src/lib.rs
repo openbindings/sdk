@@ -1125,11 +1125,12 @@ impl Default for WasmResources {
 }
 // Registration failures keep the facade's vocabulary independent of Rust types.
 fn resource_error(failure: &ExternalSchemaError) -> JsValue {
-    if matches!(failure.kind, ExternalSchemaErrorKind::Limit { .. }) {
-        error(
-            "resource",
-            "external schema registration exceeded a preparation limit",
-        )
+    if let ExternalSchemaErrorKind::Limit { resource } = &failure.kind {
+        JsValue::from_str(&encoded(json!({
+            "code": "resource",
+            "message": "external schema registration exceeded a preparation limit",
+            "details": { "resource": resource },
+        })))
     } else {
         error("resource", failure)
     }
@@ -1340,6 +1341,22 @@ impl WasmPrepared {
     #[wasm_bindgen(js_name=evaluateJsonText)]
     pub fn evaluate_json_text(&self, text: &str, cancelled: bool) -> Result<String, JsValue> {
         self.evaluate_json(text.as_bytes(), cancelled)
+    }
+    /// Admit exact JSON and explain it without transferring an input owner.
+    #[wasm_bindgen(js_name=explainJson)]
+    pub fn explain_json(&self, bytes: &[u8], cancelled: bool) -> Result<String, JsValue> {
+        let value = JsonValue::parse(bytes)
+            .map_err(openbindings_internal_json::backend::value_check_refusal)
+            .map_err(input_error)?;
+        let outcome = self
+            .prepared
+            .explain_with_control(&value, &control(cancelled));
+        Ok(encoded(exact::json(&outcome)))
+    }
+    /// As [`Self::explain_json`], for text encoded into module memory directly.
+    #[wasm_bindgen(js_name=explainJsonText)]
+    pub fn explain_json_text(&self, text: &str, cancelled: bool) -> Result<String, JsValue> {
+        self.explain_json(text.as_bytes(), cancelled)
     }
     #[must_use]
     pub fn retain(&self) -> WasmPrepared {

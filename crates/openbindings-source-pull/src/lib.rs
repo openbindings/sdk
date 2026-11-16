@@ -14,7 +14,7 @@ pub use budget::PullLimits;
 pub use carrier::{CarrierError, CarrierErrorKind};
 pub use error::{PullValidationError, RelationshipError, RelationshipErrorKind, RequestError};
 pub use model::*;
-pub use openbindings_context::{Context, ContextChallenge};
+pub use openbindings_context::{ChallengeShapeError, Context, ContextChallenge, ContextShapeError};
 pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};
 pub use pull::{PullError, PullFailure, SourcePuller, SourcePullerExt};
 pub use request::PullRequest;
@@ -23,3 +23,6 @@ pub use request::PullRequest;
 pub const INTERFACE_VERSION: &str = "0.1.0";
 /// Exact interface publication used by this companion.
 pub const APPLIED_INTERFACE_REVISION: &str = "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1";
+
+/// Operation key for `pullSource` in the pinned source-puller interface.
+pub const PULL_SOURCE: &str = "openbindings.source-puller.pullSource";

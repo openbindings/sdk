@@ -1,0 +1,462 @@
+{
+    "openbindings": "0.2.0",
+    "name": "Kind Descriptor",
+    "version": "0.1.0",
+    "description": "Describe the kinds an implementation reads: which kinds, for which operations, what each kind's source data and binding data look like, and whether a proposed source entry works under a kind. A kind may be defined in writing, privately or in code; the implementation that reads it is the authority on its shapes.\n\nThese operations are offered for voluntary adoption by name. Their schemas and descriptions identify the exchanged values and the capability they describe; they do not prescribe an SDK, internal algorithm, validation or recovery policy, or process architecture. Correspondence is an author claim, not verification of an implementation.\n\nA kind reads exactly two shapes, its source data and its binding data, and this interface asks it to read nothing else. What that data means, and what the kind consults to read it, is the kind's definition; this interface describes the shapes and says nothing about their meaning. Support is per operation: a kind is supported for the operations an implementation performs under it, named by their keys, and an implementation may read a kind for invocation without describing it at all. Source entries exchanged here are OpenBindings 0.2 values; the open carrier schemas are not complete document-conformance checks.",
+    "schemas": {
+        "KindSummary": {
+            "type": "object",
+            "description": "One kind this implementation reads, with the operations it performs under it.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Exact, opaque kind as a source carries it."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "A brief overview of the kind for a person choosing one."
+                },
+                "supports": {
+                    "$ref": "#/schemas/Supports"
+                }
+            },
+            "required": [
+                "kind",
+                "supports"
+            ]
+        },
+        "Supports": {
+            "type": "array",
+            "description": "The operations this implementation performs under the kind, each named by its operation key, such as openbindings.binding-invoker.invokeBinding, openbindings.source-puller.pullSource or openbindings.kind-descriptor.checkSource. A kind is only ever supported for particular operations; listing a key is this implementation's claim for this kind and that operation, and absence of a key makes no claim. No key appears twice. An empty list describes a kind the implementation knows but performs nothing under.",
+            "items": {
+                "type": "string",
+                "minLength": 1
+            }
+        },
+        "DataSchema": {
+            "type": [
+                "object",
+                "boolean"
+            ],
+            "description": "A JSON Schema 2020-12 schema of a kind's source data or binding data, written to be filled: titled oneOf branches for alternative forms, required for what must be given, description for what a value is and where it comes from, default and enum where they apply. An application renders it as prompts or hands it to an agent; a value the schema accepts is valid data for the kind."
+        },
+        "CheckDescription": {
+            "type": "object",
+            "description": "What this implementation's checkSource does for the kind, so an application can decide whether to run it and tell a person what will happen.",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One sentence from the kind saying what its check does, such as which document it fetches or which process it starts."
+                },
+                "executes": {
+                    "type": "boolean",
+                    "description": "True when the check runs something the source data names, such as starting a command; false when it only reads. An application asks before running a check that executes."
+                }
+            },
+            "required": [
+                "description",
+                "executes"
+            ]
+        },
+        "PullDescription": {
+            "type": "object",
+            "description": "What this implementation's pullSource does for the kind, so an application can decide whether to run a pull and tell a person what will happen.",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One sentence from the kind saying what its pull does, such as which document it fetches or which process it starts."
+                },
+                "executes": {
+                    "type": "boolean",
+                    "description": "True when the pull runs something the source data names, such as starting a command; false when it only reads. An application asks before running a pull that executes."
+                }
+            },
+            "required": [
+                "description",
+                "executes"
+            ]
+        },
+        "InvokeDescription": {
+            "type": "object",
+            "description": "What this implementation's invokeBinding does for the kind, so an application can decide whether to run a call and tell a person what will happen.",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "One sentence from the kind saying what a call does, such as which service it reaches or which process it starts."
+                },
+                "executes": {
+                    "type": "boolean",
+                    "description": "True when a call runs something the source or binding data names, such as starting a command; false when it only reaches a service. An application asks before running a call that executes."
+                }
+            },
+            "required": [
+                "description",
+                "executes"
+            ]
+        },
+        "KindDescription": {
+            "type": "object",
+            "description": "Everything an application needs to add a source of this kind and to bind to it: the kind's description, the operations this implementation performs under it, what its check, its pull and a call do, and the two shapes the kind reads. An absent sourceData means sources of this kind carry no data; an absent bindingData means its bindings carry none; an absent check means this implementation does not check source entries of this kind, and an absent pull that it does not pull sources of this kind; check is present exactly when supports names openbindings.kind-descriptor.checkSource, pull exactly when it names openbindings.source-puller.pullSource, and invoke exactly when it names openbindings.binding-invoker.invokeBinding.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The exact kind described."
+                },
+                "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "A brief overview of the kind: what its sources are and how its operations arise. It may link the kind's written definition, if one exists."
+                },
+                "supports": {
+                    "$ref": "#/schemas/Supports"
+                },
+                "check": {
+                    "$ref": "#/schemas/CheckDescription"
+                },
+                "pull": {
+                    "$ref": "#/schemas/PullDescription"
+                },
+                "invoke": {
+                    "$ref": "#/schemas/InvokeDescription"
+                },
+                "sourceData": {
+                    "$ref": "#/schemas/DataSchema",
+                    "description": "The schema of a sources entry's data under this kind."
+                },
+                "bindingData": {
+                    "$ref": "#/schemas/DataSchema",
+                    "description": "The schema of a binding's data under this kind."
+                }
+            },
+            "required": [
+                "kind",
+                "description",
+                "supports"
+            ]
+        },
+        "CheckContext": {
+            "type": "object",
+            "description": "Opaque context supplied by value for one check, as the context document defines it: values the kind needs to reach what the source data names. Which values a kind needs and what they mean is the kind's; this interface defines none of them. A check that cannot proceed without a value it was not given completes unsuccessfully with CONTEXT_REQUIRED and the context document's challenge, message and schema, as its data, and a later call carries the values the schema described here.",
+            "additionalProperties": true
+        },
+        "CheckSourceInput": {
+            "type": "object",
+            "description": "A proposed source entry, as a sources entry would carry it, and context to apply.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The exact kind the entry is proposed under."
+                },
+                "data": {
+                    "description": "The proposed source data: any JSON value the kind's source schema accepts, absent for a kind whose sources carry no data."
+                },
+                "context": {
+                    "$ref": "#/schemas/CheckContext"
+                }
+            },
+            "required": [
+                "kind"
+            ],
+            "additionalProperties": false
+        },
+        "SourceEntry": {
+            "type": "object",
+            "description": "A sources entry as an OpenBindings 0.2 document carries it: the kind, the data the kind stands behind, and a description the kind derives. Absent data and present JSON null are distinct. Only core source fields and x- extensions may appear; the open carrier schema does not fully check that boundary.",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The exact kind, equal to the kind checked."
+                },
+                "data": {
+                    "description": "Source data read under the kind: any JSON value, absent when the source carries none."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable description of the source, as the kind derives it from what it read."
+                }
+            },
+            "required": [
+                "kind"
+            ],
+            "additionalProperties": true
+        }
+    },
+    "operations": {
+        "openbindings.kind-descriptor.listKinds": {
+            "description": "Return the kinds this implementation reads, each with the operations it performs under it, named by their keys. The list is this implementation's claim about itself: a listed kind and key mean the implementation performs that operation under that kind; absence makes no claim. Kind equality is the core's exact string equality. This is a capability query and performs no operation under any kind.",
+            "output": {
+                "type": "array",
+                "items": {
+                    "$ref": "#/schemas/KindSummary"
+                }
+            },
+            "examples": {
+                "builtIn": {
+                    "description": "An implementation that invokes, pulls and checks three illustrative kinds, and invokes a fourth without describing or checking it. The kinds are defined for these examples only.",
+                    "output": [
+                        {
+                            "kind": "example.text@1",
+                            "description": "A fixed set of text functions.",
+                            "supports": [
+                                "openbindings.binding-invoker.invokeBinding",
+                                "openbindings.source-puller.pullSource",
+                                "openbindings.kind-descriptor.checkSource"
+                            ]
+                        },
+                        {
+                            "kind": "example.openapi@1",
+                            "description": "An OpenAPI 3.1 document and the HTTP API it describes.",
+                            "supports": [
+                                "openbindings.binding-invoker.invokeBinding",
+                                "openbindings.source-puller.pullSource",
+                                "openbindings.kind-descriptor.checkSource"
+                            ]
+                        },
+                        {
+                            "kind": "example.mcp-stdio@1",
+                            "description": "An MCP server started over standard input and output.",
+                            "supports": [
+                                "openbindings.binding-invoker.invokeBinding",
+                                "openbindings.source-puller.pullSource",
+                                "openbindings.kind-descriptor.checkSource"
+                            ]
+                        },
+                        {
+                            "kind": "example.usage@1",
+                            "description": "A command-line tool described by a usage specification.",
+                            "supports": [
+                                "openbindings.binding-invoker.invokeBinding"
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "openbindings.kind-descriptor.describeKind": {
+            "description": "Describe one kind this implementation reads: its description, the operations this implementation performs under it, what its check and its pull do, and the schemas of its source data and binding data. The schemas are the two shapes the kind reads and are written to be filled: an application renders them as prompts, an agent fills them as it fills any schema. An absent sourceData means sources of the kind carry no data; an absent bindingData means its bindings carry none; an absent check means this implementation does not check entries of the kind. A kind this implementation does not read completes unsuccessfully. Kind equality is the core's exact string equality. This is a capability query and performs no operation under the kind.",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "The exact kind to describe."
+                    }
+                },
+                "required": [
+                    "kind"
+                ],
+                "additionalProperties": false
+            },
+            "output": {
+                "$ref": "#/schemas/KindDescription"
+            },
+            "examples": {
+                "textTools": {
+                    "description": "The illustrative kind example.text@1: its sources carry no data, since the kind's inventory of targets is fixed, and a binding's data names a target. Its check reads nothing.",
+                    "input": {
+                        "kind": "example.text@1"
+                    },
+                    "output": {
+                        "kind": "example.text@1",
+                        "description": "A fixed set of text functions: echo returns its input string and length counts its Unicode code points. Each becomes an operation; a binding's data names the function.",
+                        "supports": [
+                            "openbindings.binding-invoker.invokeBinding",
+                            "openbindings.source-puller.pullSource",
+                            "openbindings.kind-descriptor.checkSource"
+                        ],
+                        "check": {
+                            "description": "Confirms the kind is known and derives the source's description. Reads nothing.",
+                            "executes": false
+                        },
+                        "pull": {
+                            "description": "Lists the kind's fixed functions as operations. Reads nothing.",
+                            "executes": false
+                        },
+                        "invoke": {
+                            "description": "Calls the binding as the kind defines it.",
+                            "executes": false
+                        },
+                        "bindingData": {
+                            "type": "string",
+                            "title": "The text function",
+                            "enum": [
+                                "echo",
+                                "length"
+                            ]
+                        }
+                    }
+                },
+                "openapi": {
+                    "description": "The illustrative kind example.openapi@1. Its source schema offers three exclusive forms as titled oneOf branches; the fetch form asks check to fetch the document once and return the embedded form. Which forms a kind offers, and what each means, is the kind's definition.",
+                    "input": {
+                        "kind": "example.openapi@1"
+                    },
+                    "output": {
+                        "kind": "example.openapi@1",
+                        "description": "An OpenAPI 3.1 document and the HTTP API it describes. Each operation in the document becomes an operation; its parameters and request body become the input, a lone path parameter as its bare value, its success response the output; a binding's data points at the path item and method. An embedded document is the source; nothing is re-fetched for it.",
+                        "supports": [
+                            "openbindings.binding-invoker.invokeBinding",
+                            "openbindings.source-puller.pullSource",
+                            "openbindings.kind-descriptor.checkSource"
+                        ],
+                        "check": {
+                            "description": "Fetches the OpenAPI document when asked to embed it, or confirms it is served at origin. Sends no other request.",
+                            "executes": false
+                        },
+                        "pull": {
+                            "description": "Reads the embedded OpenAPI document, or fetches the one the data names. Sends no other request.",
+                            "executes": false
+                        },
+                        "invoke": {
+                            "description": "Calls the binding as the kind defines it.",
+                            "executes": false
+                        },
+                        "sourceData": {
+                            "oneOf": [
+                                {
+                                    "title": "Reference the document at a URL",
+                                    "description": "Read from the URL on every pull and invoke. The document is never embedded.",
+                                    "type": "object",
+                                    "properties": {
+                                        "origin": {
+                                            "type": "string",
+                                            "format": "uri",
+                                            "title": "Where the OpenAPI document is served"
+                                        }
+                                    },
+                                    "required": [
+                                        "origin"
+                                    ],
+                                    "additionalProperties": false
+                                },
+                                {
+                                    "title": "Embed the document fetched from a URL",
+                                    "description": "check fetches the document once and returns the embedded form. The URL is not kept.",
+                                    "type": "object",
+                                    "properties": {
+                                        "fetch": {
+                                            "type": "string",
+                                            "format": "uri",
+                                            "title": "Where to fetch the OpenAPI document"
+                                        }
+                                    },
+                                    "required": [
+                                        "fetch"
+                                    ],
+                                    "additionalProperties": false
+                                },
+                                {
+                                    "title": "Embed a document you have",
+                                    "description": "The document is the source. Nothing is fetched.",
+                                    "type": "object",
+                                    "properties": {
+                                        "artifact": {
+                                            "type": "object",
+                                            "title": "The OpenAPI document"
+                                        }
+                                    },
+                                    "required": [
+                                        "artifact"
+                                    ],
+                                    "additionalProperties": false
+                                }
+                            ]
+                        },
+                        "bindingData": {
+                            "type": "object",
+                            "properties": {
+                                "target": {
+                                    "type": "string",
+                                    "title": "The operation in the document",
+                                    "description": "A JSON Pointer to the path item and method, such as #/paths/~1tasks/post."
+                                }
+                            },
+                            "required": [
+                                "target"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "openbindings.kind-descriptor.checkSource": {
+            "description": "Check a proposed source entry under its kind and return the entry the kind stands behind: the proposed data completed as the kind defines, for example fetched and embedded, defaults filled or normalized, with a description the kind derives from what it read. The output's kind equals the input's. An application records what the check returns; it never interprets the data itself. What the kind consults to check an entry, including anything outside the document that the data names, is the kind's definition, and describeKind's check member discloses it. A kind that needs values it was not given completes unsuccessfully with CONTEXT_REQUIRED, carrying the context document's challenge (message and schema), and a later call supplies them as context. An entry the kind rejects completes unsuccessfully with a message a person can read and a code the kind or the implementation defines; this interface owns no code for it. A kind this implementation does not check completes unsuccessfully. Checking changes no document and performs none of the source's operations.",
+            "input": {
+                "$ref": "#/schemas/CheckSourceInput"
+            },
+            "output": {
+                "$ref": "#/schemas/SourceEntry"
+            },
+            "examples": {
+                "textSource": {
+                    "description": "A source of a kind whose sources carry no data. The check confirms the kind and derives the description.",
+                    "input": {
+                        "kind": "example.text@1"
+                    },
+                    "output": {
+                        "kind": "example.text@1",
+                        "description": "Text tools"
+                    }
+                },
+                "openapiFetch": {
+                    "description": "The fetch form of the illustrative OpenAPI kind: the check fetches the document once and returns the embedded form, with a description derived from the document. The URL is not kept, as this kind defines.",
+                    "input": {
+                        "kind": "example.openapi@1",
+                        "data": {
+                            "fetch": "https://api.example.com/openapi.json"
+                        }
+                    },
+                    "output": {
+                        "kind": "example.openapi@1",
+                        "data": {
+                            "artifact": {
+                                "openapi": "3.1.0",
+                                "info": {
+                                    "title": "Example API",
+                                    "version": "1.0.0"
+                                },
+                                "paths": {
+                                    "/things": {
+                                        "get": {
+                                            "operationId": "listThings",
+                                            "responses": {
+                                                "200": {
+                                                    "description": "The things."
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Example API 1.0.0"
+                    }
+                },
+                "openapiReference": {
+                    "description": "The reference form of the same kind: the check confirms the document is served at the origin and derives the description, and the entry stays a reference.",
+                    "input": {
+                        "kind": "example.openapi@1",
+                        "data": {
+                            "origin": "https://api.example.com/openapi.json"
+                        }
+                    },
+                    "output": {
+                        "kind": "example.openapi@1",
+                        "data": {
+                            "origin": "https://api.example.com/openapi.json"
+                        },
+                        "description": "Example API 1.0.0"
+                    }
+                }
+            }
+        }
+    }
+}

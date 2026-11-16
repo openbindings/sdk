@@ -471,7 +471,7 @@ async fn routing_agrees_with_published_invocation_support() {
     use openbindings_invocation::{CancellationToken, InvocationSupport};
     use openbindings_kind_description::{DescribeKindRequest, KindDescriptorExt};
 
-    const INVOKE: &str = "openbindings.binding-invoker.invokeBinding";
+    use openbindings_invocation::INVOKE_BINDING as INVOKE;
     let adapter = Memory; // One configuration for all three queries.
     let kinds = adapter.list_kinds(CancellationToken::new()).await.unwrap();
     // Include the adapter's known routing kind even if a broken listing omits it,

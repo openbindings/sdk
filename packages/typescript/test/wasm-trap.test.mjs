@@ -14,6 +14,7 @@ for (const mode of [
   "ordinary-evaluate",
   "ordinary-conversion",
   "evaluate-json",
+  "explain-json",
   "document-parse",
   "create",
   "read",

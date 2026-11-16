@@ -77,16 +77,22 @@ export function decode<T>(text: string): T {
 
 /** Thrown SDK misuse, configuration failure or fatal wasm-trap. A trap makes this module instance unusable; later calls throw the same code, including initialize(). Disposal remains safe. Expected parse, conformance and schema outcomes use result unions. Messages explain; codes identify. */
 export class SdkError extends Error {
-  /** Construct a structured thrown error with a broad code, explanatory message and optional original-source location. */
+  /** Construct a structured thrown error with a broad code, explanatory message, optional original-source location and refusal details. */
   constructor(
     /** Broad stable SDK error category; expected semantic outcomes use result unions. */
     readonly code: string,
     message: string,
     /** Optional frozen original UTF-8 source coordinates. */
     readonly location?: Readonly<SourceLocation>,
+    /** Frozen registration-limit identity, using the same resource strings as preparation failure.details.resource. Absent for other failures. */
+    readonly details?: Readonly<{
+      /** Stable preparation resource identifier for the exhausted registration limit. */
+      resource: string;
+    }>,
   ) {
     super(message);
     if (location) this.location = Object.freeze({ ...location });
+    if (details) this.details = Object.freeze({ ...details });
     this.name = "SdkError";
   }
 }
@@ -148,12 +154,14 @@ export function sdkCall<T>(call: () => T): T {
           code: string;
           message: string;
           location?: SourceLocation | null;
+          details?: { resource: string };
         }>(error);
         if (typeof info.code === "string" && typeof info.message === "string")
           throw new SdkError(
             info.code,
             info.message,
             info.location ?? undefined,
+            info.details,
           );
       } catch (decoded) {
         if (decoded instanceof SdkError) throw decoded;

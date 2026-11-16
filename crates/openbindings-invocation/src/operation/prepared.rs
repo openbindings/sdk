@@ -37,6 +37,21 @@ impl fmt::Debug for BindingChoice {
     }
 }
 /// Preparation refused before an invocation exists; no per-value verdict is implied.
+///
+/// New categories may be added. Handle unknown categories by refusal or
+/// propagation. Exhaustive downstream matches are intentionally rejected:
+///
+/// ```compile_fail,E0004
+/// use openbindings_invocation::operation::OperationPreparationFailure;
+/// fn classify(value: OperationPreparationFailure) {
+///     match value {
+///         OperationPreparationFailure::Resolution(_) => (),
+///         OperationPreparationFailure::Schema(_) => (),
+///         OperationPreparationFailure::Cancelled => (),
+///     }
+/// }
+/// ```
+#[non_exhaustive]
 #[derive(Debug)]
 pub enum OperationPreparationFailure {
     /// The named operation could not be resolved.

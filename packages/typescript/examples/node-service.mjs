@@ -1,14 +1,14 @@
 // node examples/node-service.mjs; installed package imports only.
 import { readFile } from "node:fs/promises";
 import { initialize, parseJson } from "@openbindings/sdk";
-import { prepareService, ValidationService } from "./service.mjs";
+import { prepareService, ValidationService, jsonLimits } from "./service.mjs";
 
 await initialize(
   await readFile(
     new URL(import.meta.resolve("@openbindings/sdk/openbindings.wasm")),
   ),
 );
-const schema = parseJson('{"type":"integer"}');
+const schema = parseJson('{"type":"integer"}', { limits: jsonLimits });
 if (schema.status !== "parsed")
   throw new Error("Example schema failed admission.");
 let service;
@@ -19,6 +19,7 @@ try {
   );
   if (setup.status !== "ready") throw new Error(JSON.stringify(setup));
   service = new ValidationService(setup.schema);
+  schema.value.dispose(); // preparation owns its resource snapshot before I/O
   console.log(
     JSON.stringify({
       ordinary: service.check(7),

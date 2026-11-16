@@ -8,6 +8,13 @@ Kind description, source pulling and binding/operation invocation are Rust
 companion APIs. Their coverage claims and provider streams are not exported by
 this TypeScript facade; the facade exposes document operations, value evaluation and HTTP discovery.
 
+**Untrusted input.** Every SDK call is synchronous WebAssembly: no timer fires and no `AbortSignal` is aborted while
+one runs, so nothing stops a call in progress. The SDK sets no default work limit, because no default can know your
+inputs. Wherever documents or values come from outside, set `evaluationSdkWorkUnits` when you prepare a schema, and
+JSON admission limits when you parse, as the first-use examples below do. A work limit selects the SDK's own
+evaluation lane. The [Workers guide](https://github.com/openbindings/sdk/blob/main/docs/workers.md) gives measured
+settings.
+
 ## First useful result
 
 This `0.2.0-alpha.1` package is unpublished. Install a locally built archive;
@@ -50,8 +57,12 @@ const documentText = `{
   }
 }`;
 
+// Untrusted input: bound admission and evaluation work (see "Untrusted input").
+const jsonLimits = { maxBytes: 4 * 1024 * 1024, maxNodes: 250_000 };
+const prepareOptions = { limits: { evaluationSdkWorkUnits: 100_000_000 } };
+
 function checkInput(input: JsonInput) {
-  const parsed = Document.parse(documentText);
+  const parsed = Document.parse(documentText, { limits: jsonLimits });
   if (parsed.status !== "parsed") return parsed;
   using document = parsed.value;
   const checked = document.validate();
@@ -62,7 +73,7 @@ function checkInput(input: JsonInput) {
   if (!operation) return { status: "operation-missing" } as const;
   using schema = proof.inputSchema(operation.key);
   if (!schema) return { status: "no-input-schema" } as const;
-  const setup = schema.prepare();
+  const setup = schema.prepare(prepareOptions);
   if (setup.status !== "ready") return setup;
   using prepared = setup.schema;
   const result = prepared.explain(input); // narrow on result.status
@@ -92,9 +103,14 @@ import { Document, initialize } from "@openbindings/sdk";
 
 await initialize();
 
+// Untrusted input: bound admission and evaluation work (see "Untrusted input").
+const jsonLimits = { maxBytes: 4 * 1024 * 1024, maxNodes: 250_000 };
+const prepareOptions = { limits: { evaluationSdkWorkUnits: 100_000_000 } };
+
 function checkInput(input) {
   const parsed = Document.parse(
     '{"openbindings":"0.2.0","operations":{"lookup":{"aliases":["find"],"input":{"type":"integer"}}}}',
+    { limits: jsonLimits },
   );
   if (parsed.status !== "parsed") return parsed;
   let proof, operation, schema, prepared;
@@ -106,7 +122,7 @@ function checkInput(input) {
     if (!operation) return { status: "operation-missing" };
     schema = proof.inputSchema(operation.key);
     if (!schema) return { status: "no-input-schema" };
-    const setup = schema.prepare();
+    const setup = schema.prepare(prepareOptions);
     if (setup.status !== "ready") return setup;
     prepared = setup.schema;
     return { result: prepared.explain(input) };
@@ -147,7 +163,7 @@ validating a value. Every result narrows on `status`. A value result's is
 validity), `no-verdict` (the SDK could not answer) or `input-error` when ordinary
 JavaScript data cannot be admitted.
 `evaluate` reads a string as a JSON string value; check JSON text or bytes, such as
-a request body, with `evaluateJson`, which admits them as `parseJson` does.
+a request body, with `evaluateJson` or `explainJson` (with problems), which admit them as `parseJson` does.
 Admission uses the default limits and precedes cancellation observation; malformed
 JSON remains an `input-error` even when the signal is already aborted.
 
@@ -247,7 +263,11 @@ language-specific conversion depths are unchanged; exact parsing uses `JsonLimit
 
 Edit a `Document` through `set(pointer, value)`, `remove(pointer)` or an atomic
 `edit([{ op: "set", pointer, value }, { op: "remove", pointer }])` batch. Paths use
-RFC 6901 and address the revision before the batch. Each edit returns a new `Document`; the original stays unchanged. Dispose each acquired owner independently. A path may hold an unpaired
+RFC 6901 and address the revision before the batch. `set` at an existing path
+replaces the whole member; it does not merge fields or refuse an occupied key.
+Before adding an operation, check its proposed primary key and each proposed
+alias against existing keys and aliases with `proof.resolveOperation(name)`,
+then edit that same document revision. Each edit returns a new `Document`; the original stays unchanged. Dispose each acquired owner independently. A path may hold an unpaired
 UTF-16 unit, so a finding's pointer addresses the member it reports. A batch crosses the bridge
 once, including nested exact values, splices once and reads the result once. `parseJson` values
 keep exact decimal spellings. Untouched bytes, formatting and member order remain
@@ -325,6 +345,45 @@ value use the defaults. To evaluate a value beyond those defaults, admit it with
 `parseJson` and explicit limits, then pass the resulting `ExactJson` to `evaluate`.
 
 ## Evaluate values
+
+Named schemas live in the document's top-level `schemas` map. A document-local
+reference starts at that document root:
+
+```json
+{
+  "openbindings": "0.2.0",
+  "schemas": {
+    "Item": {
+      "type": "object",
+      "required": ["sku"],
+      "properties": { "sku": { "type": "string" } }
+    }
+  },
+  "operations": {
+    "lookup": { "input": { "$ref": "#/schemas/Item" } }
+  }
+}
+```
+
+To explain JSON text, admit it with `parseJson`, pass its exact value to
+`explain`, and dispose the value after the synchronous call. Passing the text
+directly to `explain` evaluates a string value:
+
+```typescript
+import { parseJson, type PreparedSchema } from "@openbindings/sdk";
+
+function explainText(prepared: PreparedSchema, text: string) {
+  const parsed = parseJson(text, {
+    limits: { maxBytes: 4 * 1024 * 1024, maxNodes: 250_000, maxDepth: 10_000 },
+  });
+  if (parsed.status !== "parsed") return parsed;
+  try {
+    return prepared.explain(parsed.value);
+  } finally {
+    parsed.value.dispose();
+  }
+}
+```
 
 External schemas are explicit and immutable. Pass `ExternalSchemas` to
 `schema.prepare({ resources })`; no reference causes a fetch. A prepared schema
@@ -417,6 +476,7 @@ units, while unsupported Unicode-text operations return a typed inability.
 `evaluate` requests the outcome. An established failure has no problems and
 `problemsComplete: false`. `explain` collects established failing assertions
 at original locations, with additional allocation and work, up to 100 problems.
+Once the cap is full, further child traversal stops and diagnostics are incomplete.
 `problemsComplete` is true only when all reportable failures were collected;
 missing witnesses, cancellation or exhausted diagnostic limits leave it false
 without changing the failure verdict. `allOf` collects problems from its failing
@@ -446,6 +506,14 @@ matching source is available.
 Keep the corresponding source owner when coordinate lookup is needed.
 Messages are advisory; use result tags, codes and rule evidence for control flow.
 Result records may gain properties: read the properties needed by the application.
+
+A document finding's `status` describes its evidence, not an error severity.
+`"met"` records positive evidence for that check; it is not a validation
+failure or necessarily the final aggregate status of its rule. `"violated"` records a violation and
+`"inconclusive"` records a check that could not be settled; `"not-applicable"`
+means an earlier prerequisite prevents the rule from applying. Use the report's
+`conclusion` and per-rule `evidence` for conformance, rather than treating every
+entry in `findings` as an error.
 
 Document findings use exact JSON Pointers and UTF-8 byte coordinates in the assessed revision.
 A pointer keeps a member name's unpaired UTF-16 unit, as a JavaScript string can,
@@ -519,8 +587,8 @@ Each worker initializes its own SDK module instance with `await initialize()`.
 The Node worker checks a value and posts plain data back. SDK owners stay in
 the worker and are disposed there.
 
-The [service lifecycle example](examples/service-lifecycle.mjs) retains old work
-while installing a replacement. Public TypeScript invocation, kind-description and
+The [service lifecycle example](examples/service-lifecycle.mjs) selects the active
+schema after request body I/O, including replacements installed while reading. Public TypeScript invocation, kind-description and
 source-pull providers and custom evaluator callbacks are not provided.
 
 ## HTTP discovery and reference
