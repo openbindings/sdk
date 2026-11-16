@@ -252,3 +252,112 @@ fn caller_base_is_ignored_from_document_and_identified_resources() {
     let input = SchemaInput::new(root.clone(), root).with_base("https://retrieval.test/schema");
     assert!(identical(Some(&input), Some(&input), &ComparisonLimits::default()).unwrap());
 }
+
+#[test]
+fn relative_references_use_embedded_resource_bases_once() {
+    let limits = ComparisonLimits::default();
+    let plain = json(r#"{"type":"string"}"#);
+    let plain = SchemaInput::new(plain.clone(), plain);
+    for (id, nested_id, reference, root_reference) in [
+        ("sub/", "b", "b", "sub/"),
+        ("https://probe.test/sub/", "b", "b", "sub/"),
+        ("sub/", "b", "https://probe.test/sub/b", "sub/"),
+        ("sub/", "b", "#/$defs/b", "sub/"),
+        ("sub/", "b", "b", "sub/b"),
+        ("sub", "b", "b", "sub"),
+        ("sub/", "https://probe.test/sub/b", "b", "sub/"),
+    ] {
+        let root = json(&serde_json::json!({
+            "$defs": {"a": {"$id": id, "$defs": {"b": {"$id": nested_id, "type": "string"}}, "$ref": reference}},
+            "$ref": root_reference
+        }).to_string());
+        for decoy in [false, true] {
+            let mut context =
+                ComparisonContext::new(root.clone()).with_base("https://probe.test/root");
+            if decoy && id != "sub" {
+                context =
+                    context.with_resource("https://probe.test/b", json(r#"{"type":"number"}"#));
+            }
+            let input = context.schema(root.clone());
+            for _ in 0..2 {
+                // Cold and completed cached indexes agree.
+                assert!(
+                    identical(Some(&input), Some(&input), &limits).unwrap_or_else(|e| panic!(
+                        "{id}/{nested_id}/{reference}/{root_reference}/{decoy}: {e:?}"
+                    ))
+                );
+                for direction in [Direction::Input, Direction::Output] {
+                    for (target, candidate) in [(&input, &plain), (&plain, &input)] {
+                        assert_eq!(
+                            compare(direction, target, candidate, &limits)
+                                .unwrap()
+                                .verdict(),
+                            Verdict::Indeterminate
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn detached_duplicate_declarations_are_ambiguous_even_with_equal_content() {
+    let limits = ComparisonLimits::default();
+    let plain = json(r#"{"type":"integer"}"#);
+    let plain = SchemaInput::new(plain.clone(), plain);
+    for text in [
+        r#"{"$defs":{"a":{"$id":"https://other.test/a","type":"integer","maximum":5}},"$ref":"https://other.test/a"}"#,
+        r#"{"$id":"https://other.test/root","$defs":{"a":{"$id":"a","type":"integer","maximum":5}},"$ref":"a"}"#,
+        r##"{"$dynamicAnchor":"a","$defs":{"use":{"$ref":"#a"}},"type":"integer","maximum":5}"##,
+    ] {
+        let root = json(text);
+        let context = ComparisonContext::new(root.clone()).with_base("https://probe.test/root");
+        let pointer = if root.get("$dynamicAnchor").is_some() {
+            "/$defs/use"
+        } else {
+            ""
+        };
+        let select = |value: &JsonValue| {
+            if pointer.is_empty() {
+                value.clone()
+            } else {
+                value.at(pointer).unwrap().to_owned()
+            }
+        };
+        let contained = context.schema(select(&root));
+        let detached = context.schema(select(&json(text)));
+        for _ in 0..2 {
+            for direction in [Direction::Input, Direction::Output] {
+                for (target, candidate) in [(&detached, &plain), (&plain, &detached)] {
+                    assert_eq!(
+                        compare(direction, target, candidate, &limits)
+                            .unwrap_err()
+                            .kind(),
+                        ComparisonFailureKind::InvalidReference
+                    );
+                }
+                // The anchor control contains a reference cycle; its identity
+                // policy is independent of the detached declaration collision.
+                if pointer.is_empty() {
+                    assert_eq!(
+                        compare(direction, &contained, &plain, &limits)
+                            .unwrap()
+                            .verdict(),
+                        Verdict::Indeterminate
+                    );
+                }
+            }
+        }
+    }
+    // A detached root's own ID establishes its private resource before lookup.
+    let root = json(r#"{"$id":"https://other.test/root","type":"integer","maximum":5}"#);
+    let context = ComparisonContext::new(root.clone());
+    let detached = context.schema(json(root.text()));
+    assert_eq!(
+        compare(Direction::Input, &detached, &plain, &limits)
+            .unwrap()
+            .verdict(),
+        Verdict::Indeterminate
+    );
+}

@@ -577,7 +577,10 @@ present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `with_base` and `with_resource` configure it, and `schema(exact_value)` selects a
 `SchemaInput`. Membership uses node identity, not JSON equality: an equal but
 separately parsed schema gives a detached input with its own root's assigned
-dialect and private call-local declarations. Pointer references still start at
+dialect and private call-local declarations. These do not override configured
+declarations: a reached URI or anchor claimed by distinct occurrences fails with
+`InvalidReference`, even when their JSON content is identical.
+Pointer references still start at
 the configured document unless a local `$id` changes scope.
 As SDK policy, roots with both `openbindings` and `operations` members are
 recognized as OBI documents without validating those values.

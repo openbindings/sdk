@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-11-16 repairs (unreleased)
+
+### Fixed
+
+- An established failure is no longer lost when an allowance runs out: a position that has definitely failed (an
+  array past `maxItems`, say) completes at once instead of visiting its items, so under the Workers guide's limits an
+  array of `$ref` items answers `fails`, where it answered no verdict for memory. Unknowns never erase a definite
+  failure, as before.
+- An explanation that cannot finish keeps the failing position's own problems: `explain` on that array reports
+  `maxItems` with `problemsComplete: false`, where it reported no problems. Explaining such failures is also far
+  faster, since children that cannot add a retained problem are not visited.
+- Schema comparison resolves a relative `$ref` inside an embedded resource whose own `$id` is relative, where it
+  answered `MissingReference`.
+- The TypeScript Worker and service examples follow the Workers guide: a streamed body limit, its JSON, registration,
+  preparation and evaluation limits, and no owner held across an `await`.
+
+### Changed
+
+- The TypeScript README says at the top that SDK calls cannot be interrupted and that untrusted input needs
+  `evaluationSdkWorkUnits` and JSON limits; the first-use examples set both. The SDK still sets no default work limit
+  (the owner's ruling, 2026-11-16).
+- The TypeScript README documents that `set` on an existing path replaces the whole member, findings whose status is
+  `met`, top-level `schemas` with `#/schemas/` references, and explaining JSON text. The Workers guide says its
+  evaluation limits select the SDK's own lane and how a Worker answers a no-verdict. The comparison docs say a
+  detached copy that re-declares the document's identifiers is ambiguous.
+
 ## 2026-11-15 review repairs (unreleased)
 
 ### Fixed

@@ -36,6 +36,13 @@ some reportable evidence may be missing because of this cap, a work/storage limi
 cancellation, or an unavailable original witness. It does not weaken the verdict.
 The cheap `evaluate` call returns no problems and sets this flag to false.
 
+An established failure stops further outcome-only child traversal. Reference-bearing item traversal cannot turn that failure
+into a resource no-verdict. During explanation, root assertions are materialized
+before further child traversal; if that traversal exhausts the allowance, those
+problems survive with incomplete diagnostics. Once 100 problems are retained,
+further child traversal stops with incomplete diagnostics. The same cumulative work and
+reservation limits still apply, including to materializing those problems.
+
 For `allOf`, problems come from the branches established to fail. For failed
 `anyOf`, `oneOf` or `not`, the problem names that applicator; it does not list
 branch assertions as independent failures. The default evaluator includes

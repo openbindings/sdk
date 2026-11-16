@@ -615,6 +615,12 @@ impl Index {
     ) -> Result<usize, Failure> {
         let node = backend::occurrence(schema);
         let origin = self.entries[scope].origin;
+        // An embedded resource has already resolved its declaration against
+        // its containing base. Reaching its root must not apply a relative $id
+        // again against that resource's own resolved base.
+        if scope != origin && backend::occurrence(self.entries[scope].document.view()) == node {
+            return Ok(scope);
+        }
         if let Some(id) = schema.get("$id") {
             let text = id.as_str().ok_or(FailureKind::InvalidReference)?;
             attempt.work(text.len().saturating_mul(8).saturating_add(1))?;

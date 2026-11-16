@@ -66,7 +66,11 @@ A schema selected outside the root's schema positions, including an opaque
 carrier member, gets the same call-local view of its subtree's declarations as
 a detached schema. These declarations are private to that view: sibling
 selections and the other side of a comparison cannot see them, and the view is
-released with the call. Pointer references still start at the configured
+released with the call. They do not override the configured document or supplied
+resources: a reached URI or anchor declared by distinct occurrences is ambiguous
+and fails with `InvalidReference`, even when the JSON content is identical.
+Reuse the same node to select a configured schema; separately parsing a copy can
+introduce such a collision. Pointer references still start at the configured
 document unless the selected subtree declares its own resource with `$id`.
 They must land at a schema position there; selecting carrier data never makes
 that data a reference target.

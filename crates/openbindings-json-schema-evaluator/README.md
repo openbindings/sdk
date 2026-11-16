@@ -293,6 +293,13 @@ An external resource's declared dialect is never silently read as 2020-12.
 See [evaluator profiles and preparation](https://github.com/openbindings/sdk/blob/main/docs/schema-evaluators.md) for
 custom meta-schema admission and the structural and cooperative resource limits.
 
+An established failure stops further outcome-only child traversal. Reference-bearing item traversal cannot turn that failure
+into a resource no-verdict. During explanation, root assertions are materialized
+before further child traversal; if that traversal exhausts the allowance, those
+problems survive with incomplete diagnostics. Once 100 problems are retained,
+further child traversal stops with incomplete diagnostics. The same cumulative work and
+reservation limits still apply, including to materializing those problems.
+
 `evaluate` is the cheap check: failure has no problems and marks diagnostics
 incomplete. `explain` preserves the same result and reports available bounded
 problems at original source locations. Some semantic failures currently have no

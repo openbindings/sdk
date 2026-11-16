@@ -64,6 +64,9 @@ impl ComparisonContext {
     /// Detached schemas and selections outside configured schema positions
     /// keep their own root's assigned dialect and private call-local declarations;
     /// selecting a value never adds it to the persistent document index.
+    /// Call-local declarations do not override configured declarations. A reached
+    /// URI or anchor declared by distinct occurrences is ambiguous and fails with
+    /// `InvalidReference`, even if the occurrences have identical JSON content.
     /// Pointer references still start at the configured document unless the
     /// selected schema declares its own resource with `$id`.
     pub fn schema(&self, schema: JsonValue) -> SchemaInput {
