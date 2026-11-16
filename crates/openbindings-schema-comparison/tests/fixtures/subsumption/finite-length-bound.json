@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "A length failure beside flowing enum is indeterminate; the profile does not infer inclusion from the listed value.",
+  "description": "Finite inclusion discharges the length failure beside flowing enum: the listed \"abcdef\" satisfies the receiving minLength 5.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -32,7 +32,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "indeterminate"
+      "verdict": "compatible"
     }
   }
 }

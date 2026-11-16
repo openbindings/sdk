@@ -126,15 +126,14 @@ qualification scopes are recorded in [performance boundaries](docs/performance-b
 The optional [comparison companion](crates/openbindings-schema-comparison/README.md)
 implements normalized identity, directional compatibility and interface checking
 from `OB-2020-12` profile 0.1, amended in interfaces revision
-`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. It preserves optional
+`addf8d845f6fd6c67da514c45d1a38819f1dae62`. It preserves optional
 slots, exact numbers/strings, opaque keyword values and union multiplicity. Explicit
 caller roots, bases and resource records govern references; it performs no fetching
 and does not reuse core `$id` interpretation or value evaluation. Its identity answer
 is profile identity, not general schema equivalence or a verified reuse claim.
 
-The comparison fixture harness passes 55 ordinary and 11 exact identity groups,
-plus all 186 ordinary and 29 exact directional groups (including expected schema
-errors), with no skipped groups. Directional verdicts distinguish compatible,
+The comparison fixture harness passes 63 ordinary and 12 exact identity groups,
+plus all 208 ordinary and 32 exact directional groups, with no skipped groups. Directional verdicts distinguish compatible,
 incompatible and indeterminate; interface checking retains every operation,
 every distinct alias match, realization/consumption selected by a callback on
 each required/provided pair (or a missing match), skipped slots
@@ -146,7 +145,10 @@ Callers choose summary treatment of failures;
 documents lazily and keep completed indexing after successful work. Non-identical oneOf and retained allOf positions stop directionally. Compatible
 proves inclusion; incompatible dominates indeterminate with the profile's local
 vacuity exception. Retained applicator references compare
-normalized targets, and `$defs` retention is local to each schema subtree. Reference-rule identity lets pullers
+normalized targets, and `$defs` retention is local to each schema subtree. Exact
+empty schemas do not alone keep definitions. Unsatisfiable merges become empty
+schemas at every position. Finite flowing values can prove inclusion through
+exact literal checks, with const/enum intersections and the profile boundaries. Reference-rule identity lets pullers
 keep same-spelled accounted references as leaves and ask whether remaining drift
 lies only behind unaccounted targets. The caller supplies accounting.
 Enum intersections deduplicate exact values in first-occurrence order.

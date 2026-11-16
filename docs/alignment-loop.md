@@ -6,7 +6,7 @@ Package publication remains a separate step.
 
 The normative target is specification
 `c1419c9fc3ae5a00c2b83da710c11bf67dab7934` and adopted interfaces
-`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. A newer remote revision does not silently
+`addf8d845f6fd6c67da514c45d1a38819f1dae62`. A newer remote revision does not silently
 change the target. Any deliberate re-pin needs its own delta and qualification.
 
 ## Repeat for each implementation slice

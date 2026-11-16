@@ -164,12 +164,18 @@ fn invalid_referenced_schema_declarations_keep_the_target_location() {
 }
 
 #[test]
-fn merge_failures_keep_the_original_conjunction() {
-    let error = failure(&input(
-        r#"{"properties":{"nested":{"allOf":[{"type":"string"},{"type":"number"}]}}}"#,
-    ));
-    assert_eq!(error.kind(), ComparisonFailureKind::UnsatisfiableMerge);
-    location(&error, ComparisonSide::Left, "/properties/nested");
+fn unsatisfiable_nested_merges_compare_as_empty_schemas() {
+    let merged =
+        input(r#"{"properties":{"nested":{"allOf":[{"type":"string"},{"type":"number"}]}}}"#);
+    let empty = input(r#"{"properties":{"nested":false}}"#);
+    assert_eq!(
+        identical(Some(&merged), Some(&empty), &ComparisonLimits::default()),
+        Ok(true)
+    );
+    assert_eq!(
+        identical(Some(&merged), None, &ComparisonLimits::default()),
+        Ok(false)
+    );
 }
 
 #[test]

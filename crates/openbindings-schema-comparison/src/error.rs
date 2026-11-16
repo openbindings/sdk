@@ -20,9 +20,6 @@ pub enum ComparisonFailureKind {
     UnsupportedNormalization,
     /// An active original reference target is reached again.
     ReferenceCycle,
-    /// A specified type/enum intersection is empty, or merged const values conflict.
-    /// This is not a general schema satisfiability classification.
-    UnsatisfiableMerge,
     /// An explicit per-attempt resource allowance was exhausted. Formatting omits the label; match to read it.
     LimitExceeded(&'static str),
     /// A context root is not the exact root of its paired conformance proof.
@@ -40,7 +37,6 @@ impl fmt::Debug for ComparisonFailureKind {
             Self::UnsupportedReference => "UnsupportedReference",
             Self::UnsupportedNormalization => "UnsupportedNormalization",
             Self::ReferenceCycle => "ReferenceCycle",
-            Self::UnsatisfiableMerge => "UnsatisfiableMerge",
             Self::LimitExceeded(_) => "LimitExceeded { .. }",
             Self::ContextMismatch => "ContextMismatch",
             Self::Cancelled => "Cancelled",
@@ -160,7 +156,6 @@ impl fmt::Display for ComparisonFailure {
             ComparisonFailureKind::ReferenceCycle => {
                 "the comparison profile cannot inline a reference cycle"
             }
-            ComparisonFailureKind::UnsatisfiableMerge => "the profile merge is unsatisfiable",
             ComparisonFailureKind::LimitExceeded(_) => {
                 "the comparison exhausted a configured resource allowance"
             }

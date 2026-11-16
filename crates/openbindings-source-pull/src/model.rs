@@ -508,7 +508,7 @@ impl OmittedEntry {
         item,
         "item",
         "Borrow the omitted source item's label: `operations/<key>` or `schemas/<key>`, using the offered key.
-See the pinned [Report contract](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/source-puller/README.md#report)."
+See the pinned [Report contract](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/source-puller/README.md#report)."
     );
     optional_text!(
         existing,
@@ -517,7 +517,7 @@ See the pinned [Report contract](https://github.com/openbindings/interfaces/blob
 Forms are `operations/<key>` or `schemas/<key>` using document primary keys;
 an identifier declaration may use `operations/<key>/input` or `operations/<key>/output`.
 [`PullResult::validate_for`] checks primary keys and slot presence. See the pinned
-[Report contract](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/source-puller/README.md#report)."
+[Report contract](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/source-puller/README.md#report)."
     );
     labels_accessor!(
         also_identifies,

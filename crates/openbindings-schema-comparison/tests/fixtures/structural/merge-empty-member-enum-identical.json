@@ -1,0 +1,52 @@
+{
+  "version": "1.0",
+  "description": "An empty enum intersection at a property member below the compared schema normalizes that member to the exact empty schema; the merged schema still admits {}.",
+  "mode": "identical",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "allOf": [
+            {
+              "properties": {
+                "a": {
+                  "enum": [
+                    1
+                  ]
+                }
+              }
+            }
+          ],
+          "properties": {
+            "a": {
+              "enum": [
+                2
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "properties": {
+            "a": false
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

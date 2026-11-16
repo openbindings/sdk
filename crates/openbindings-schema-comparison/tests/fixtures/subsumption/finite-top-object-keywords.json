@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "description": "Empty properties, empty required and a true additionalProperties are unconstrained under the Top rule, so they cannot refuse the object constant the candidate refuses.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": {
+            "a": 1
+          },
+          "properties": {},
+          "required": [],
+          "additionalProperties": true
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": {
+            "a": 2
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

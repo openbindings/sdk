@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "description": "maxLength applies to the listed string \"ab\", which it in fact refuses, so the candidate's refusal of \"ab\" is not an eligible failure; 1 is admitted.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "enum": [
+            1,
+            "ab"
+          ],
+          "maxLength": 1
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "enum": [
+            1
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

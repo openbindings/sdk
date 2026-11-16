@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "description": "An items schema recognized as Top cannot refuse the array constant, so the candidate's refusal of [1] decides.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": [
+            1
+          ],
+          "items": {}
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": [
+            2
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

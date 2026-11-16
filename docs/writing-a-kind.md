@@ -15,7 +15,7 @@ The SDK supplies checked calls and exact JSON. Applications supply kind-specific
 transports, credential storage and routing, and decide retries.
 
 This page targets the current unpublished `0.2.0-alpha.1` SDK and its interface
-revision `eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. The document model is
+revision `addf8d845f6fd6c67da514c45d1a38819f1dae62`. The document model is
 OpenBindings 0.2. The [example crate](../examples/kind-adapter/README.md) contains
 every Rust block below, with tests. Its fictional in-memory protocol needs no
 network. It builds for native Rust and `wasm32-unknown-unknown`.
@@ -411,7 +411,7 @@ for each existing binding of the selected source. A recognized binding with
 added Boolean operation schemas is stale
 and gets a removal proposal. Unrecognized binding data is unmatched.
 
-In the [Report contract](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/source-puller/README.md#report),
+In the [Report contract](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/source-puller/README.md#report),
 omitted `item` labels are `operations/<key>` or `schemas/<key>` using offered
 keys; `existing` uses document primary keys in those forms, or
 `operations/<key>/input` or `operations/<key>/output` for identifier declarations. A conflict
@@ -716,14 +716,14 @@ object-form schema for the next attempt's context; mark secret properties
 `writeOnly`. The challenge is a request, not permission to release credentials.
 Use titled `oneOf` branches for alternatives and the optional `oauth2` annotation
 on an access-token property, as the pinned context interface defines in
-[the challenge](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/context/README.md#the-challenge)
-and [the annotation](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/context/README.md#the-oauth2-annotation).
+[the challenge](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/context/README.md#the-challenge)
+and [the annotation](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/context/README.md#the-oauth2-annotation).
 The application acquires values, decides whether to disclose them and starts a
 new attempt. The SDK never acquires context or retries for you.
 
 A provider that makes no prediction can use the one-line body
 `ready(Ok(None))` with `Ready<Result<Option<ContextChallenge>, InvocationError>>`.
-The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/binding-invoker/README.md)
+The [binding-invoker interface](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/binding-invoker/README.md)
 states that `null` is always conformant, even when invocation will need context.
 `None` means no prediction; it does not promise that invocation will proceed.
 
@@ -1464,7 +1464,7 @@ Run both native and Wasm builds and exercise any actual host transport separatel
 - Build for Wasm, then verify the host imports and local-future requirements.
 
 For the full current contracts, read the pinned
-[binding invocation](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/binding-invoker/README.md),
-[kind description](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/kind-descriptor/README.md) and
-[source pull](https://github.com/openbindings/interfaces/blob/eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1/source-puller/README.md)
+[binding invocation](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/binding-invoker/README.md),
+[kind description](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/kind-descriptor/README.md) and
+[source pull](https://github.com/openbindings/interfaces/blob/addf8d845f6fd6c67da514c45d1a38819f1dae62/source-puller/README.md)
 publications. Interface and SDK versions are independent.

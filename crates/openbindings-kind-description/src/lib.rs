@@ -19,7 +19,7 @@ pub use queries::{
 /// Version of the adopted kind-descriptor interface, independent of SDK version.
 pub const INTERFACE_VERSION: &str = "0.1.0";
 /// Exact interface publication used by this companion.
-pub const APPLIED_INTERFACE_REVISION: &str = "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1";
+pub const APPLIED_INTERFACE_REVISION: &str = "addf8d845f6fd6c67da514c45d1a38819f1dae62";
 
 /// Operation key for `listKinds` in the pinned kind-descriptor interface.
 pub const LIST_KINDS: &str = "openbindings.kind-descriptor.listKinds";

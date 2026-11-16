@@ -22,7 +22,7 @@ pub use request::PullRequest;
 /// Adopted source-puller interface version, independent of the SDK version.
 pub const INTERFACE_VERSION: &str = "0.1.0";
 /// Exact interface publication used by this companion.
-pub const APPLIED_INTERFACE_REVISION: &str = "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1";
+pub const APPLIED_INTERFACE_REVISION: &str = "addf8d845f6fd6c67da514c45d1a38819f1dae62";
 
 /// Operation key for `pullSource` in the pinned source-puller interface.
 pub const PULL_SOURCE: &str = "openbindings.source-puller.pullSource";

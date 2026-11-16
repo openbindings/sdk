@@ -48,7 +48,6 @@ fn independently_authored_design_controls_keep_their_expected_classifications() 
                 | ComparisonFailureKind::ReferenceCycle
                 | ComparisonFailureKind::UnsupportedReference,
             ) => "Failure(Reference)",
-            Err(ComparisonFailureKind::UnsatisfiableMerge) => "Failure(SchemaMerge)",
             other => panic!("unexpected {}: {other:?}", case["id"]),
         };
         assert_eq!(

@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "description": "With both keywords, only 1 flows, the const value the enum also lists, and the receiving integer-or-string type accepts it.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": 1,
+          "enum": [
+            1,
+            "a"
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

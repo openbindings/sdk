@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "description": "The number 5 has no members, so the receiving property schema carrying a pattern is never applied to it, and finite inclusion proves compatible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "const": 5
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": [
+            "integer",
+            "object"
+          ],
+          "properties": {
+            "a": {
+              "pattern": "^x"
+            }
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "compatible"
+    }
+  }
+}

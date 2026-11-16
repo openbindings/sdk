@@ -42,7 +42,7 @@ fn document_identity(left: &JsonValue, right: &JsonValue) -> Result<bool, Compar
     Ok(answer)
 }
 #[test]
-fn all_55_identity_and_186_directional_groups_preserve_the_published_verdicts() {
+fn all_63_identity_and_208_directional_groups_preserve_the_published_verdicts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let manifest: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/manifest.json")).unwrap();
@@ -118,7 +118,7 @@ fn all_55_identity_and_186_directional_groups_preserve_the_published_verdicts() 
     }
     assert_eq!(
         (identity, directional),
-        (55, 186),
+        (63, 208),
         "every identity and directional group ran"
     );
     assert!(mismatches.is_empty(), "{}", mismatches.join("\n"));
@@ -127,7 +127,7 @@ fn all_55_identity_and_186_directional_groups_preserve_the_published_verdicts() 
     );
 }
 #[test]
-fn all_11_identity_and_29_directional_exact_groups_preserve_the_published_verdicts() {
+fn all_12_identity_and_32_directional_exact_groups_preserve_the_published_verdicts() {
     let pack: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/exact-values.json")).unwrap();
     let mut identity = 0;
@@ -146,21 +146,12 @@ fn all_11_identity_and_29_directional_exact_groups_preserve_the_published_verdic
                 &ComparisonLimits::default(),
             )
             .unwrap();
-            if case["expected"]["error"] == "schema" {
-                assert_eq!(
-                    (summary(&report)).map_err(|failure| failure.kind()),
-                    Err(ComparisonFailureKind::UnsatisfiableMerge),
-                    "{}",
-                    case["id"]
-                );
-            } else {
-                assert_eq!(
-                    verdict(summary(&report).unwrap()),
-                    case["expected"]["verdict"].as_str().unwrap(),
-                    "{}",
-                    case["id"]
-                );
-            }
+            assert_eq!(
+                verdict(summary(&report).unwrap()),
+                case["expected"]["verdict"].as_str().unwrap(),
+                "{}",
+                case["id"]
+            );
             if let Some(reason) = case["reason"].as_str() {
                 assert_eq!(
                     report.issues().next().unwrap().reason(),
@@ -181,11 +172,11 @@ fn all_11_identity_and_29_directional_exact_groups_preserve_the_published_verdic
     }
     assert_eq!(
         (identity, directional),
-        (11, 29),
+        (12, 32),
         "every identity and directional group ran"
     );
     println!(
-        "exact corpus: {identity} identity and {directional} directional groups passed; 0 skipped (including expected normalization failures)"
+        "exact corpus: {identity} identity and {directional} directional groups passed; 0 skipped"
     );
 }
 

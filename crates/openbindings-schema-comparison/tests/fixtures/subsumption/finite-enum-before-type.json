@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "description": "A type failure beside flowing enum is unresolved without a finite-value inclusion rule.",
+  "description": "Finite inclusion discharges the type failure beside flowing enum: the receiving integer type accepts the listed 1.",
   "mode": "subsume",
   "options": {
     "profile": "OB-2020-12"
@@ -33,7 +33,7 @@
   },
   "expected": {
     "summary": {
-      "verdict": "indeterminate"
+      "verdict": "compatible"
     }
   }
 }

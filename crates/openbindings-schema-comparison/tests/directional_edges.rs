@@ -216,7 +216,7 @@ fn kept_definitions_do_not_change_union_counterexamples() {
 }
 
 #[test]
-fn finite_eligibility_disregards_only_inapplicable_type_keywords() {
+fn finite_eligibility_disregards_inapplicable_and_unconstraining_keywords() {
     for (keyword, value, applicable) in [
         ("minimum", json!(0), "number"),
         ("maximum", json!(0), "number"),
@@ -249,7 +249,13 @@ fn finite_eligibility_disregards_only_inapplicable_type_keywords() {
             _ => unreachable!(),
         };
         let flow = json!({"type":applicable,"const":literal,keyword:value});
-        assert_flow(&input(&flow), &receiver, Verdict::Indeterminate);
+        let expected =
+            if ["items", "properties", "required", "additionalProperties"].contains(&keyword) {
+                Verdict::Incompatible
+            } else {
+                Verdict::Indeterminate
+            };
+        assert_flow(&input(&flow), &receiver, expected);
         let flow = json!({"type":applicable,keyword:value});
         assert_flow(&input(&flow), &receiver, Verdict::Indeterminate);
     }

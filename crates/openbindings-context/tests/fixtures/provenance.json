@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/openbindings/interfaces",
-  "revision": "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1",
+  "revision": "addf8d845f6fd6c67da514c45d1a38819f1dae62",
   "directory": "conformance/context",
   "sha256": {
     "cases.json": "fd2171088d8e34d969ed80ad582c11455a6b595da7f1f8cf5f1fe5fd0021c833",

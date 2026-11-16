@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "description": "Output: the candidate may produce 1, which the target enum refuses; the candidate's maxLength applies only to strings, so it cannot refuse the number and the failure is eligible.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "enum": [
+            "a"
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "output": {
+          "enum": [
+            1,
+            "a"
+          ],
+          "maxLength": 5
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

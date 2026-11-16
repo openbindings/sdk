@@ -1,7 +1,7 @@
 # Pinned source-pull test inputs
 
 Interface-derived inputs target revision
-`eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. The crate's tests and guide state the
+`addf8d845f6fd6c67da514c45d1a38819f1dae62`. The crate's tests and guide state the
 supported interface/profile scope. Additional SDK controls are identified below;
 they are test evidence, not replacements for the pinned publication.
 

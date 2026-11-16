@@ -8,11 +8,46 @@ use crate::{
 use std::{cmp::Ordering, collections::BTreeMap};
 
 pub(crate) fn all_of(
+    siblings: Object,
+    branches: Vec<Value>,
+    depth: usize,
+    attempt: &mut Attempt<'_>,
+) -> Result<Value, Failure> {
+    empty_on_conflict(all_of_inner(siblings, branches, depth, attempt), attempt)
+}
+// A merge either completes its position, finds the position empty (an empty
+// type or enum intersection, or conflicting const values), or fails.
+enum Stop {
+    Empty,
+    Failed(Failure),
+}
+impl From<Failure> for Stop {
+    fn from(failure: Failure) -> Self {
+        Self::Failed(failure)
+    }
+}
+impl From<FailureKind> for Stop {
+    fn from(kind: FailureKind) -> Self {
+        Self::Failed(kind.into())
+    }
+}
+// An empty position normalizes to the exact empty schema where it occurs.
+fn empty_on_conflict(
+    result: Result<Value, Stop>,
+    attempt: &mut Attempt<'_>,
+) -> Result<Value, Failure> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(Stop::Empty) => crate::normalize::boolean_schema(false, attempt),
+        Err(Stop::Failed(failure)) => Err(failure),
+    }
+}
+fn all_of_inner(
     mut siblings: Object,
     mut branches: Vec<Value>,
     depth: usize,
     attempt: &mut Attempt<'_>,
-) -> Result<Value, Failure> {
+) -> Result<Value, Stop> {
     attempt.depth(depth)?;
     if siblings.is_empty() && branches.len() == 1 {
         let mut branch = branches
@@ -91,6 +126,9 @@ pub(crate) fn all_of(
     let mut result = Value::Object(siblings);
     for branch in branches {
         result = pair(result, branch, depth + 1, attempt)?;
+        if crate::normalize::empty_member(&result) {
+            break;
+        }
     }
     Ok(result)
 }
@@ -160,7 +198,10 @@ fn pair(
         branches.extend([Value::Object(left), Value::Object(right)]);
         return all_of(Object::new(), branches, depth, attempt);
     }
-    merge_maps(left, right, depth, attempt, false).map(Value::Object)
+    empty_on_conflict(
+        merge_maps(left, right, depth, attempt, false).map(Value::Object),
+        attempt,
+    )
 }
 fn merge_maps(
     left: Object,
@@ -168,7 +209,7 @@ fn merge_maps(
     depth: usize,
     attempt: &mut Attempt<'_>,
     properties: bool,
-) -> Result<Object, Failure> {
+) -> Result<Object, Stop> {
     attempt.depth(depth)?;
     let mut result = Object::new();
     let mut left = left.into_iter().peekable();
@@ -208,18 +249,18 @@ fn keyword(
     right: Value,
     depth: usize,
     attempt: &mut Attempt<'_>,
-) -> Result<Value, Failure> {
+) -> Result<Value, Stop> {
     attempt.depth(depth)?;
     if is(key, "properties") {
         let (Value::Object(left), Value::Object(right)) =
             (left.owned(depth, attempt)?, right.owned(depth, attempt)?)
         else {
-            return Err(Failure::from(FailureKind::InvalidSchema));
+            return Err(FailureKind::InvalidSchema.into());
         };
         return merge_maps(left, right, depth, attempt, true).map(Value::Object);
     }
     if is(key, "items") {
-        return pair(left, right, depth, attempt);
+        return Ok(pair(left, right, depth, attempt)?);
     }
     if is(key, "additionalProperties") {
         if crate::normalize::empty_member(&left) {
@@ -228,13 +269,13 @@ fn keyword(
         if crate::normalize::empty_member(&right) {
             return Ok(right);
         }
-        return pair(left, right, depth, attempt);
+        return Ok(pair(left, right, depth, attempt)?);
     }
     if is(key, "const") {
         return if value::equal(&left, &right, depth, attempt)? {
             Ok(left)
         } else {
-            Err(Failure::from(FailureKind::UnsatisfiableMerge))
+            Err(Stop::Empty)
         };
     }
     if is(key, "type") || is(key, "required") {
@@ -242,7 +283,7 @@ fn keyword(
     }
     if is(key, "enum") {
         let (Value::Array(left), Value::Array(right)) = (left, right) else {
-            return Err(Failure::from(FailureKind::InvalidSchema));
+            return Err(FailureKind::InvalidSchema.into());
         };
         let mut result = attempt.vector(left.len())?;
         for value in left {
@@ -258,7 +299,7 @@ fn keyword(
             }
         }
         return if result.is_empty() {
-            Err(Failure::from(FailureKind::UnsatisfiableMerge))
+            Err(Stop::Empty)
         } else {
             Ok(Value::Array(result))
         };
@@ -271,7 +312,7 @@ fn keyword(
         .any(|name| is(key, name));
     if higher || lower {
         let (Value::Number(a), Value::Number(b)) = (&left, &right) else {
-            return Err(Failure::from(FailureKind::InvalidSchema));
+            return Err(FailureKind::InvalidSchema.into());
         };
         let order = value::numbers(a, b, attempt)?;
         return Ok(
@@ -282,26 +323,26 @@ fn keyword(
             },
         );
     }
-    Err(Failure::from(FailureKind::UnsupportedNormalization))
+    Err(FailureKind::UnsupportedNormalization.into())
 }
 fn strings(
     left: Value,
     right: Value,
     intersection: bool,
     attempt: &mut Attempt<'_>,
-) -> Result<Value, Failure> {
+) -> Result<Value, Stop> {
     let (Value::Array(left), Value::Array(right)) = (left, right) else {
-        return Err(Failure::from(FailureKind::InvalidSchema));
+        return Err(FailureKind::InvalidSchema.into());
     };
     let mut names = BTreeMap::<Name, ()>::new();
     if intersection {
         for a in left {
             let Value::String(a) = a else {
-                return Err(Failure::from(FailureKind::InvalidSchema));
+                return Err(FailureKind::InvalidSchema.into());
             };
             for b in &right {
                 let Value::String(b) = b else {
-                    return Err(Failure::from(FailureKind::InvalidSchema));
+                    return Err(FailureKind::InvalidSchema.into());
                 };
                 attempt.work(a.len().min(b.len()).saturating_add(1))?;
                 let name = if a == *b {
@@ -321,7 +362,7 @@ fn strings(
             }
         }
         if names.is_empty() {
-            return Err(Failure::from(FailureKind::UnsatisfiableMerge));
+            return Err(Stop::Empty);
         }
         // An intersection containing number already includes its integer
         // subtype. The pinned typeIntersection fixture requires this reduction
@@ -333,7 +374,7 @@ fn strings(
     } else {
         for name in left.into_iter().chain(right) {
             let Value::String(name) = name else {
-                return Err(Failure::from(FailureKind::InvalidSchema));
+                return Err(FailureKind::InvalidSchema.into());
             };
             put_string(&mut names, name, attempt)?;
         }
@@ -359,11 +400,7 @@ fn put_string(
     Ok(())
 }
 
-fn deduplicate_enum(
-    map: &mut Object,
-    depth: usize,
-    attempt: &mut Attempt<'_>,
-) -> Result<(), Failure> {
+fn deduplicate_enum(map: &mut Object, depth: usize, attempt: &mut Attempt<'_>) -> Result<(), Stop> {
     let key = value::literal("enum", attempt)?;
     let Some(Value::Array(values)) = map.remove(&key) else {
         return Ok(());
@@ -382,7 +419,7 @@ fn deduplicate_enum(
         }
     }
     if unique.is_empty() {
-        return Err(FailureKind::UnsatisfiableMerge.into());
+        return Err(Stop::Empty);
     }
-    value::insert(map, key, Value::Array(unique), attempt)
+    Ok(value::insert(map, key, Value::Array(unique), attempt)?)
 }

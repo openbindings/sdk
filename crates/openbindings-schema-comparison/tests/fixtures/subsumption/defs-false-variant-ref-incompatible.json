@@ -1,0 +1,43 @@
+{
+  "version": "1.0",
+  "description": "A false variant keeps no definitions, so the union behind $ref unwraps rather than becoming a retained allOf, and its string variant fails against the sole integer counterpart.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "$ref": "#/operations/test/input/$defs/u",
+          "$defs": {
+            "u": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                false
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "incompatible"
+    }
+  }
+}

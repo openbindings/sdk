@@ -103,13 +103,15 @@ fn keep_defs_scratch(schema: JsonRef<'_>, attempt: &mut Attempt<'_>) -> Result<b
     pending.push(schema.to_owned());
     while let Some(schema) = pending.pop() {
         attempt.work(1)?;
-        if schema.view().as_bool() == Some(false) {
-            return Ok(true);
-        }
+        let empty = exact_empty(schema.view(), attempt)?;
         if let Some(members) = schema.view().members() {
             for member in members {
                 let key = value::name(member.name, attempt)?;
-                if !known(&key) && !stripped(&key) && !is(&key, "$ref") && !is(&key, "$defs") {
+                if !known(&key)
+                    && !stripped(&key)
+                    && !is(&key, "$ref")
+                    && !(empty && is(&key, "not"))
+                {
                     return Ok(true);
                 }
             }
@@ -128,6 +130,34 @@ fn keep_defs_scratch(schema: JsonRef<'_>, attempt: &mut Attempt<'_>) -> Result<b
         }
     }
     Ok(false)
+}
+// Recognize only the exact empty spelling after Boolean mapping and stripping.
+// Definitions are scanned separately, so other retained content still keeps them.
+fn exact_empty(schema: JsonRef<'_>, attempt: &mut Attempt<'_>) -> Result<bool, Failure> {
+    if schema.as_bool() == Some(false) {
+        return Ok(true);
+    }
+    let Some(not) = schema.get("not") else {
+        return Ok(false);
+    };
+    for member in schema.members().ok_or(FailureKind::InvalidSchema)? {
+        let key = value::name(member.name, attempt)?;
+        if !stripped(&key) && !is(&key, "not") && !is(&key, "$defs") {
+            return Ok(false);
+        }
+    }
+    if not.as_bool() == Some(true) {
+        return Ok(true);
+    }
+    let Some(members) = not.members() else {
+        return Ok(false);
+    };
+    for member in members {
+        if !stripped(&value::name(member.name, attempt)?) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 fn retained_applicator(key: &[u16]) -> bool {
     [
@@ -619,7 +649,7 @@ fn strings(raw: JsonRef<'_>, types: bool, attempt: &mut Attempt<'_>) -> Result<V
     Ok(Value::Array(result))
 }
 
-fn boolean_schema(boolean: bool, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
+pub(crate) fn boolean_schema(boolean: bool, attempt: &mut Attempt<'_>) -> Result<Value, Failure> {
     let mut object = Object::new();
     if !boolean {
         let key = value::literal("not", attempt)?;

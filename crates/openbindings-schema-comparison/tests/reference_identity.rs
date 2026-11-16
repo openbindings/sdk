@@ -20,7 +20,7 @@ fn accounted_leaves_keep_siblings_and_containing_conjunctions_unmerged() {
     assert_eq!(
         (identical(Some(&a), Some(&b), &ComparisonLimits::default()))
             .map_err(|failure| failure.kind()),
-        Err(ComparisonFailureKind::UnsatisfiableMerge)
+        Ok(false)
     );
     assert_eq!(
         identical_with_references(

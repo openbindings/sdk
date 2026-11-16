@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "description": "The listed 1 is refused, so finite inclusion proves nothing; a refused value does not by itself make the position incompatible, and the type failure beside the flowing enum stays unresolved.",
+  "mode": "subsume",
+  "options": {
+    "profile": "OB-2020-12"
+  },
+  "left": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "enum": [
+            "a",
+            1
+          ]
+        }
+      }
+    }
+  },
+  "right": {
+    "openbindings": "0.2.0",
+    "operations": {
+      "test": {
+        "input": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "expected": {
+    "summary": {
+      "verdict": "indeterminate"
+    }
+  }
+}

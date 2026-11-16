@@ -594,7 +594,11 @@ Locations preserve original source frames and are redacted in formatting.
 Identity sides are `Left`/`Right`, directional sides `Target`/`Candidate`, and
 interface sides `Required`/`Provided` regardless of role. Global limits and
 cancellation have neither origin nor side. Use `kind()` for classification;
-whole-error equality includes provenance.
+whole-error equality includes provenance. Unsatisfiable merges normalize to
+`{"not":{}}` at every position and are not failures. Finite const/enum inclusion uses exact
+literal checks through properties, additionalProperties, items and anyOf, while
+preserving outside-profile boundaries. Const/enum failure eligibility is judged
+per authored value, disregarding Top-equivalent and inapplicable keywords.
 `compare` and `compare_with_control` take `Direction`, a present target and a
 present candidate, and return `Comparison` with `verdict()`, `reason()` and
 `finding()` accessors. `ComparisonContext::new(root)` retains a reusable document;
