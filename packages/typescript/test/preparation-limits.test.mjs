@@ -68,6 +68,8 @@ for (const { field, value, code } of fixture.cases) {
         assert.throws(register, (error) => {
           assert.ok(error instanceof sdk.SdkError);
           assert.equal(error.code, "resource");
+          assert.deepEqual(error.details, { resource: code });
+          assert.equal(Object.isFrozen(error.details), true);
           assert.equal(
             error.message,
             "external schema registration exceeded a preparation limit",

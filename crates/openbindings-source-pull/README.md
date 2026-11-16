@@ -1,5 +1,9 @@
 # OpenBindings source pulling
 
+`PULL_SOURCE` is the full pinned source-puller operation key for aliases and
+support claims. `ContextShapeError` and `ChallengeShapeError` are re-exported
+with `Context` and `ContextChallenge`.
+
 For a complete protocol implementation walkthrough, read
 [writing a binding kind adapter](https://github.com/openbindings/sdk/blob/main/docs/writing-a-kind.md).
 

@@ -554,3 +554,24 @@ void suppliedRoot;
 for (const code of ["byte-limit", "node-limit", "depth-limit"] as const) {
   code satisfies ValueAdmissionFailure["code"];
 }
+
+const jsonExplanation: import("../dist/index.js").JsonCheck =
+  preparedSchema.explainJson("7");
+preparedSchema.explainJson(new Uint8Array(), { signal: AbortSignal.abort() });
+if (jsonExplanation.status === "fails")
+  jsonExplanation.problems[0]!.instance satisfies string;
+if (jsonExplanation.status === "input-error")
+  jsonExplanation.error.byteOffset satisfies number | undefined;
+// @ts-expect-error text admission can fail
+const unadmittedExplanation: ValueOutcome = preparedSchema.explainJson("7");
+// @ts-expect-error explainJson takes JSON text or bytes
+preparedSchema.explainJson(exactInput);
+// @ts-expect-error explainJson does not transfer an owner
+jsonExplanation.dispose();
+void unadmittedExplanation;
+declare const registrationError: SdkError;
+registrationError.details?.resource satisfies string | undefined;
+if (registrationError.details) {
+  // @ts-expect-error error details are immutable
+  registrationError.details.resource = "changed";
+}

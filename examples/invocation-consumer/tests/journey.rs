@@ -111,8 +111,8 @@ async fn two_local_kinds_cross_description_authoring_pull_drift_context_and_invo
                 .map(|s| s.as_str().unwrap().to_owned())
                 .collect::<std::collections::BTreeSet<_>>(),
             [
-                "openbindings.kind-descriptor.checkSource",
-                "openbindings.source-puller.pullSource"
+                openbindings_kind_description::CHECK_SOURCE,
+                openbindings_source_pull::PULL_SOURCE
             ]
             .map(str::to_owned)
             .into_iter()

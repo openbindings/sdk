@@ -1,5 +1,11 @@
 # OpenBindings invocation
 
+`INVOKE_BINDING` and `PREFLIGHT_BINDING` are the full pinned binding-invoker
+operation keys for aliases and support claims. `ContextShapeError` and
+`ChallengeShapeError` are re-exported with `Context` and `ContextChallenge`.
+`operation::OperationPreparationFailure` is non-exhaustive; downstream matches
+must refuse or propagate unknown failure categories.
+
 For an application call with schema gates and typed output, read
 [document to typed result](https://github.com/openbindings/sdk/blob/main/docs/document-to-typed-result.md).
 

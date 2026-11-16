@@ -94,6 +94,7 @@ test("inherited options use the same SDK error category as malformed own options
           (options) => document.references(options),
           (options) => prepared.evaluate(value, options),
           (options) => prepared.evaluateJson("7", options),
+          (options) => prepared.explainJson("7", options),
           (options) => prepared.explain(value, options),
         ],
       ],

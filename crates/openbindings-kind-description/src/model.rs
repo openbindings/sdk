@@ -397,6 +397,12 @@ carrier!(
     KindDescription,
     "A kind's description, per-operation claims, operation disclosures and two data schemas."
 );
+// The operation keys a disclosure stands for. The source-pull and invocation roles own
+// these as public constants; the kind description keeps its own copy so that it does
+// not depend on either role, and a unit test holds the copies equal.
+const PULL_SOURCE: &str = "openbindings.source-puller.pullSource";
+const INVOKE_BINDING: &str = "openbindings.binding-invoker.invokeBinding";
+
 impl KindDescription {
     /// Admit the open description carrier without evaluating either data schema.
     pub fn from_json(value: JsonValue) -> Result<Self, CarrierError> {
@@ -414,7 +420,7 @@ impl KindDescription {
         let declares_check = operations
             .elements()
             .expect("admitted supports")
-            .any(|value| value.as_str() == Some("openbindings.kind-descriptor.checkSource"));
+            .any(|value| value.as_str() == Some(crate::CHECK_SOURCE));
         let has_check = object.value().get("check").is_some();
         if declares_check != has_check {
             return Err(CarrierErrorKind::InconsistentCheckSupport.at_field("check"));
@@ -422,12 +428,12 @@ impl KindDescription {
         for (name, operation, error) in [
             (
                 "pull",
-                "openbindings.source-puller.pullSource",
+                PULL_SOURCE,
                 CarrierErrorKind::InconsistentPullSupport,
             ),
             (
                 "invoke",
-                "openbindings.binding-invoker.invokeBinding",
+                INVOKE_BINDING,
                 CarrierErrorKind::InconsistentInvokeSupport,
             ),
         ] {
@@ -641,5 +647,17 @@ impl CheckedSource {
             .value()
             .get("description")
             .and_then(|value| value.as_string())
+    }
+}
+
+#[cfg(test)]
+mod disclosure_keys {
+    #[test]
+    fn disclosure_keys_equal_the_constants_their_roles_own() {
+        assert_eq!(super::PULL_SOURCE, openbindings_source_pull::PULL_SOURCE);
+        assert_eq!(
+            super::INVOKE_BINDING,
+            openbindings_invocation::INVOKE_BINDING
+        );
     }
 }

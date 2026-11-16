@@ -1,5 +1,8 @@
 # OpenBindings schema comparison
 
+`InterfaceIssueKind` is non-exhaustive. Downstream matches must preserve an
+unknown issue as a refusal or propagate it rather than infer compatibility.
+
 Compare schemas by normalized identity or directional compatibility under profile
 `OB-2020-12` version `0.1`, pinned at interfaces revision
 `eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1`. This unpublished companion is independent

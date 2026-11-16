@@ -120,6 +120,10 @@ if (mode === "initialize") {
       bridge.WasmPrepared.prototype.evaluateJsonText = trap;
       invoke = () => prepared.evaluateJson("0");
       break;
+    case "explain-json":
+      bridge.WasmPrepared.prototype.explainJsonText = trap;
+      invoke = () => prepared.explainJson("0");
+      break;
     case "document-parse":
       bridge.WasmDocument.parseText = trap;
       invoke = () => sdk.Document.parse(text);

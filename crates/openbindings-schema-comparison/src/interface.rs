@@ -66,6 +66,25 @@ impl OperationComparison {
     }
 }
 /// An interface issue's kind. Indeterminate outcomes and failures stay distinct.
+///
+/// New categories may be added. Handle unknown categories by refusal or
+/// propagation. Exhaustive downstream matches are intentionally rejected:
+///
+/// ```compile_fail,E0004
+/// use openbindings_schema_comparison::InterfaceIssueKind;
+/// fn classify(value: InterfaceIssueKind) {
+///     match value {
+///         InterfaceIssueKind::Missing => (),
+///         InterfaceIssueKind::OutputIncompatible => (),
+///         InterfaceIssueKind::InputIncompatible => (),
+///         InterfaceIssueKind::OutputIndeterminate => (),
+///         InterfaceIssueKind::InputIndeterminate => (),
+///         InterfaceIssueKind::OutputFailure => (),
+///         InterfaceIssueKind::InputFailure => (),
+///     }
+/// }
+/// ```
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InterfaceIssueKind {
     /// Included required operation is absent from the provided namespace, regardless of selected role.

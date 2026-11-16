@@ -163,7 +163,7 @@ validating a value. Every result narrows on `status`. A value result's is
 validity), `no-verdict` (the SDK could not answer) or `input-error` when ordinary
 JavaScript data cannot be admitted.
 `evaluate` reads a string as a JSON string value; check JSON text or bytes, such as
-a request body, with `evaluateJson`, which admits them as `parseJson` does.
+a request body, with `evaluateJson` or `explainJson` (with problems), which admit them as `parseJson` does.
 Admission uses the default limits and precedes cancellation observation; malformed
 JSON remains an `input-error` even when the signal is already aborted.
 

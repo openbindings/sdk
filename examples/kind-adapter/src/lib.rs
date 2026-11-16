@@ -104,10 +104,10 @@ use openbindings_kind_description::{
     DescribeKindRequest, KindDescription, KindDescriptor, KindSummary,
 };
 
-const SUPPORTS: &str = r#"[
-    "openbindings.binding-invoker.invokeBinding",
-    "openbindings.source-puller.pullSource"
-]"#;
+const SUPPORTS: [&str; 2] = [
+    openbindings_invocation::INVOKE_BINDING,
+    openbindings_source_pull::PULL_SOURCE,
+];
 
 impl KindDescriptor for Memory {
     type Error = AdapterError;
@@ -118,7 +118,7 @@ impl KindDescriptor for Memory {
         ready(Ok(vec![
             KindSummary::from_json(object([
                 ("kind", string(KIND)),
-                ("supports", json(SUPPORTS)),
+                ("supports", JsonValue::from_serializable(&SUPPORTS).unwrap()),
             ]))
             .unwrap(),
         ]))
@@ -133,7 +133,7 @@ impl KindDescriptor for Memory {
         }
         ready(Ok(KindDescription::from_json(object([
             ("kind", string(KIND)),
-            ("supports", json(SUPPORTS)),
+            ("supports", JsonValue::from_serializable(&SUPPORTS).unwrap()),
             ("description", string("Echo exact JSON through a local channel.")),
             ("invoke", json(r#"{"description":"Echoes each input until input closes.","executes":false}"#)),
             ("pull", json(r#"{"description":"Reads a fixed local inventory.","executes":false}"#)),

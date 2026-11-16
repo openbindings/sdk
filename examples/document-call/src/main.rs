@@ -121,6 +121,7 @@ async fn call(text: &str, input_text: &str) -> Result<Reply, Box<dyn Error>> {
                 }
                 ValidationEvidence::Evaluation(_) => unreachable!("preparation judges no value"),
             },
+            _ => "operation preparation refused".to_owned(),
         })?;
     let value = JsonValue::parse(input_text).map_err(|e| format!("input JSON admission: {e}"))?;
     let call = prepared

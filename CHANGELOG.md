@@ -2,6 +2,20 @@
 
 ## 2026-11-16 repairs (unreleased)
 
+### Added
+
+These follow the 2026-11-16 decision panel's strong consensus on the review's API questions.
+
+- TypeScript registration refusals (`new ExternalSchemas(...)`, `resources.with(...)`) carry the limiting resource
+  as `details.resource`, the strings preparation refusals already use; the code stays `resource`.
+- Constants for the interface operation keys, each in the crate that implements the role: `LIST_KINDS`,
+  `DESCRIBE_KIND` and `CHECK_SOURCE` (kind description), `PULL_SOURCE` (source pull), `INVOKE_BINDING` and
+  `PREFLIGHT_BINDING` (invocation). A test holds each to the pinned interface document.
+- The role crates that re-export `Context` and `ContextChallenge` also re-export `ContextShapeError` and
+  `ChallengeShapeError`.
+- TypeScript `PreparedSchema.explainJson(text | bytes)`, the sibling of `evaluateJson`: it admits JSON and explains
+  it in one call, with nothing to dispose.
+
 ### Fixed
 
 - An established failure is no longer lost when an allowance runs out: a position that has definitely failed (an
@@ -18,6 +32,8 @@
 
 ### Changed
 
+- Breaking: `InterfaceIssueKind` (schema comparison) and `OperationPreparationFailure` (invocation) are
+  `#[non_exhaustive]`; a match outside the crate needs a wildcard arm.
 - The TypeScript README says at the top that SDK calls cannot be interrupted and that untrusted input needs
   `evaluationSdkWorkUnits` and JSON limits; the first-use examples set both. The SDK still sets no default work limit
   (the owner's ruling, 2026-11-16).

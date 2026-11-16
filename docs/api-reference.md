@@ -70,6 +70,22 @@ through unchanged, and their closures are not called. Checked source checks use
 The pull errors `RequestError`, `PullValidationError`, `PullFailure` and `PullError`
 are non-exhaustive. Handle unknown failures by refusal or propagation.
 
+`InterfaceIssueKind` and `operation::OperationPreparationFailure` are
+non-exhaustive. Downstream matches need a fallback that refuses or propagates
+unknown categories. `ReferenceResolution` and limit structs remain exhaustive.
+
+The role crates export the pinned operation keys for authoring aliases and
+`supports` claims:
+
+| Crate | Constants |
+| --- | --- |
+| `openbindings-kind-description` | `LIST_KINDS`, `DESCRIBE_KIND`, `CHECK_SOURCE` |
+| `openbindings-source-pull` | `PULL_SOURCE` |
+| `openbindings-invocation` | `INVOKE_BINDING`, `PREFLIGHT_BINDING` |
+
+Each string is the full `openbindings.<interface>.<operation>` key. These names
+make an author's correspondence claim; they do not verify implementation behavior.
+
 ## Exact documents and conformance
 
 Rust `JsonValue::parse_prefix(input)` and
@@ -369,7 +385,15 @@ including the selected root's base, dialect and provenance.
 `evaluate` is the cheap value check; `explain` requests diagnostics for the same
 semantic result. In Rust, first parse exact JSON text or bytes with
 `JsonValue::parse` or `parse_with_limits`, then call `evaluate(&value)` or
-`explain(&value)`. TypeScript `evaluateJson` admits and evaluates exact JSON text or bytes. TypeScript `evaluate` accepts checked ordinary JSON or an
+`explain(&value)`. TypeScript `evaluateJson(input, options?)` admits and evaluates
+exact JSON text or UTF-8 bytes; `explainJson(input, options?)` admits the same
+input and returns `explain`'s bounded problems. Both return `JsonCheck` and
+release temporary input storage within the call, leaving no input owner to
+dispose. Both use the default admission limits (32 MiB, 10,000 container levels,
+1,000,000 nodes), preserve exact numbers, and admit before observing cancellation.
+Malformed JSON returns `input-error`; wrong input types and literal unpaired
+UTF-16 text throw. For custom admission limits, use `parseJson` followed by
+`explain` and dispose the parsed owner. TypeScript `evaluate` accepts checked ordinary JSON or an
 `ExactJson`; a string there is a JSON string value, not serialized JSON text.
 
 | Value result | Meaning |
@@ -637,6 +661,9 @@ loading and invocation without preparing a direction again.
 
 ### Context admission
 
+The invocation, kind-description and source-pull crates re-export `Context`,
+`ContextChallenge`, `ContextShapeError` and `ChallengeShapeError` together.
+
 `Context::new(JsonObject)` and `Context::try_from(JsonValue)` are fallible and
 return `ContextShapeError::{ExpectedObject, DuplicateMember}`. Members remain
 opaque. Each request decoder that admits a context member applies the same
@@ -714,5 +741,9 @@ only work accepts `null`, and numbers must be nonnegative 32-bit integers.
 separately from evaluator `limits`. Registration options apply only to that
 construction or `with` call, not to later preparation. Limits and cancellation
 produce the same Rust refusals: preparation returns `refused`, while registration
-throws `SdkError` with code `resource`. A refused attempt leaves existing owners
+throws `SdkError` with code `resource`. Registration limit refusals also carry
+frozen `details: { resource: string }`, using preparation's resource strings:
+`schema-nodes`, `schema-identity-bytes`, `preparation-sdk-work-units`, or
+`preparation-sdk-reservation-bytes`. The message stays
+`external schema registration exceeded a preparation limit`. A refused attempt leaves existing owners
 usable. SDK reservation estimates are not a Wasm linear-memory ceiling.

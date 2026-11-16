@@ -18,7 +18,7 @@ pub use channel::{
     OutputEvent, ProviderInput, ProviderIo, ProviderOutput, WriteError,
 };
 pub use error::InvocationError;
-pub use openbindings_context::{Context, ContextChallenge};
+pub use openbindings_context::{ChallengeShapeError, Context, ContextChallenge, ContextShapeError};
 pub use operation::{
     DefaultOperationInvoker, OperationAddress, OperationInvoker, OperationRequest,
 };
@@ -30,3 +30,8 @@ pub const INTERFACE_VERSION: &str = "0.1.0";
 pub const APPLIED_INTERFACE_REVISION: &str = "eafa49a14539711f3c9d8d9d4dbcb494ea4eb7c1";
 
 pub use openbindings_internal_cancellation::{Cancellation, CancellationToken};
+
+/// Operation key for `invokeBinding` in the pinned binding-invoker interface.
+pub const INVOKE_BINDING: &str = "openbindings.binding-invoker.invokeBinding";
+/// Operation key for `preflightBinding` in the pinned binding-invoker interface.
+pub const PREFLIGHT_BINDING: &str = "openbindings.binding-invoker.preflightBinding";
